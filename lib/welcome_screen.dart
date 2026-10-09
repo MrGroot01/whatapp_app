@@ -4,8 +4,8 @@ import 'login_screen.dart';
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
-  static const Color _bg = Color(0xFF0F1B3D);      // deep navy
-  static const Color _accent = Color(0xFF00C2A8);  // teal
+  static const Color _bg = Color(0xFF0F1B3D);
+  static const Color _accent = Color(0xFF00C2A8);
   static const Color _card = Color(0xFF1A2A55);
 
   @override
@@ -40,10 +40,10 @@ class WelcomeScreen extends StatelessWidget {
 
                       // Title
                       const Text(
-                        'Welcome to ChatNest',
+                        'Welcome to Whatsapp',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.white,
+                          color: Colors.white70,
                           fontSize: 30,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.3,
@@ -55,7 +55,7 @@ class WelcomeScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Color(0xFFE0E6F5),
-                          fontSize: 17,
+                          fontSize: 18,
                           height: 1.4,
                         ),
                       ),

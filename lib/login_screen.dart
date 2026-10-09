@@ -74,6 +74,11 @@ class _LoginScreenState extends State<LoginScreen> {
     // ask the database: is this email already verified?
     final alreadyVerified = await DatabaseHelper.isVerified(email);
 
+    // count how many users have verified on this phone
+    final total = await DatabaseHelper.countVerifiedUsers();
+    debugPrint('Verified users on this phone: $total');
+    debugPrint('Emails: ${await DatabaseHelper.getVerifiedEmails()}');
+
     if (!mounted) return;
     setState(() => isLoading = false);
 

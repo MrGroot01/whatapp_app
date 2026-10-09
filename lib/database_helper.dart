@@ -62,6 +62,27 @@ class DatabaseHelper {
     return rows.isNotEmpty;
   }
 
+  // How many users have verified on this phone
+  static Future<int> countVerifiedUsers() async {
+    final db = await getDatabase();
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS total FROM users WHERE verified = 1',
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // Which emails have verified on this phone
+  static Future<List<String>> getVerifiedEmails() async {
+    final db = await getDatabase();
+    final rows = await db.query(
+      'users',
+      columns: ['email'],
+      where: 'verified = ?',
+      whereArgs: [1],
+    );
+    return rows.map((r) => r['email'] as String).toList();
+  }
+
   // ---------- CHAT ----------
   static Future<List<Map<String, Object?>>> getMessages(String contact) async {
     final db = await getDatabase();
