@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -11,20 +15,41 @@ class DatabaseHelper {
     final folder = await getDatabasesPath();
     _db = await openDatabase(
       join(folder, 'whatsapp_app.db'),
-      version: 2,
+      version: 4,
       onCreate: (db, version) async {
-        await db.execute(
-          'CREATE TABLE users (email TEXT PRIMARY KEY, verified INTEGER)',
-        );
+        await _createUsersTable(db);
         await _createChatTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createChatTables(db);
         }
+        if (oldVersion < 3) {
+          // old test users have no password, so remove them
+          await db.delete('users');
+          await db.execute('ALTER TABLE users ADD COLUMN nickname TEXT');
+          await db.execute('ALTER TABLE users ADD COLUMN salt TEXT');
+          await db.execute('ALTER TABLE users ADD COLUMN password_hash TEXT');
+        }
+        if (oldVersion < 4) {
+          // new column to remember each user's profile picture
+          await db.execute('ALTER TABLE users ADD COLUMN profile_image TEXT');
+        }
       },
     );
     return _db!;
+  }
+
+  static Future<void> _createUsersTable(Database db) async {
+    await db.execute(
+      'CREATE TABLE users ('
+          'email TEXT PRIMARY KEY, '
+          'verified INTEGER NOT NULL DEFAULT 0, '
+          'nickname TEXT, '
+          'salt TEXT, '
+          'password_hash TEXT, '
+          'profile_image TEXT)',
+    );
   }
 
   static Future<void> _createChatTables(Database db) async {
@@ -42,13 +67,76 @@ class DatabaseHelper {
     );
   }
 
+  // ---------- PASSWORD HELPERS ----------
+  // A salt is a random text added to the password before hashing,
+  // so two users with the same password get different hashes.
+  static String _makeSalt() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    return base64Url.encode(bytes);
+  }
+
+  static String _hash(String password, String salt) {
+    return sha256.convert(utf8.encode('$salt$password')).toString();
+  }
+
   // ---------- USERS ----------
+  static Future<bool> emailExists(String email) async {
+    final db = await getDatabase();
+    final rows = await db.query(
+      'users',
+      where: 'email = ?',
+      whereArgs: [email.toLowerCase()],
+    );
+    return rows.isNotEmpty;
+  }
+
+  static Future<void> registerUser({
+    required String email,
+    required String nickname,
+    required String password,
+  }) async {
+    final db = await getDatabase();
+    final salt = _makeSalt();
+    await db.insert('users', {
+      'email': email.toLowerCase(),
+      'nickname': nickname,
+      'salt': salt,
+      'password_hash': _hash(password, salt),
+      'verified': 0,
+    });
+  }
+
+  static Future<Map<String, Object?>?> getUser(String email) async {
+    final db = await getDatabase();
+    final rows = await db.query(
+      'users',
+      where: 'email = ?',
+      whereArgs: [email.toLowerCase()],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first;
+  }
+
+  static Future<bool> checkPassword(String email, String password) async {
+    final user = await getUser(email);
+    if (user == null) return false;
+
+    final salt = user['salt'] as String?;
+    final saved = user['password_hash'] as String?;
+    if (salt == null || saved == null) return false;
+
+    return _hash(password, salt) == saved;
+  }
+
+  // UPDATE only the verified flag. (insert + replace would erase the password)
   static Future<void> markVerified(String email) async {
     final db = await getDatabase();
-    await db.insert(
+    await db.update(
       'users',
-      {'email': email.toLowerCase(), 'verified': 1},
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      {'verified': 1},
+      where: 'email = ?',
+      whereArgs: [email.toLowerCase()],
     );
   }
 
@@ -81,6 +169,32 @@ class DatabaseHelper {
       whereArgs: [1],
     );
     return rows.map((r) => r['email'] as String).toList();
+  }
+
+  // ---------- PROFILE PICTURE ----------
+  // Write: "this email's picture is at this address"
+  static Future<void> saveProfileImage(String email, String path) async {
+    final db = await getDatabase();
+    await db.update(
+      'users',
+      {'profile_image': path},
+      where: 'email = ?',
+      whereArgs: [email.toLowerCase()],
+    );
+  }
+
+  // Read: "where is this email's picture?" (null if none)
+  static Future<String?> getProfileImage(String email) async {
+    final db = await getDatabase();
+    final rows = await db.query(
+      'users',
+      columns: ['profile_image'],
+      where: 'email = ?',
+      whereArgs: [email.toLowerCase()],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['profile_image'] as String?;
   }
 
   // ---------- CHAT ----------

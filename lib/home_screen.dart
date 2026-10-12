@@ -1,6 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 import 'chat_screen.dart';
-import 'welcome_screen.dart';
+import 'database_helper.dart';
+import 'session_helper.dart';
+import 'settings_screen.dart';
 
 // One contact = one small card of information
 class Contact {
@@ -22,13 +27,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const Color _bg = Color(0xFF0F1B3D);
-  static const Color _accent = Color(0xFF00C2A8);
-  static const Color _card = Color(0xFF1A2A55);
-  static const Color _text = Color(0xFFE0E6F5);
-
   final searchController = TextEditingController();
   String searchText = '';
+
+  // the picture of the logged-in user (empty until they pick one)
+  File? profileImage;
 
   final List<Contact> contacts = const [
     Contact('Amma', 'Did you eat lunch?', '6:20 pm', Color(0xFFE91E63)),
@@ -46,57 +49,31 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    SessionHelper.saveSession(widget.email);
+    loadProfileImage();
+  }
+
+  @override
   void dispose() {
     searchController.dispose();
     super.dispose();
   }
 
-  // ---------- LOGOUT ----------
-  Future<void> confirmLogout() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: _card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text(
-          'Log out?',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Are you sure you want to log out of your account?',
-          style: TextStyle(color: _text, fontSize: 16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: _text, fontSize: 16),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              'Logout',
-              style: TextStyle(
-                color: Color(0xFFFF8A80),
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  // read the picture address from SQLite and show it
+  Future<void> loadProfileImage() async {
+    final savedPath = await DatabaseHelper.getProfileImage(widget.email);
 
-    if (shouldLogout == true && mounted) {
-      // go to Welcome screen and remove all old screens
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const WelcomeScreen()),
-            (route) => false,
-      );
+    File? file;
+    if (savedPath != null && File(savedPath).existsSync()) {
+      file = File(savedPath);
     }
+
+    if (!mounted) return;
+    setState(() {
+      profileImage = file;
+    });
   }
 
   @override
@@ -106,81 +83,82 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList();
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'ChatNest',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+        scrolledUnderElevation: 0,
+        title: Text(
+          AppBrand.name,
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1,
+          ),
         ),
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            color: _card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            onSelected: (value) {
-              if (value == 'logout') confirmLogout();
+          GestureDetector(
+            onTap: () async {
+              // wait until the settings page is closed...
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SettingsScreen(email: widget.email),
+                ),
+              );
+              // ...then read the picture again, in case it changed
+              loadProfileImage();
             },
-            itemBuilder: (context) => [
-              // shows who is logged in (not clickable)
-              PopupMenuItem<String>(
-                enabled: false,
-                child: Row(
-                  children: [
-                    const Icon(Icons.account_circle,
-                        color: _accent, size: 26),
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: Text(
-                        widget.email,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _text, fontSize: 15),
-                      ),
-                    ),
-                  ],
-                ),
+            // white ring around the picture
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
               ),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout_rounded, color: Color(0xFFFF8A80)),
-                    SizedBox(width: 10),
-                    Text(
-                      'Logout',
-                      style: TextStyle(
-                        color: Color(0xFFFF8A80),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+              child: CircleAvatar(
+                radius: 17,
+                backgroundColor: AppColors.gold,
+                backgroundImage:
+                profileImage != null ? FileImage(profileImage!) : null,
+                child: profileImage == null
+                    ? Text(
+                  widget.email[0].toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                )
+                    : null,
               ),
-            ],
+            ),
           ),
+          const SizedBox(width: 16),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {},
-        backgroundColor: _accent,
-        foregroundColor: Colors.black,
+        backgroundColor: AppColors.emerald,
+        foregroundColor: Colors.white,
         child: const Icon(Icons.add_comment),
       ),
       body: Column(
         children: [
-          // SEARCH BAR
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          // GREEN HEADER PART with the search bar (curved at the bottom)
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            decoration: const BoxDecoration(
+              color: AppColors.emerald,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(28),
+                bottomRight: Radius.circular(28),
+              ),
+            ),
             child: TextField(
               controller: searchController,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-              cursorColor: _accent,
+              style: const TextStyle(color: AppColors.textDark, fontSize: 16),
+              cursorColor: AppColors.emerald,
               onChanged: (value) {
                 setState(() {
                   searchText = value;
@@ -188,10 +166,11 @@ class _HomeScreenState extends State<HomeScreen> {
               },
               decoration: InputDecoration(
                 hintText: 'Search',
-                hintStyle: const TextStyle(color: _text, fontSize: 16),
-                prefixIcon: const Icon(Icons.search, color: _text),
+                hintStyle:
+                const TextStyle(color: AppColors.textSoft, fontSize: 16),
+                prefixIcon: const Icon(Icons.search, color: AppColors.textSoft),
                 filled: true,
-                fillColor: _card,
+                fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),
@@ -207,17 +186,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const Center(
               child: Text(
                 'No contacts found',
-                style: TextStyle(color: _text, fontSize: 17),
+                style: TextStyle(color: AppColors.textSoft, fontSize: 17),
               ),
             )
-                : ListView.builder(
+                : ListView.separated(
+              padding: const EdgeInsets.only(top: 8, bottom: 90),
               itemCount: shownContacts.length,
+              // thin line between rows, starting after the picture
+              separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                indent: 88,
+                endIndent: 16,
+                color: Color(0xFFE9E4D8),
+              ),
               itemBuilder: (context, index) {
                 final contact = shownContacts[index];
                 return ListTile(
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 4,
+                    vertical: 6,
                   ),
                   leading: CircleAvatar(
                     radius: 26,
@@ -234,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   title: Text(
                     contact.name,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textDark,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -243,11 +230,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     contact.message,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _text, fontSize: 15),
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 15,
+                    ),
                   ),
                   trailing: Text(
                     contact.time,
-                    style: const TextStyle(color: _text, fontSize: 13),
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 13,
+                    ),
                   ),
                   onTap: () {
                     Navigator.push(

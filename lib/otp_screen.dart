@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'database_helper.dart';
-import 'home_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
@@ -27,7 +25,7 @@ class _OtpScreenState extends State<OtpScreen> {
     super.dispose();
   }
 
-  Future<void> onVerifyPressed() async {
+  void onVerifyPressed() {
     final entered = otpController.text.trim();
 
     if (entered.length != 4) {
@@ -36,19 +34,8 @@ class _OtpScreenState extends State<OtpScreen> {
     }
 
     if (entered == widget.correctOtp) {
-      // write in the notebook: this email is verified
-      await DatabaseHelper.markVerified(widget.email);
-      debugPrint('Saved in SQLite: ${widget.email} verified = true');
-
-      if (!mounted) return;
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(email: widget.email),
-        ),
-            (route) => false,
-      );
+      // tell the Sign up screen: the OTP is correct
+      Navigator.pop(context, true);
     } else {
       setState(() => errorText = 'Wrong OTP, try again');
     }

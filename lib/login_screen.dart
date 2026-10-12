@@ -1,8 +1,8 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'otp_screen.dart';
-import 'home_screen.dart';
+import 'app_theme.dart';
 import 'database_helper.dart';
+import 'home_screen.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,17 +12,14 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  static const Color _bg = Color(0xFF0F1B3D);
-  static const Color _accent = Color(0xFF00C2A8);
-  static const Color _card = Color(0xFF1A2A55);
-  static const Color _text = Color(0xFFE0E6F5);
+  static const Color _error = Color(0xFFD94B4B);
 
   final formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool hidePassword = true;
   bool isLoading = false;
-  String password = '';
+  String? errorMessage;
 
   @override
   void dispose() {
@@ -31,7 +28,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // ---------- VALIDATION ----------
   String? validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Please enter your email';
@@ -42,64 +38,75 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
+  // At login we only check that the box is not empty.
+  // (The strong password rules are for the signup page.)
   String? validatePassword(String? value) {
-    final pass = value ?? '';
-    if (pass.isEmpty) return 'Please enter your password';
-    if (pass.length < 8) return 'Use at least 8 characters';
-    if (pass.contains(' ')) return 'Password cannot contain spaces';
-    if (!RegExp(r'[A-Z]').hasMatch(pass)) return 'Add 1 capital letter (A-Z)';
-    if (!RegExp(r'[a-z]').hasMatch(pass)) return 'Add 1 small letter (a-z)';
-    if (!RegExp(r'[0-9]').hasMatch(pass)) return 'Add 1 number (0-9)';
-    if (!RegExp(r'[!@#$%^&*(),.?":{}|<>_\-]').hasMatch(pass)) {
-      return 'Add 1 special character (! @ # \$ % & *)';
-    }
+    if (value == null || value.isEmpty) return 'Please enter your password';
     return null;
   }
 
-  bool get hasLength => password.length >= 8;
-  bool get hasUpper => RegExp(r'[A-Z]').hasMatch(password);
-  bool get hasLower => RegExp(r'[a-z]').hasMatch(password);
-  bool get hasNumber => RegExp(r'[0-9]').hasMatch(password);
-  bool get hasSpecial =>
-      RegExp(r'[!@#$%^&*(),.?":{}|<>_\-]').hasMatch(password);
-
-  // ---------- ACTION ----------
+  // ---------- ACTIONS ----------
   Future<void> onNextPressed() async {
     if (!formKey.currentState!.validate()) return;
 
-    setState(() => isLoading = true);
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
 
     final email = emailController.text.trim().toLowerCase();
 
-    // ask the database: is this email already verified?
-    final alreadyVerified = await DatabaseHelper.isVerified(email);
-
-    // count how many users have verified on this phone
-    final total = await DatabaseHelper.countVerifiedUsers();
-    debugPrint('Verified users on this phone: $total');
-    debugPrint('Emails: ${await DatabaseHelper.getVerifiedEmails()}');
-
+    // 1. does this account exist?
+    final user = await DatabaseHelper.getUser(email);
     if (!mounted) return;
+
+    if (user == null) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'No account found for this email. Please sign up.';
+      });
+      return;
+    }
+
+    // 2. is the password correct?
+    final passwordOk =
+    await DatabaseHelper.checkPassword(email, passwordController.text);
+    if (!mounted) return;
+
+    if (!passwordOk) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Wrong password. Please try again.';
+      });
+      return;
+    }
+
     setState(() => isLoading = false);
 
-    if (alreadyVerified) {
-      // OLD USER -> go directly to Home
-      debugPrint('$email already verified -> Home');
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => HomeScreen(email: email)),
-            (route) => false,
-      );
-    } else {
-      // NEW USER -> OTP first
-      final otp = (Random().nextInt(9000) + 1000).toString();
-      debugPrint('OTP for $email: $otp');
+    // 3. password is correct -> straight to Home (no OTP at login)
+    debugPrint('$email logged in -> Home');
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => HomeScreen(email: email)),
+          (route) => false,
+    );
+  }
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => OtpScreen(email: email, correctOtp: otp),
-        ),
+  Future<void> openSignup() async {
+    // Signup sends back the new email when the account is created
+    final newEmail = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const SignupScreen()),
+    );
+
+    if (newEmail != null && mounted) {
+      setState(() {
+        emailController.text = newEmail;
+        passwordController.clear();
+        errorMessage = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account created. Please log in.')),
       );
     }
   }
@@ -119,52 +126,31 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: _text, fontSize: 16),
-      floatingLabelStyle: const TextStyle(color: _accent, fontSize: 16),
-      prefixIcon: Icon(icon, color: _accent),
+      labelStyle: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+      floatingLabelStyle:
+      const TextStyle(color: AppColors.emerald, fontSize: 16),
+      prefixIcon: Icon(icon, color: AppColors.emerald),
       suffixIcon: suffix,
       filled: true,
-      fillColor: _card,
-      errorStyle: const TextStyle(color: Color(0xFFFF8A80), fontSize: 14),
+      fillColor: AppColors.card,
+      errorStyle: const TextStyle(color: _error, fontSize: 14),
       errorMaxLines: 2,
-      enabledBorder: boxBorder(const Color(0xFF3A4C80)),
-      focusedBorder: boxBorder(_accent),
-      errorBorder: boxBorder(const Color(0xFFFF8A80)),
-      focusedErrorBorder: boxBorder(const Color(0xFFFF8A80)),
-    );
-  }
-
-  Widget rule(String text, bool done) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Row(
-        children: [
-          Icon(
-            done ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 20,
-            color: done ? _accent : const Color(0xFF8E9BC0),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 15,
-              color: done ? Colors.white : _text,
-            ),
-          ),
-        ],
-      ),
+      enabledBorder: boxBorder(const Color(0xFFE3DED2)),
+      focusedBorder: boxBorder(AppColors.emerald),
+      errorBorder: boxBorder(_error),
+      focusedErrorBorder: boxBorder(_error),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: _bg,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.textDark,
         elevation: 0,
+        scrolledUnderElevation: 0,
       ),
       body: SafeArea(
         child: Center(
@@ -176,15 +162,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // ICON
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: _accent.withOpacity(0.15),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE3F1ED),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.lock_rounded,
-                          size: 44, color: _accent),
+                      child: const Icon(
+                        Icons.lock_rounded,
+                        size: 44,
+                        color: AppColors.emerald,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -192,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     'Welcome back',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textDark,
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                     ),
@@ -201,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text(
                     'Log in with your email and password.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: _text, fontSize: 16),
+                    style: TextStyle(color: AppColors.textSoft, fontSize: 16),
                   ),
                   const SizedBox(height: 28),
 
@@ -211,8 +201,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
-                    style: const TextStyle(color: Colors.white, fontSize: 17),
-                    cursorColor: _accent,
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 17,
+                    ),
+                    cursorColor: AppColors.emerald,
+                    onChanged: (_) {
+                      if (errorMessage != null) {
+                        setState(() => errorMessage = null);
+                      }
+                    },
                     decoration: fieldDecoration(
                       label: 'Email',
                       icon: Icons.email_outlined,
@@ -226,10 +224,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: passwordController,
                     obscureText: hidePassword,
                     textInputAction: TextInputAction.done,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    style: const TextStyle(color: Colors.white, fontSize: 17),
-                    cursorColor: _accent,
-                    onChanged: (v) => setState(() => password = v),
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 17,
+                    ),
+                    cursorColor: AppColors.emerald,
+                    onChanged: (_) {
+                      if (errorMessage != null) {
+                        setState(() => errorMessage = null);
+                      }
+                    },
                     decoration: fieldDecoration(
                       label: 'Password',
                       icon: Icons.lock_outline,
@@ -238,7 +242,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           hidePassword
                               ? Icons.visibility_off
                               : Icons.visibility,
-                          color: _text,
+                          color: AppColors.textSoft,
                         ),
                         onPressed: () =>
                             setState(() => hidePassword = !hidePassword),
@@ -246,26 +250,47 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     validator: validatePassword,
                   ),
-                  const SizedBox(height: 14),
 
-                  // LIVE PASSWORD CHECKLIST
-                  rule('At least 8 characters', hasLength),
-                  rule('1 capital letter (A-Z)', hasUpper),
-                  rule('1 small letter (a-z)', hasLower),
-                  rule('1 number (0-9)', hasNumber),
-                  rule('1 special character (! @ # \$ %)', hasSpecial),
-                  const SizedBox(height: 28),
+                  // ERROR MESSAGE (soft red box)
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFCEAEA),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: _error, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              errorMessage!,
+                              style: const TextStyle(
+                                color: _error,
+                                fontSize: 14.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
 
-                  // BUTTON
+                  // LOGIN BUTTON
                   SizedBox(
-                    height: 54,
+                    height: 56,
                     child: ElevatedButton(
                       onPressed: isLoading ? null : onNextPressed,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _accent,
-                        foregroundColor: Colors.black,
+                        backgroundColor: AppColors.emerald,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                       ),
                       child: isLoading
@@ -274,15 +299,39 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
-                          color: Colors.black,
+                          color: Colors.white,
                         ),
                       )
                           : const Text(
                         'Login',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // SIGN UP LINK
+                  TextButton(
+                    onPressed: openSignup,
+                    child: const Text.rich(
+                      TextSpan(
+                        text: "Don't have an account? ",
+                        style: TextStyle(
+                          color: AppColors.textSoft,
+                          fontSize: 15,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: 'Sign up',
+                            style: TextStyle(
+                              color: AppColors.emerald,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
