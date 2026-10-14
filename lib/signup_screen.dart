@@ -1,7 +1,9 @@
 import 'dart:math';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
-import 'database_helper.dart';
 import 'otp_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -19,6 +21,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final nicknameController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
+
   bool hidePassword = true;
   bool hideConfirm = true;
   bool isLoading = false;
@@ -34,11 +37,11 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  // ---------- VALIDATION ----------
   String? validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Please enter your email';
-    final regex = RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
+    final regex =
+    RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
     if (!regex.hasMatch(email)) {
       return 'Enter a valid email (example: name@gmail.com)';
     }
@@ -68,7 +71,9 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   String? validateConfirm(String? value) {
-    if (value == null || value.isEmpty) return 'Please confirm your password';
+    if (value == null || value.isEmpty) {
+      return 'Please confirm your password';
+    }
     if (value != passwordController.text) return 'Passwords do not match';
     return null;
   }
@@ -80,7 +85,26 @@ class _SignupScreenState extends State<SignupScreen> {
   bool get hasSpecial =>
       RegExp(r'[!@#$%^&*(),.?":{}|<>_\-]').hasMatch(password);
 
-  // ---------- ACTION ----------
+  String firebaseErrorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return 'This email is already registered. Please log in.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'weak-password':
+        return 'This password is too weak. Please choose another.';
+      case 'operation-not-allowed':
+        return 'Email/password sign-up is not enabled in Firebase Console.';
+      case 'network-request-failed':
+        return 'Network error. Check your internet connection.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      default:
+        return e.message ?? 'Unable to create account. Please try again.';
+    }
+  }
+
+  // ---------- REGISTER: account -> OTP -> Login ----------
   Future<void> onRegisterPressed() async {
     if (!formKey.currentState!.validate()) return;
 
@@ -90,21 +114,49 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     final email = emailController.text.trim().toLowerCase();
+    final nickname = nicknameController.text.trim();
 
-    final exists = await DatabaseHelper.emailExists(email);
-    if (!mounted) return;
-
-    if (exists) {
+    // STEP 1: create the Firebase account.
+    // This also checks that the email is new, before we ask for an OTP.
+    User? created;
+    try {
+      final credential =
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: passwordController.text,
+      );
+      created = credential.user;
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = 'This email is already registered. Please log in.';
+        errorMessage = firebaseErrorMessage(e);
+      });
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        errorMessage =
+        'Something went wrong while creating the account. Please try again.';
       });
       return;
     }
 
+    final newUser = created;
+    if (newUser == null) {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Account could not be created. Please try again.';
+      });
+      return;
+    }
+
+    if (!mounted) return;
     setState(() => isLoading = false);
 
-    // make an OTP and ask the user to verify the email
+    // STEP 2: make a 4-digit OTP and open the OTP screen
     final otp = (Random().nextInt(9000) + 1000).toString();
     debugPrint('OTP for $email: $otp');
 
@@ -115,23 +167,57 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
     );
 
-    // user pressed Back on the OTP screen -> no account is created
-    if (verified != true || !mounted) return;
+    // STEP 3: the user pressed Back -> remove the account we just made
+    if (verified != true) {
+      await _cancelSignup(newUser);
+      if (!mounted) return;
+      setState(() {
+        errorMessage =
+        'Verification was cancelled, so no account was created. Please try again.';
+      });
+      return;
+    }
 
-    // OTP is correct -> now save the account
-    await DatabaseHelper.registerUser(
-      email: email,
-      nickname: nicknameController.text.trim(),
-      password: passwordController.text,
-    );
-    await DatabaseHelper.markVerified(email);
+    // show the loading circle while the profile is being saved
+    if (mounted) setState(() => isLoading = true);
+
+    // STEP 4: the OTP was correct -> save the name and the public profile
+    try {
+      await newUser.updateDisplayName(nickname);
+    } catch (e) {
+      debugPrint('Display name not saved: $e');
+    }
+
+    try {
+      await FirebaseDatabase.instance
+          .ref('publicProfiles/${newUser.uid}')
+          .set({
+        'uid': newUser.uid,
+        'email': email,
+        'name': nickname,
+        'createdAt': ServerValue.timestamp,
+      }).timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('Public profile not saved: $e');
+    }
+
+    // sign out, so the user comes back to the Login screen
+    await FirebaseAuth.instance.signOut();
+
     if (!mounted) return;
-
-    // go back to Login and give it the new email
     Navigator.pop(context, email);
   }
 
-  // ---------- UI HELPERS ----------
+  // delete the half-made account (used when the OTP step is cancelled)
+  Future<void> _cancelSignup(User user) async {
+    try {
+      await user.delete(); // this also signs the user out
+    } catch (e) {
+      debugPrint('Could not delete the unverified account: $e');
+      await FirebaseAuth.instance.signOut();
+    }
+  }
+
   OutlineInputBorder boxBorder(Color color) {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
@@ -205,7 +291,6 @@ class _SignupScreenState extends State<SignupScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ICON
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(18),
@@ -237,8 +322,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     style: TextStyle(color: AppColors.textSoft, fontSize: 16),
                   ),
                   const SizedBox(height: 28),
-
-                  // EMAIL
                   TextFormField(
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -261,8 +344,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     validator: validateEmail,
                   ),
                   const SizedBox(height: 16),
-
-                  // NICKNAME
                   TextFormField(
                     controller: nicknameController,
                     textInputAction: TextInputAction.next,
@@ -280,8 +361,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     validator: validateNickname,
                   ),
                   const SizedBox(height: 16),
-
-                  // PASSWORD
                   TextFormField(
                     controller: passwordController,
                     obscureText: hidePassword,
@@ -292,7 +371,10 @@ class _SignupScreenState extends State<SignupScreen> {
                       fontSize: 17,
                     ),
                     cursorColor: AppColors.emerald,
-                    onChanged: (v) => setState(() => password = v),
+                    onChanged: (value) => setState(() {
+                      password = value;
+                      if (errorMessage != null) errorMessage = null;
+                    }),
                     decoration: fieldDecoration(
                       label: 'Password',
                       icon: Icons.lock_outline,
@@ -310,8 +392,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     validator: validatePassword,
                   ),
                   const SizedBox(height: 16),
-
-                  // CONFIRM PASSWORD
                   TextFormField(
                     controller: confirmController,
                     obscureText: hideConfirm,
@@ -339,8 +419,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     validator: validateConfirm,
                   ),
                   const SizedBox(height: 16),
-
-                  // LIVE PASSWORD CHECKLIST (inside a white card)
                   Container(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                     decoration: BoxDecoration(
@@ -359,8 +437,6 @@ class _SignupScreenState extends State<SignupScreen> {
                       ],
                     ),
                   ),
-
-                  // ERROR MESSAGE (soft red box)
                   if (errorMessage != null) ...[
                     const SizedBox(height: 16),
                     Container(
@@ -371,8 +447,11 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline,
-                              color: _error, size: 20),
+                          const Icon(
+                            Icons.error_outline,
+                            color: _error,
+                            size: 20,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -388,8 +467,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ],
                   const SizedBox(height: 24),
-
-                  // REGISTER BUTTON
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(
@@ -421,10 +498,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // BACK TO LOGIN
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: isLoading ? null : () => Navigator.pop(context),
                     child: const Text.rich(
                       TextSpan(
                         text: 'Already have an account? ',

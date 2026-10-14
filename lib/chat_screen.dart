@@ -1,17 +1,18 @@
-import 'dart:math';
+import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'app_theme.dart';
-import 'database_helper.dart';
 
 // One message = text + who sent it + time + tick status
 class Message {
-  final int id;
+  final String id; // the Firebase key of this message
   final String text;
   final bool isMe;
   final DateTime time;
-  int status; // 0 = sent, 1 = delivered, 2 = read
+  final int status; // 0 = sent, 2 = read
 
   Message({
     required this.id,
@@ -21,13 +22,17 @@ class Message {
     this.status = 0,
   });
 
-  factory Message.fromRow(Map<String, Object?> r) {
+  factory Message.fromMap(String id, Map<dynamic, dynamic> data, String myUid) {
+    final ts = data['timeMs'];
+    final st = data['status'];
     return Message(
-      id: r['id'] as int,
-      text: r['text'] as String,
-      isMe: (r['is_me'] as int) == 1,
-      time: DateTime.fromMillisecondsSinceEpoch(r['time_ms'] as int),
-      status: r['status'] as int,
+      id: id,
+      text: (data['text'] ?? '').toString(),
+      isMe: data['senderId'] == myUid,
+      time: DateTime.fromMillisecondsSinceEpoch(
+        ts is num ? ts.toInt() : DateTime.now().millisecondsSinceEpoch,
+      ),
+      status: st is num ? st.toInt() : 0,
     );
   }
 }
@@ -35,8 +40,14 @@ class Message {
 class ChatScreen extends StatefulWidget {
   final String name;
   final Color color;
+  final String chatKey; // unique per account + contact
 
-  const ChatScreen({super.key, required this.name, required this.color});
+  const ChatScreen({
+    super.key,
+    required this.name,
+    required this.color,
+    required this.chatKey,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -63,17 +74,45 @@ class _ChatScreenState extends State<ChatScreen> {
   final scrollController = ScrollController();
   final focusNode = FocusNode();
 
+  // the "notice board" for this chat in Firebase
+  // both people use the SAME board: the two account ids, sorted, joined by "_"
+  late final String _chatId = _makeChatId();
+
+  String _makeChatId() {
+    final parts = widget.chatKey.split('_');
+    if (parts.length != 2) return widget.chatKey;
+    parts.sort();
+    return parts.join('_');
+  }
+
+  late final DatabaseReference _messagesRef =
+  FirebaseDatabase.instance.ref('chats/$_chatId/messages');
+  StreamSubscription<DatabaseEvent>? _subscription;
+
+  String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+
   List<Message> messages = [];
   bool loading = true;
+  bool loadError = false;
   bool hasText = false;
-  bool typing = false;
   bool showEmoji = false;
   bool showScrollDown = false;
 
   @override
   void initState() {
     super.initState();
-    loadMessages();
+
+    // LIVE: this runs every time anything in the chat changes in Firebase
+    _subscription = _messagesRef.onValue.listen(
+      _onMessagesChanged,
+      onError: (_) {
+        if (!mounted) return;
+        setState(() {
+          loading = false;
+          loadError = true;
+        });
+      },
+    );
 
     scrollController.addListener(() {
       // list is reversed, so offset 0 = bottom
@@ -90,60 +129,45 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _subscription?.cancel();
     messageController.dispose();
     scrollController.dispose();
     focusNode.dispose();
     super.dispose();
   }
 
-  // ---------- DATABASE ----------
-  Future<void> loadMessages() async {
-    // first time only: add a few demo messages
-    if (!await DatabaseHelper.isSeeded(widget.name)) {
-      await seedMessages();
-      await DatabaseHelper.markSeeded(widget.name);
+  // ---------- LIVE MESSAGES ----------
+  void _onMessagesChanged(DatabaseEvent event) {
+    final value = event.snapshot.value;
+    final list = <Message>[];
+
+    if (value is Map) {
+      value.forEach((key, data) {
+        if (data is Map) {
+          list.add(Message.fromMap(key.toString(), data, _myUid));
+        }
+      });
     }
 
-    final rows = await DatabaseHelper.getMessages(widget.name);
+    // oldest first
+    list.sort((a, b) => a.time.compareTo(b.time));
+
     if (!mounted) return;
     setState(() {
-      messages = rows.map(Message.fromRow).toList();
+      messages = list;
       loading = false;
+      loadError = false;
     });
+
+    _markIncomingAsRead(list);
   }
 
-  Future<void> seedMessages() async {
-    final now = DateTime.now();
-    final yesterday = DateTime(now.year, now.month, now.day - 1, 18, 15);
-
-    final demo = <List<Object>>[
-      ['Hi!', false, yesterday],
-      ['Hello, how are you?', true, yesterday.add(const Duration(minutes: 1))],
-      [
-        'I am good. What about you?',
-        false,
-        now.subtract(const Duration(minutes: 25))
-      ],
-      [
-        'Doing great, working on my Flutter app',
-        true,
-        now.subtract(const Duration(minutes: 23))
-      ],
-      [
-        'Nice! Show me when it is done',
-        false,
-        now.subtract(const Duration(minutes: 21))
-      ],
-    ];
-
-    for (final d in demo) {
-      await DatabaseHelper.addMessage(
-        contact: widget.name,
-        text: d[0] as String,
-        isMe: d[1] as bool,
-        timeMs: (d[2] as DateTime).millisecondsSinceEpoch,
-        status: 2,
-      );
+  // messages from the other person become "read" when this chat is open
+  void _markIncomingAsRead(List<Message> list) {
+    for (final m in list) {
+      if (!m.isMe && m.status != 2) {
+        _messagesRef.child(m.id).update({'status': 2});
+      }
     }
   }
 
@@ -152,108 +176,26 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = messageController.text.trim();
     if (text.isEmpty) return;
 
+    if (_myUid.isEmpty) {
+      snack('Please log in again');
+      return;
+    }
+
     messageController.clear();
     setState(() => hasText = false);
-
-    final now = DateTime.now();
-    final id = await DatabaseHelper.addMessage(
-      contact: widget.name,
-      text: text,
-      isMe: true,
-      timeMs: now.millisecondsSinceEpoch,
-      status: 0,
-    );
-    if (!mounted) return;
-
-    final msg = Message(id: id, text: text, isMe: true, time: now);
-    setState(() => messages.add(msg));
     scrollToBottom();
 
-    updateTicks(msg);
-    sendReply(text);
-  }
-
-  // one tick -> two grey ticks -> two blue ticks
-  Future<void> updateTicks(Message msg) async {
-    await Future.delayed(const Duration(seconds: 1));
-    await setStatus(msg, 1);
-    await Future.delayed(const Duration(seconds: 1));
-    await setStatus(msg, 2);
-  }
-
-  Future<void> setStatus(Message msg, int status) async {
-    await DatabaseHelper.updateStatus(msg.id, status);
-    if (!mounted) return;
-    setState(() => msg.status = status);
-  }
-
-  // the contact "types" and replies
-  Future<void> sendReply(String sentText) async {
-    await Future.delayed(const Duration(milliseconds: 1800));
-    if (!mounted) return;
-    setState(() => typing = true);
-
-    await Future.delayed(Duration(milliseconds: 1500 + Random().nextInt(1500)));
-    if (!mounted) return;
-
-    final now = DateTime.now();
-    final replyText = pickReply(sentText);
-    final id = await DatabaseHelper.addMessage(
-      contact: widget.name,
-      text: replyText,
-      isMe: false,
-      timeMs: now.millisecondsSinceEpoch,
-      status: 2,
-    );
-    if (!mounted) return;
-
-    setState(() {
-      typing = false;
-      messages.add(Message(
-        id: id,
-        text: replyText,
-        isMe: false,
-        time: now,
-        status: 2,
-      ));
-    });
-  }
-
-  String pickReply(String sent) {
-    final t = sent.toLowerCase();
-    final random = Random();
-
-    // match whole words only, so "this" is not treated as "hi"
-    bool hasWord(String words) => RegExp(r'\b(' + words + r')\b').hasMatch(t);
-
-    if (t.contains('how are you')) {
-      return 'I am fine, thanks for asking! 😊';
+    try {
+      // push() makes a new unique key, set() writes the message there
+      await _messagesRef.push().set({
+        'text': text,
+        'senderId': _myUid,
+        'timeMs': ServerValue.timestamp,
+        'status': 0,
+      });
+    } catch (e) {
+      snack('Could not send. Check your internet and database rules.');
     }
-    if (hasWord('hi|hello|hey')) {
-      return ['Hello! 😊', 'Hey, how are you?', 'Hi there!'][random.nextInt(3)];
-    }
-    if (t.contains('thank')) {
-      return 'You are welcome! 🙏';
-    }
-    if (hasWord('bye')) {
-      return 'Bye, take care! 👋';
-    }
-    if (t.contains('?')) {
-      return [
-        'Let me check and tell you',
-        'Good question 🤔',
-        'I will tell you later'
-      ][random.nextInt(3)];
-    }
-    const general = [
-      'Okay 👍',
-      'Nice!',
-      'Haha, true 😂',
-      'Alright, got it',
-      'Tell me more',
-      'Sure, no problem',
-    ];
-    return general[random.nextInt(general.length)];
   }
 
   // ---------- ACTIONS ----------
@@ -299,6 +241,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void snack(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -314,10 +257,12 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> deleteMessage(Message msg) async {
-    await DatabaseHelper.deleteMessage(msg.id);
-    if (!mounted) return;
-    setState(() => messages.remove(msg));
-    snack('Message deleted');
+    try {
+      await _messagesRef.child(msg.id).remove();
+      snack('Message deleted');
+    } catch (e) {
+      snack('Could not delete the message');
+    }
   }
 
   Future<void> clearChat() async {
@@ -361,9 +306,11 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     if (ok == true) {
-      await DatabaseHelper.clearChat(widget.name);
-      if (!mounted) return;
-      setState(() => messages.clear());
+      try {
+        await _messagesRef.remove();
+      } catch (e) {
+        snack('Could not clear the chat');
+      }
     }
   }
 
@@ -391,17 +338,19 @@ class _ChatScreenState extends State<ChatScreen> {
                 snack('Copied');
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: _error),
-              title: const Text(
-                'Delete',
-                style: TextStyle(color: _error, fontSize: 17),
+            // only your own messages can be deleted
+            if (msg.isMe)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: _error),
+                title: const Text(
+                  'Delete',
+                  style: TextStyle(color: _error, fontSize: 17),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  deleteMessage(msg);
+                },
               ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                deleteMessage(msg);
-              },
-            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -473,7 +422,7 @@ class _ChatScreenState extends State<ChatScreen> {
               radius: 40,
               backgroundColor: widget.color,
               child: Text(
-                widget.name[0],
+                widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 34,
@@ -578,11 +527,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (status == 0) {
       return const Icon(Icons.done, size: 17, color: _tickGrey);
     }
-    return Icon(
-      Icons.done_all,
-      size: 17,
-      color: status == 2 ? _tickRead : _tickGrey,
-    );
+    return const Icon(Icons.done_all, size: 17, color: _tickRead);
   }
 
   Widget buildBubble(Message msg) {
@@ -653,28 +598,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget buildTypingBubble() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: _theirs,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Text(
-          'typing...',
-          style: TextStyle(
-            color: AppColors.textSoft,
-            fontSize: 15,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget buildMessageList() {
     if (loading) {
       return const Center(
@@ -682,7 +605,20 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    if (messages.isEmpty && !typing) {
+    if (loadError) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Unable to load messages. Check your Firebase Realtime Database rules.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+          ),
+        ),
+      );
+    }
+
+    if (messages.isEmpty) {
       return const Center(
         child: Text(
           'No messages yet\nSay hi 👋',
@@ -699,13 +635,8 @@ class _ChatScreenState extends State<ChatScreen> {
       reverse: true,
       padding: const EdgeInsets.all(12),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      itemCount: items.length + (typing ? 1 : 0),
-      itemBuilder: (context, i) {
-        var index = i;
-        if (typing) {
-          if (index == 0) return buildTypingBubble();
-          index -= 1;
-        }
+      itemCount: items.length,
+      itemBuilder: (context, index) {
         final item = items[index];
         if (item is DateTime) return buildDateChip(item);
         return buildBubble(item as Message);
@@ -846,7 +777,7 @@ class _ChatScreenState extends State<ChatScreen> {
               radius: 19,
               backgroundColor: widget.color,
               child: Text(
-                widget.name[0],
+                widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -855,27 +786,13 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    typing ? 'typing...' : 'online',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: typing
-                          ? const Color(0xFFF2D98B)
-                          : const Color(0xCCFFFFFF),
-                    ),
-                  ),
-                ],
+              child: Text(
+                widget.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],

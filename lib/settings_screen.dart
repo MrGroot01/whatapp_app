@@ -1,12 +1,13 @@
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'app_theme.dart';
 import 'database_helper.dart';
-import 'session_helper.dart';
-import 'welcome_screen.dart';
+import 'login_screen.dart';
 
 // One row in the settings list
 class SettingsItem {
@@ -65,29 +66,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  // ---------- READ THE NICKNAME FROM SQLITE ----------
+  // ---------- READ THE NAME FROM FIREBASE ----------
   Future<void> loadNickname() async {
-    final user = await DatabaseHelper.getUser(widget.email);
-    final name = user?['nickname'] as String?;
-    if (!mounted) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    setState(() {
-      nickname = name;
-    });
+    String? name = user.displayName;
+    try {
+      final snap = await FirebaseDatabase.instance
+          .ref('publicProfiles/${user.uid}/name')
+          .get()
+          .timeout(const Duration(seconds: 8));
+      final value = snap.value;
+      if (value is String && value.trim().isNotEmpty) name = value;
+    } catch (e) {
+      debugPrint('Could not load name: $e');
+    }
+
+    if (!mounted) return;
+    setState(() => nickname = name);
   }
 
-  // ---------- READ THE SAVED PICTURE FROM SQLITE ----------
+  // ---------- READ THE SAVED PICTURE ----------
   Future<void> loadSavedImage() async {
-    final savedPath = await DatabaseHelper.getProfileImage(widget.email);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final savedPath = await DatabaseHelper.getProfileImageForUid(uid);
     if (savedPath == null) return;
 
     final file = File(savedPath);
     if (!file.existsSync()) return;
     if (!mounted) return;
 
-    setState(() {
-      profileImage = file;
-    });
+    setState(() => profileImage = file);
   }
 
   // ---------- PICK A PICTURE AND SAVE IT ----------
@@ -108,9 +120,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
     final savedFile = await File(picked.path).copy('${folder.path}/$fileName');
 
-    // 2. remember the old picture's address, then write the new one in SQLite
-    final oldPath = await DatabaseHelper.getProfileImage(widget.email);
-    await DatabaseHelper.saveProfileImage(widget.email, savedFile.path);
+    // 2. remember the old picture's address, then save the new one
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final oldPath = await DatabaseHelper.getProfileImageForUid(uid);
+    await DatabaseHelper.saveProfileImageForUid(uid, savedFile.path);
     debugPrint('Saved picture: ${savedFile.path}');
 
     // 3. delete the old picture file so the phone does not fill up
@@ -124,9 +138,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
 
     // 4. show the new picture
-    setState(() {
-      profileImage = savedFile;
-    });
+    setState(() => profileImage = savedFile);
   }
 
   // ---------- LOGOUT ----------
@@ -171,14 +183,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (shouldLogout == true && mounted) {
-      // erase the "who is logged in" note
-      await SessionHelper.clearSession();
+      // 1. sign out of Firebase
+      await FirebaseAuth.instance.signOut();
+
+      // 2. erase the old local "who is logged in" note
       if (!mounted) return;
 
-      // go to the Welcome page and remove all old pages
+      // 3. go to the Login page and remove all old pages
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const WelcomeScreen()),
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
             (route) => false,
       );
     }

@@ -15,10 +15,11 @@ class DatabaseHelper {
     final folder = await getDatabasesPath();
     _db = await openDatabase(
       join(folder, 'whatsapp_app.db'),
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
         await _createUsersTable(db);
         await _createChatTables(db);
+        await _createProfileTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -34,6 +35,10 @@ class DatabaseHelper {
         if (oldVersion < 4) {
           // new column to remember each user's profile picture
           await db.execute('ALTER TABLE users ADD COLUMN profile_image TEXT');
+        }
+        if (oldVersion < 5) {
+          // profile pictures now belong to the Firebase account id
+          await _createProfileTable(db);
         }
       },
     );
@@ -67,6 +72,14 @@ class DatabaseHelper {
     );
   }
 
+  static Future<void> _createProfileTable(Database db) async {
+    await db.execute(
+      'CREATE TABLE IF NOT EXISTS profile_images ('
+          'uid TEXT PRIMARY KEY, '
+          'path TEXT NOT NULL)',
+    );
+  }
+
   // ---------- PASSWORD HELPERS ----------
   // A salt is a random text added to the password before hashing,
   // so two users with the same password get different hashes.
@@ -80,7 +93,7 @@ class DatabaseHelper {
     return sha256.convert(utf8.encode('$salt$password')).toString();
   }
 
-  // ---------- USERS ----------
+  // ---------- USERS (old local login, no longer used by Firebase login) ----------
   static Future<bool> emailExists(String email) async {
     final db = await getDatabase();
     final rows = await db.query(
@@ -171,8 +184,7 @@ class DatabaseHelper {
     return rows.map((r) => r['email'] as String).toList();
   }
 
-  // ---------- PROFILE PICTURE ----------
-  // Write: "this email's picture is at this address"
+  // ---------- PROFILE PICTURE (old, by email) ----------
   static Future<void> saveProfileImage(String email, String path) async {
     final db = await getDatabase();
     await db.update(
@@ -183,7 +195,6 @@ class DatabaseHelper {
     );
   }
 
-  // Read: "where is this email's picture?" (null if none)
   static Future<String?> getProfileImage(String email) async {
     final db = await getDatabase();
     final rows = await db.query(
@@ -197,7 +208,30 @@ class DatabaseHelper {
     return rows.first['profile_image'] as String?;
   }
 
+  // ---------- PROFILE PICTURE (new, by Firebase account id) ----------
+  static Future<void> saveProfileImageForUid(String uid, String path) async {
+    final db = await getDatabase();
+    await db.insert(
+      'profile_images',
+      {'uid': uid, 'path': path},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<String?> getProfileImageForUid(String uid) async {
+    final db = await getDatabase();
+    final rows = await db.query(
+      'profile_images',
+      where: 'uid = ?',
+      whereArgs: [uid],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['path'] as String?;
+  }
+
   // ---------- CHAT ----------
+  // "contact" now holds a unique key: <account id>_<contact id>
   static Future<List<Map<String, Object?>>> getMessages(String contact) async {
     final db = await getDatabase();
     return db.query(

@@ -1,6 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
-import 'database_helper.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
 
@@ -14,11 +14,16 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   static const Color _error = Color(0xFFD94B4B);
 
+  // true  = the user must click the link in the verification email
+  // false = anyone with a correct password can log in
+  static const bool requireVerifiedEmail = false;
+
   final formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool hidePassword = true;
   bool isLoading = false;
+  bool needsVerification = false;
   String? errorMessage;
 
   @override
@@ -31,69 +36,135 @@ class _LoginScreenState extends State<LoginScreen> {
   String? validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Please enter your email';
-    final regex = RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
+    final regex =
+    RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
     if (!regex.hasMatch(email)) {
       return 'Enter a valid email (example: name@gmail.com)';
     }
     return null;
   }
 
-  // At login we only check that the box is not empty.
-  // (The strong password rules are for the signup page.)
   String? validatePassword(String? value) {
     if (value == null || value.isEmpty) return 'Please enter your password';
     return null;
   }
 
-  // ---------- ACTIONS ----------
+  String firebaseErrorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'user-not-found':
+      case 'invalid-credential':
+      case 'wrong-password':
+      // Firebase uses one answer for "no account" and "wrong password"
+        return 'Email or password is incorrect. '
+            'If you are new here, tap Sign up below.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      case 'network-request-failed':
+        return 'Network error. Check your internet connection.';
+      default:
+        return e.message ?? 'Unable to log in. Please try again.';
+    }
+  }
+
   Future<void> onNextPressed() async {
     if (!formKey.currentState!.validate()) return;
 
     setState(() {
       isLoading = true;
       errorMessage = null;
+      needsVerification = false;
     });
 
     final email = emailController.text.trim().toLowerCase();
 
-    // 1. does this account exist?
-    final user = await DatabaseHelper.getUser(email);
-    if (!mounted) return;
+    try {
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: passwordController.text,
+      );
 
-    if (user == null) {
+      // get the latest "email verified" status from Firebase
+      await credential.user?.reload();
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (requireVerifiedEmail && !(user?.emailVerified ?? false)) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        setState(() {
+          isLoading = false;
+          needsVerification = true;
+          errorMessage =
+          'Please verify your email first. Open the link we sent to your '
+              'inbox (check Spam too), then log in again.';
+        });
+        return;
+      }
+
+      if (!mounted) return;
+      final signedInEmail = user?.email ?? email;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(email: signedInEmail),
+        ),
+            (route) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      // the exact reason shows in the Run console
+      debugPrint('Login failed: ${e.code}');
+      if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = 'No account found for this email. Please sign up.';
+        errorMessage = firebaseErrorMessage(e);
       });
-      return;
-    }
-
-    // 2. is the password correct?
-    final passwordOk =
-    await DatabaseHelper.checkPassword(email, passwordController.text);
-    if (!mounted) return;
-
-    if (!passwordOk) {
+    } catch (e) {
+      debugPrint('Login failed: $e');
+      if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = 'Wrong password. Please try again.';
+        errorMessage = 'Something went wrong. Please try again.';
       });
-      return;
     }
+  }
 
-    setState(() => isLoading = false);
+  // sign in again only to send the email, then sign out
+  Future<void> resendVerification() async {
+    setState(() => isLoading = true);
 
-    // 3. password is correct -> straight to Home (no OTP at login)
-    debugPrint('$email logged in -> Home');
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => HomeScreen(email: email)),
-          (route) => false,
-    );
+    try {
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailController.text.trim().toLowerCase(),
+        password: passwordController.text,
+      );
+      await cred.user?.sendEmailVerification();
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        errorMessage = null;
+        needsVerification = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification email sent. Check your inbox.'),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        errorMessage = firebaseErrorMessage(e);
+      });
+    }
   }
 
   Future<void> openSignup() async {
-    // Signup sends back the new email when the account is created
     final newEmail = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (context) => const SignupScreen()),
@@ -106,12 +177,13 @@ class _LoginScreenState extends State<LoginScreen> {
         errorMessage = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created. Please log in.')),
+        const SnackBar(
+          content: Text('Account verified. Please log in.'),
+        ),
       );
     }
   }
 
-  // ---------- UI HELPERS ----------
   OutlineInputBorder boxBorder(Color color) {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
@@ -162,7 +234,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ICON
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(18),
@@ -194,8 +265,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: AppColors.textSoft, fontSize: 16),
                   ),
                   const SizedBox(height: 28),
-
-                  // EMAIL
                   TextFormField(
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -218,12 +287,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: validateEmail,
                   ),
                   const SizedBox(height: 16),
-
-                  // PASSWORD
                   TextFormField(
                     controller: passwordController,
                     obscureText: hidePassword,
                     textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) {
+                      if (!isLoading) onNextPressed();
+                    },
                     style: const TextStyle(
                       color: AppColors.textDark,
                       fontSize: 17,
@@ -250,8 +320,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     validator: validatePassword,
                   ),
-
-                  // ERROR MESSAGE (soft red box)
                   if (errorMessage != null) ...[
                     const SizedBox(height: 16),
                     Container(
@@ -262,8 +330,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.error_outline,
-                              color: _error, size: 20),
+                          const Icon(
+                            Icons.error_outline,
+                            color: _error,
+                            size: 20,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -277,10 +348,22 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                     ),
+                    if (needsVerification)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          onPressed: isLoading ? null : resendVerification,
+                          child: const Text(
+                            'Resend verification email',
+                            style: TextStyle(
+                              color: AppColors.emerald,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                   const SizedBox(height: 24),
-
-                  // LOGIN BUTTON
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(
@@ -312,10 +395,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // SIGN UP LINK
                   TextButton(
-                    onPressed: openSignup,
+                    onPressed: isLoading ? null : openSignup,
                     child: const Text.rich(
                       TextSpan(
                         text: "Don't have an account? ",

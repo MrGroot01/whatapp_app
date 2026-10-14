@@ -1,8 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
-import 'database_helper.dart';
 import 'home_screen.dart';
-import 'session_helper.dart';
 import 'welcome_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -20,19 +19,35 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> decideNextPage() async {
-    // do two things at the same time:
-    // 1. read the session note  2. keep the logo on screen for 2 seconds
-    final results = await Future.wait([
-      SessionHelper.getSession(),
-      Future.delayed(const Duration(seconds: 2)),
-    ]);
-    final email = results[0] as String?;
+    // keep the logo on screen for 2 seconds
+    await Future.delayed(const Duration(seconds: 2));
 
     // default: send the user to the Welcome page
     Widget nextPage = const WelcomeScreen();
 
-    // if someone is logged in (and still exists), go to the home page
-    if (email != null && await DatabaseHelper.emailExists(email)) {
+    // Firebase remembers the logged-in user by itself
+    var user = FirebaseAuth.instance.currentUser;
+
+    if (user != null) {
+      try {
+        // ask the server: does this account still exist and is it enabled?
+        await user.reload().timeout(const Duration(seconds: 6));
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'user-not-found' ||
+            e.code == 'user-disabled' ||
+            e.code == 'user-token-expired') {
+          // the account was deleted or disabled: log out on this phone too
+          await FirebaseAuth.instance.signOut();
+        }
+      } catch (_) {
+        // offline or slow network: keep the saved login
+      }
+
+      user = FirebaseAuth.instance.currentUser;
+    }
+
+    final email = user?.email;
+    if (user != null && email != null && email.isNotEmpty) {
       nextPage = HomeScreen(email: email);
     }
 
@@ -61,44 +76,32 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               const Spacer(),
 
-              // LOGO: white circle, chat icon, small gold star
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 104,
-                    height: 104,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x33000000),
-                          blurRadius: 24,
-                          offset: Offset(0, 10),
-                        ),
-                      ],
+              // LOGO IMAGE from assets/icon/app_icon.png
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x44000000),
+                      blurRadius: 24,
+                      offset: Offset(0, 10),
                     ),
-                    child: const Icon(
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: Image.asset(
+                    'assets/icon/app_icon.png',
+                    width: 120,
+                    height: 120,
+                    // if the image is missing, show an icon instead of crashing
+                    errorBuilder: (context, error, stackTrace) => const Icon(
                       Icons.chat_bubble_rounded,
-                      size: 52,
-                      color: AppColors.emerald,
+                      size: 90,
+                      color: Colors.white,
                     ),
                   ),
-                  const Positioned(
-                    right: -6,
-                    top: -6,
-                    child: CircleAvatar(
-                      radius: 16,
-                      backgroundColor: AppColors.gold,
-                      child: Icon(
-                        Icons.auto_awesome,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
               const SizedBox(height: 28),
 

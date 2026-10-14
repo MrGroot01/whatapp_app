@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "900449015045",
+    "firebase_url": "https://velora-chat-b8232-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "velora-chat-b8232",
+    "storage_bucket": "velora-chat-b8232.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:900449015045:android:9a930317eb2240f0a0536c",
+        "android_client_info": {
+          "package_name": "com.example.whatapp_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEwtDNDKKAF84mL-KFnswN6WSDUTvMcmQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
