@@ -1,52 +1,140 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
+import 'call_screen.dart';
+import 'contact_info_screen.dart';
+import 'chat_media_screen.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:url_launcher/url_launcher.dart';
+
 import 'app_theme.dart';
 
-// One message = text + who sent it + time + tick status
+// One message = text / image / file / contact + who sent it + time + tick status
 class Message {
   final String id; // the Firebase key of this message
   final String text;
   final bool isMe;
+  final String senderId;
   final DateTime time;
   final int status; // 0 = sent, 2 = read
+  final String type; // 'text', 'image', 'file' or 'contact'
+  final String url; // Storage URL for documents / older image messages
+  final String
+  imageBase64; // compressed image stored directly in Realtime Database
+  final String fileName;
+  final bool forwarded;
+  final String replyToId; // the message this one replies to
+  final String replyText; // short preview of that message
+  final String replySenderId; // who wrote that message
+  final Map<String, String> reactions; // account id -> emoji
+  final String contactUid; // shared contact: account id
+  final String contactName;
+  final String contactPhone;
+  final String contactCountryCode;
 
   Message({
     required this.id,
     required this.text,
     required this.isMe,
+    required this.senderId,
     required this.time,
     this.status = 0,
+    this.type = 'text',
+    this.url = '',
+    this.imageBase64 = '',
+    this.fileName = '',
+    this.forwarded = false,
+    this.replyToId = '',
+    this.replyText = '',
+    this.replySenderId = '',
+    this.reactions = const {},
+    this.contactUid = '',
+    this.contactName = '',
+    this.contactPhone = '',
+    this.contactCountryCode = '',
   });
 
   factory Message.fromMap(String id, Map<dynamic, dynamic> data, String myUid) {
     final ts = data['timeMs'];
     final st = data['status'];
+
+    final reactions = <String, String>{};
+    final rawReactions = data['reactions'];
+    if (rawReactions is Map) {
+      rawReactions.forEach((key, value) {
+        if (value != null) reactions[key.toString()] = value.toString();
+      });
+    }
+
+    final sender = (data['senderId'] ?? '').toString();
+
     return Message(
       id: id,
       text: (data['text'] ?? '').toString(),
-      isMe: data['senderId'] == myUid,
+      isMe: sender == myUid,
+      senderId: sender,
       time: DateTime.fromMillisecondsSinceEpoch(
         ts is num ? ts.toInt() : DateTime.now().millisecondsSinceEpoch,
       ),
       status: st is num ? st.toInt() : 0,
+      type: (data['type'] ?? 'text').toString(),
+      url: (data['url'] ?? '').toString(),
+      imageBase64: (data['imageBase64'] ?? '').toString(),
+      fileName: (data['fileName'] ?? '').toString(),
+      forwarded: data['forwarded'] == true,
+      replyToId: (data['replyToId'] ?? '').toString(),
+      replyText: (data['replyText'] ?? '').toString(),
+      replySenderId: (data['replySenderId'] ?? '').toString(),
+      reactions: reactions,
+      contactUid: (data['contactUid'] ?? '').toString(),
+      contactName: (data['contactName'] ?? '').toString(),
+      contactPhone: (data['contactPhone'] ?? '').toString(),
+      contactCountryCode: (data['contactCountryCode'] ?? '').toString(),
     );
   }
+}
+
+// One saved contact, used by the "share contact" and "forward" pickers
+class _SavedContact {
+  final String id;
+  final String name;
+  final String phone;
+  final String countryCode;
+
+  const _SavedContact({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.countryCode,
+  });
 }
 
 class ChatScreen extends StatefulWidget {
   final String name;
   final Color color;
   final String chatKey; // unique per account + contact
+  final String phone; // contact phone number (without country code)
+  final String countryCode; // e.g. +91
 
   const ChatScreen({
     super.key,
     required this.name,
     required this.color,
     required this.chatKey,
+    this.phone = '',
+    this.countryCode = '+91',
   });
 
   @override
@@ -60,6 +148,17 @@ class _ChatScreenState extends State<ChatScreen> {
   static const Color _tickRead = Color(0xFF34A7E0);
   static const Color _tickGrey = Color(0xFF8A9A98);
   static const Color _error = Color(0xFFD94B4B);
+  static const Color _quoteOther = Color(0xFFAC44CF);
+
+  // the quick reactions shown when you long-press a message
+  static const List<String> _quickReactions = [
+    '👍',
+    '❤️',
+    '😂',
+    '😮',
+    '😢',
+    '🙏',
+  ];
 
   static const List<String> _emojis = [
     '😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😎',
@@ -71,7 +170,18 @@ class _ChatScreenState extends State<ChatScreen> {
   ];
 
   final messageController = TextEditingController();
-  final scrollController = ScrollController();
+  // the message list can jump to any message (Search needs this)
+  final ItemScrollController itemScrollController = ItemScrollController();
+  final ItemPositionsListener itemPositionsListener =
+  ItemPositionsListener.create();
+
+  // ---------- SEARCH IN CHAT ----------
+  bool searching = false;
+  String searchQuery = '';
+  int currentMatch = 0; // 0 = the newest match
+  String? _currentMatchId;
+  final searchController = TextEditingController();
+  final searchFocus = FocusNode();
   final focusNode = FocusNode();
 
   // the "notice board" for this chat in Firebase
@@ -85,11 +195,31 @@ class _ChatScreenState extends State<ChatScreen> {
     return parts.join('_');
   }
 
-  late final DatabaseReference _messagesRef =
-  FirebaseDatabase.instance.ref('chats/$_chatId/messages');
+  // the chat board between ME and another account (used by "forward")
+  String _chatIdWith(String otherUid) {
+    final parts = [_myUid, otherUid]..sort();
+    return parts.join('_');
+  }
+
+  late final DatabaseReference _messagesRef = FirebaseDatabase.instance.ref(
+    'chats/$_chatId/messages',
+  );
   StreamSubscription<DatabaseEvent>? _subscription;
 
   String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  // camera / gallery
+  final ImagePicker _picker = ImagePicker();
+
+  // speech to text
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechReady = false;
+  String _textBeforeMic = ''; // what was already typed before pressing the mic
+  bool _heardWords = false;
+
+  // language the mic understands. null = phone default.
+  // Examples: 'en_IN' (Indian English), 'hi_IN' (Hindi), 'kn_IN' (Kannada)
+  static const String? _speechLocale = null;
 
   List<Message> messages = [];
   bool loading = true;
@@ -97,6 +227,11 @@ class _ChatScreenState extends State<ChatScreen> {
   bool hasText = false;
   bool showEmoji = false;
   bool showScrollDown = false;
+  bool uploading = false;
+  bool listening = false;
+
+  // the message the user is replying to (null = not replying)
+  Message? replyingTo;
 
   @override
   void initState() {
@@ -114,11 +249,7 @@ class _ChatScreenState extends State<ChatScreen> {
       },
     );
 
-    scrollController.addListener(() {
-      // list is reversed, so offset 0 = bottom
-      final away = scrollController.offset > 300;
-      if (away != showScrollDown) setState(() => showScrollDown = away);
-    });
+    itemPositionsListener.itemPositions.addListener(_onPositionsChanged);
 
     focusNode.addListener(() {
       if (focusNode.hasFocus && showEmoji) {
@@ -130,8 +261,11 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _speech.cancel();
     messageController.dispose();
-    scrollController.dispose();
+    itemPositionsListener.itemPositions.removeListener(_onPositionsChanged);
+    searchController.dispose();
+    searchFocus.dispose();
     focusNode.dispose();
     super.dispose();
   }
@@ -171,8 +305,53 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ---------- SENDING ----------
+  // ---------- REPLY HELPERS ----------
+  // a short text that describes any kind of message
+  String _previewOf(Message m) {
+    String t;
+    switch (m.type) {
+      case 'image':
+        t = '📷 Photo';
+        break;
+      case 'file':
+        t = '📄 ${m.fileName.isNotEmpty ? m.fileName : m.text}';
+        break;
+      case 'contact':
+        t = '👤 ${m.contactName}';
+        break;
+      default:
+        t = m.text;
+    }
+    return t.length > 100 ? '${t.substring(0, 100)}…' : t;
+  }
+
+  // adds the "reply to" fields when the user is replying to a message
+  Map<String, dynamic> _withReply(Map<String, dynamic> data) {
+    final r = replyingTo;
+    if (r != null) {
+      data['replyToId'] = r.id;
+      data['replyText'] = _previewOf(r);
+      data['replySenderId'] = r.senderId;
+    }
+    return data;
+  }
+
+  void startReply(Message msg) {
+    setState(() {
+      replyingTo = msg;
+      showEmoji = false;
+    });
+    focusNode.requestFocus();
+  }
+
+  // ---------- SENDING TEXT ----------
   Future<void> sendMessage() async {
+    // stop the microphone if it is still listening
+    if (listening) {
+      await _speech.stop();
+      if (mounted) setState(() => listening = false);
+    }
+
     final text = messageController.text.trim();
     if (text.isEmpty) return;
 
@@ -181,34 +360,1019 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
+    final data = _withReply({
+      'text': text,
+      'type': 'text',
+      'senderId': _myUid,
+      'timeMs': ServerValue.timestamp,
+      'status': 0,
+    });
+
     messageController.clear();
-    setState(() => hasText = false);
+    setState(() {
+      hasText = false;
+      replyingTo = null;
+    });
     scrollToBottom();
 
     try {
       // push() makes a new unique key, set() writes the message there
-      await _messagesRef.push().set({
-        'text': text,
+      await _messagesRef.push().set(data);
+    } catch (e) {
+      debugPrint('Send failed: $e');
+      snack('Could not send. Check your internet and database rules.');
+    }
+  }
+
+  // ---------- CALL ----------
+  // Opens the WhatsApp-style in-app call screen.
+  void openCallScreen({required bool video}) {
+    closePanels();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CallScreen(
+          name: widget.name,
+          color: widget.color,
+          phone: widget.phone,
+          countryCode: widget.countryCode,
+          video: video,
+        ),
+      ),
+    );
+  }
+
+  // ---------- CAMERA / GALLERY / DOCUMENT ----------
+  Future<void> pickFromCamera() async {
+    try {
+      final x = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 35,
+        maxWidth: 700,
+        maxHeight: 700,
+      );
+      if (x == null) return;
+      await _uploadAndSend(File(x.path), x.name, 'image');
+    } catch (e) {
+      snack('Could not open the camera. Check camera permission.');
+    }
+  }
+
+  Future<void> pickFromGallery() async {
+    try {
+      final x = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 35,
+        maxWidth: 700,
+        maxHeight: 700,
+      );
+      if (x == null) return;
+      await _uploadAndSend(File(x.path), x.name, 'image');
+    } catch (e) {
+      snack('Could not open the gallery');
+    }
+  }
+
+  Future<void> pickDocument() async {
+    try {
+      final res = await FilePicker.platform.pickFiles();
+      if (res == null || res.files.isEmpty) return;
+      final picked = res.files.single;
+      final path = picked.path;
+      if (path == null) return;
+      await _uploadAndSend(File(path), picked.name, 'file');
+    } catch (e) {
+      snack('Could not pick the document');
+    }
+  }
+
+  // Images are stored as Base64 in Realtime Database (no Firebase Storage).
+  // Documents still use Firebase Storage because they are binary files.
+  Future<void> _uploadAndSend(File file, String name, String type) async {
+    if (_myUid.isEmpty) {
+      snack('Please log in again');
+      return;
+    }
+
+    if (mounted) setState(() => uploading = true);
+    try {
+      final messageData = <String, dynamic>{
+        'text': type == 'image' ? '' : name,
+        'type': type,
+        'fileName': name,
         'senderId': _myUid,
         'timeMs': ServerValue.timestamp,
         'status': 0,
-      });
-    } catch (e) {
-      snack('Could not send. Check your internet and database rules.');
+      };
+
+      if (type == 'image') {
+        final bytes = await file.readAsBytes();
+        final imageBase64 = base64Encode(bytes);
+        // RTDB has a per-write size limit. Keep images compressed and small.
+        if (imageBase64.length > 10 * 1024 * 1024) {
+          snack('Image is too large. Please take a smaller photo.');
+          return;
+        }
+        messageData['imageBase64'] = imageBase64;
+      } else {
+        // Document upload still requires Firebase Storage to be enabled.
+        final ref = FirebaseStorage.instance.ref(
+          'chats/$_chatId/${DateTime.now().millisecondsSinceEpoch}_$name',
+        );
+        await ref.putFile(file);
+        messageData['url'] = await ref.getDownloadURL();
+      }
+
+      _withReply(messageData);
+      await _messagesRef.push().set(messageData);
+      if (mounted) setState(() => replyingTo = null);
+      scrollToBottom();
+    } catch (e, stackTrace) {
+      debugPrint('Message attachment save failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      snack(
+        type == 'image'
+            ? 'Could not save image. Check Realtime Database rules and connection.'
+            : 'Document upload needs Firebase Storage enabled.',
+      );
+    } finally {
+      if (mounted) setState(() => uploading = false);
     }
+  }
+
+  Future<void> openUrl(String url) async {
+    if (url.isEmpty) return;
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      snack('Could not open the file');
+    }
+  }
+
+  // ---------- SAVED CONTACTS (for share + forward) ----------
+  Color _colorFor(String key) {
+    const colors = [
+      Color(0xFFE91E63),
+      Color(0xFF3F51B5),
+      Color(0xFF009688),
+      Color(0xFFFF9800),
+      Color(0xFF9C27B0),
+      Color(0xFF795548),
+      Color(0xFF607D8B),
+      Color(0xFFF44336),
+      Color(0xFF4CAF50),
+      Color(0xFF2196F3),
+    ];
+    return colors[key.hashCode.abs() % colors.length];
+  }
+
+  Future<List<_SavedContact>> _loadSavedContacts() async {
+    final list = <_SavedContact>[];
+    if (_myUid.isEmpty) return list;
+
+    try {
+      final snap = await FirebaseDatabase.instance
+          .ref('users/$_myUid/contacts')
+          .get();
+      final value = snap.value;
+      if (value is Map) {
+        value.forEach((key, data) {
+          if (data is Map) {
+            list.add(
+              _SavedContact(
+                id: key.toString(),
+                name: (data['name'] ?? 'Contact').toString(),
+                phone: (data['phone'] ?? '').toString(),
+                countryCode: (data['countryCode'] ?? '+91').toString(),
+              ),
+            );
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Could not load contacts: $e');
+    }
+
+    list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return list;
+  }
+
+  // a bottom sheet with a search box and the list of saved contacts
+  // multi = false -> tap one contact and the sheet closes
+  // multi = true  -> tick several contacts, then press the send button
+  Future<List<_SavedContact>?> _pickContacts({
+    required String title,
+    required bool multi,
+  }) async {
+    closePanels();
+
+    final all = await _loadSavedContacts();
+    if (!mounted) return null;
+
+    if (all.isEmpty) {
+      snack('No saved contacts yet');
+      return null;
+    }
+
+    final selected = <String>{};
+    String query = '';
+
+    return showModalBottomSheet<List<_SavedContact>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final q = query.trim().toLowerCase();
+            final shown = all.where((c) {
+              if (q.isEmpty) return true;
+              return c.name.toLowerCase().contains(q) ||
+                  '${c.countryCode}${c.phone}'.contains(q);
+            }).toList();
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.6,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 8, 6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: GoogleFonts.poppins(
+                                color: AppColors.textDark,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(sheetContext),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: TextField(
+                        cursorColor: AppColors.emerald,
+                        onChanged: (v) => setSheetState(() => query = v),
+                        style: GoogleFonts.poppins(
+                          color: AppColors.textDark,
+                          fontSize: 16,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Search name or number',
+                          hintStyle: GoogleFonts.poppins(
+                            color: AppColors.textSoft,
+                            fontSize: 15,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            color: AppColors.textSoft,
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF3F0E8),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(30),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: shown.isEmpty
+                          ? Center(
+                        child: Text(
+                          'No contact found',
+                          style: GoogleFonts.poppins(
+                            color: AppColors.textSoft,
+                            fontSize: 16,
+                          ),
+                        ),
+                      )
+                          : ListView.builder(
+                        itemCount: shown.length,
+                        itemBuilder: (context, index) {
+                          final c = shown[index];
+
+                          final avatar = CircleAvatar(
+                            backgroundColor: _colorFor(c.id),
+                            child: Text(
+                              c.name.isNotEmpty
+                                  ? c.name[0].toUpperCase()
+                                  : '?',
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+
+                          final nameText = Text(
+                            c.name,
+                            style: GoogleFonts.poppins(
+                              color: AppColors.textDark,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          );
+
+                          final phoneText = Text(
+                            '${c.countryCode} ${c.phone}',
+                            style: GoogleFonts.poppins(
+                              color: AppColors.textSoft,
+                              fontSize: 13,
+                            ),
+                          );
+
+                          if (!multi) {
+                            return ListTile(
+                              leading: avatar,
+                              title: nameText,
+                              subtitle: phoneText,
+                              onTap: () =>
+                                  Navigator.pop(sheetContext, [c]),
+                            );
+                          }
+
+                          return CheckboxListTile(
+                            secondary: avatar,
+                            title: nameText,
+                            subtitle: phoneText,
+                            activeColor: AppColors.emerald,
+                            value: selected.contains(c.id),
+                            onChanged: (checked) {
+                              setSheetState(() {
+                                if (checked == true) {
+                                  selected.add(c.id);
+                                } else {
+                                  selected.remove(c.id);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                    if (multi)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: selected.isEmpty
+                                ? null
+                                : () => Navigator.pop(
+                              sheetContext,
+                              all
+                                  .where((c) => selected.contains(c.id))
+                                  .toList(),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.emerald,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: Text(
+                              selected.isEmpty
+                                  ? 'Select contacts'
+                                  : 'Send to ${selected.length}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ---------- SHARE A CONTACT ----------
+  Future<void> shareContact() async {
+    final picked = await _pickContacts(title: 'Share contact', multi: false);
+    if (picked == null || picked.isEmpty) return;
+    if (_myUid.isEmpty) {
+      snack('Please log in again');
+      return;
+    }
+
+    final c = picked.first;
+
+    try {
+      await _messagesRef.push().set(
+        _withReply({
+          'text': c.name,
+          'type': 'contact',
+          'contactUid': c.id,
+          'contactName': c.name,
+          'contactPhone': c.phone,
+          'contactCountryCode': c.countryCode,
+          'senderId': _myUid,
+          'timeMs': ServerValue.timestamp,
+          'status': 0,
+        }),
+      );
+      if (mounted) setState(() => replyingTo = null);
+      scrollToBottom();
+    } catch (e) {
+      debugPrint('Share contact failed: $e');
+      snack('Could not share the contact. Check the database rules.');
+    }
+  }
+
+  // tap on a shared contact card
+  Future<void> showContactCard(Message msg) async {
+    final uid = msg.contactUid;
+    final canUse = uid.isNotEmpty && uid != _myUid;
+
+    bool alreadySaved = false;
+    if (canUse) {
+      try {
+        final snap = await FirebaseDatabase.instance
+            .ref('users/$_myUid/contacts/$uid')
+            .get();
+        alreadySaved = snap.exists;
+      } catch (e) {
+        debugPrint('Contact check failed: $e');
+      }
+    }
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 36,
+                backgroundColor: _colorFor(uid.isEmpty ? msg.contactName : uid),
+                child: Text(
+                  msg.contactName.isNotEmpty
+                      ? msg.contactName[0].toUpperCase()
+                      : '?',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                msg.contactName,
+                style: GoogleFonts.poppins(
+                  color: AppColors.textDark,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '${msg.contactCountryCode} ${msg.contactPhone}',
+                style: GoogleFonts.poppins(
+                  color: AppColors.textSoft,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (canUse)
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      openChatWith(msg);
+                    },
+                    icon: const Icon(Icons.chat),
+                    label: Text(
+                      'Message',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.emerald,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              if (canUse && !alreadySaved) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      saveSharedContact(msg);
+                    },
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: Text(
+                      'Save contact',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.emerald,
+                      side: const BorderSide(color: AppColors.emerald),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              if (canUse && alreadySaved)
+                Text(
+                  'Already in your contacts',
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textSoft,
+                    fontSize: 14,
+                  ),
+                ),
+              if (!canUse)
+                Text(
+                  uid == _myUid ? 'This is your own number' : '',
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textSoft,
+                    fontSize: 14,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void openChatWith(Message msg) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          name: msg.contactName,
+          color: _colorFor(msg.contactUid),
+          chatKey: '${_myUid}_${msg.contactUid}',
+          phone: msg.contactPhone,
+          countryCode: msg.contactCountryCode,
+        ),
+      ),
+    );
+  }
+
+  Future<void> saveSharedContact(Message msg) async {
+    final uid = msg.contactUid;
+    if (uid.isEmpty || uid == _myUid) return;
+
+    try {
+      await FirebaseDatabase.instance.ref('users/$_myUid/contacts/$uid').set({
+        'uid': uid,
+        'name': msg.contactName,
+        'phone': msg.contactPhone,
+        'countryCode': msg.contactCountryCode,
+        'addedAt': ServerValue.timestamp,
+        'lastMessage': 'Tap to start chatting',
+        'time': '',
+      });
+      snack('Contact saved');
+    } catch (e) {
+      debugPrint('Save contact failed: $e');
+      snack('Could not save the contact. Check the database rules.');
+    }
+  }
+
+  // ---------- REACTIONS ----------
+  // tap the same emoji again to remove your reaction
+  Future<void> reactTo(Message msg, String emoji) async {
+    if (_myUid.isEmpty) {
+      snack('Please log in again');
+      return;
+    }
+
+    final ref = _messagesRef.child(msg.id).child('reactions').child(_myUid);
+
+    try {
+      if (msg.reactions[_myUid] == emoji) {
+        await ref.remove();
+      } else {
+        await ref.set(emoji);
+      }
+    } catch (e) {
+      debugPrint('Reaction failed: $e');
+      snack('Could not add the reaction. Check the database rules.');
+    }
+  }
+
+  // the "+" button: pick any emoji from the full list
+  void pickAnyEmoji(Message msg) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SizedBox(
+        height: 300,
+        child: GridView.count(
+          crossAxisCount: 8,
+          padding: const EdgeInsets.all(12),
+          children: _emojis
+              .map(
+                (e) => InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                reactTo(msg, e);
+              },
+              child: Center(
+                child: Text(e, style: const TextStyle(fontSize: 26)),
+              ),
+            ),
+          )
+              .toList(),
+        ),
+      ),
+    );
+  }
+
+  // ---------- FORWARD ----------
+  Future<void> forwardMessage(Message msg) async {
+    final picked = await _pickContacts(title: 'Forward to...', multi: true);
+    if (picked == null || picked.isEmpty) return;
+    if (_myUid.isEmpty) {
+      snack('Please log in again');
+      return;
+    }
+
+    int done = 0;
+
+    for (final c in picked) {
+      try {
+        final data = <String, dynamic>{
+          'text': msg.text,
+          'type': msg.type,
+          'senderId': _myUid,
+          'timeMs': ServerValue.timestamp,
+          'status': 0,
+          'forwarded': true,
+        };
+        if (msg.url.isNotEmpty) data['url'] = msg.url;
+        if (msg.imageBase64.isNotEmpty) data['imageBase64'] = msg.imageBase64;
+        if (msg.fileName.isNotEmpty) data['fileName'] = msg.fileName;
+        if (msg.type == 'contact') {
+          data['contactUid'] = msg.contactUid;
+          data['contactName'] = msg.contactName;
+          data['contactPhone'] = msg.contactPhone;
+          data['contactCountryCode'] = msg.contactCountryCode;
+        }
+
+        await FirebaseDatabase.instance
+            .ref('chats/${_chatIdWith(c.id)}/messages')
+            .push()
+            .set(data);
+        done++;
+      } catch (e) {
+        debugPrint('Forward to ${c.name} failed: $e');
+      }
+    }
+
+    snack(
+      done == picked.length
+          ? 'Message forwarded'
+          : 'Forwarded to $done of ${picked.length} contacts',
+    );
+  }
+
+  // ---------- SPEECH TO TEXT ----------
+  // How it works:
+  //  1) tap the mic  -> it starts listening
+  //  2) speak        -> your words appear live in the typing box
+  //  3) tap stop (or pause 5 seconds) -> the text stays in the box
+  //  4) tap send     -> the text is sent like a normal message
+  Future<bool> _initSpeech() async {
+    if (_speechReady) return true;
+    _speechReady = await _speech.initialize(
+      onStatus: _onSpeechStatus,
+      onError: _onSpeechError,
+    );
+    return _speechReady;
+  }
+
+  void _onSpeechStatus(String status) {
+    if (!mounted) return;
+    if ((status == 'notListening' || status == 'done') && listening) {
+      setState(() => listening = false);
+    }
+  }
+
+  void _onSpeechError(SpeechRecognitionError e) {
+    if (!mounted) return;
+    setState(() => listening = false);
+
+    if (e.errorMsg == 'error_speech_timeout' ||
+        e.errorMsg == 'error_no_match') {
+      // only complain if nothing was heard
+      if (!_heardWords) {
+        snack("I didn't hear anything. Tap the mic and speak clearly.");
+      }
+    } else if (e.errorMsg == 'error_permission') {
+      snack('Please allow the microphone permission for this app');
+    } else if (e.errorMsg == 'error_network' ||
+        e.errorMsg == 'error_network_timeout') {
+      snack('Speech needs an internet connection');
+    } else {
+      snack('Speech error: ${e.errorMsg}');
+    }
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    final words = result.recognizedWords.trim();
+    if (words.isEmpty) return;
+
+    _heardWords = true;
+    final full = _textBeforeMic.isEmpty ? words : '$_textBeforeMic $words';
+
+    messageController.value = TextEditingValue(
+      text: full,
+      selection: TextSelection.collapsed(offset: full.length),
+    );
+    if (mounted) setState(() => hasText = true);
+  }
+
+  // tap the mic: start listening
+  Future<void> toggleListening() async {
+    final ok = await _initSpeech();
+    if (!ok) {
+      snack('Microphone permission is needed. Allow it in the app settings.');
+      return;
+    }
+    if (!mounted) return;
+
+    closePanels();
+    _textBeforeMic = messageController.text.trim();
+    _heardWords = false;
+    setState(() => listening = true);
+    await _speech.listen(
+      onResult: _onSpeechResult,
+      listenOptions: stt.SpeechListenOptions(
+        localeId: _speechLocale,
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 3),
+        partialResults: true,
+        cancelOnError: true,
+        listenMode: stt.ListenMode.dictation,
+      ),
+    );
+  }
+
+  // tap stop: keep the text in the box so you can edit it or send it
+  Future<void> stopListening() async {
+    await _speech.stop();
+    if (mounted) setState(() => listening = false);
+  }
+
+  // cancel: throw away what was heard
+  Future<void> cancelListening() async {
+    await _speech.cancel();
+    messageController.text = _textBeforeMic;
+    messageController.selection = TextSelection.collapsed(
+      offset: _textBeforeMic.length,
+    );
+    if (mounted) {
+      setState(() {
+        listening = false;
+        hasText = _textBeforeMic.isNotEmpty;
+      });
+    }
+  }
+
+  // small bar shown while the mic is listening
+  Widget buildListeningBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+      padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.mic, color: _error),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Listening... speak now',
+              style: GoogleFonts.poppins(
+                color: AppColors.textDark,
+                fontSize: 15,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: cancelListening,
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(
+                color: _error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ---------- ACTIONS ----------
   void scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (scrollController.hasClients) {
-        scrollController.animateTo(
-          0,
+      if (itemScrollController.isAttached) {
+        itemScrollController.scrollTo(
+          index: 0, // the list is reversed: item 0 is the newest message
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
       }
     });
+  }
+
+  // shows the "scroll down" button when the newest message is out of view
+  void _onPositionsChanged() {
+    final positions = itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty || !mounted) return;
+    final atBottom = positions.any((p) => p.index == 0);
+    if (showScrollDown == atBottom) {
+      setState(() => showScrollDown = !atBottom);
+    }
+  }
+
+  // ---------- SEARCH IN CHAT ----------
+  void startSearch() {
+    searchController.clear();
+    setState(() {
+      searching = true;
+      searchQuery = '';
+      currentMatch = 0;
+      showEmoji = false;
+      replyingTo = null;
+    });
+  }
+
+  void stopSearch() {
+    searchController.clear();
+    FocusScope.of(context).unfocus();
+    setState(() {
+      searching = false;
+      searchQuery = '';
+      currentMatch = 0;
+    });
+  }
+
+  void onSearchChanged(String value) {
+    setState(() {
+      searchQuery = value.trim();
+      currentMatch = 0; // start from the newest match
+    });
+    WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _jumpToCurrentMatch(animate: false),
+    );
+  }
+
+  // delta = 1 -> older match (up arrow), delta = -1 -> newer match (down arrow)
+  void goToMatch(int delta) {
+    final matches = _searchMatches(buildItems().reversed.toList());
+    if (matches.isEmpty) return;
+    setState(() {
+      currentMatch = (currentMatch + delta).clamp(0, matches.length - 1).toInt();
+    });
+    _jumpToCurrentMatch(animate: true);
+  }
+
+  void _jumpToCurrentMatch({required bool animate}) {
+    if (!mounted || !itemScrollController.isAttached) return;
+    final matches = _searchMatches(buildItems().reversed.toList());
+    if (matches.isEmpty) return;
+
+    final index = matches[currentMatch.clamp(0, matches.length - 1).toInt()];
+    if (animate) {
+      itemScrollController.scrollTo(
+        index: index,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      itemScrollController.jumpTo(index: index, alignment: 0.5);
+    }
+  }
+
+  bool _messageMatches(Message m, String query) {
+    final needle = query.toLowerCase();
+    switch (m.type) {
+      case 'text':
+        return m.text.toLowerCase().contains(needle);
+      case 'file':
+        final name = m.fileName.isNotEmpty ? m.fileName : m.text;
+        return name.toLowerCase().contains(needle);
+      case 'contact':
+        return m.contactName.toLowerCase().contains(needle) ||
+            m.contactPhone.contains(needle);
+      default:
+        return false; // photos have no text to search
+    }
+  }
+
+  // the positions (in the shown list) of the messages that match the search
+  List<int> _searchMatches(List<Object> items) {
+    final q = searchQuery.trim();
+    if (q.isEmpty) return <int>[];
+
+    final result = <int>[];
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      if (item is Message && _messageMatches(item, q)) result.add(i);
+    }
+    return result;
+  }
+
+  // text with the searched words highlighted in yellow
+  // (the current match is orange)
+  Widget _highlightedText(String text, String messageId, {double fontSize = 17}) {
+    final style = GoogleFonts.poppins(
+      color: AppColors.textDark,
+      fontSize: fontSize,
+      height: 1.3,
+    );
+
+    final q = searching ? searchQuery.trim() : '';
+    if (q.isEmpty) return Text(text, style: style);
+
+    final lower = text.toLowerCase();
+    final needle = q.toLowerCase();
+    if (lower.length != text.length) return Text(text, style: style);
+
+    final color = messageId == _currentMatchId
+        ? const Color(0xFFFFB84D)
+        : const Color(0xFFFFE58F);
+
+    final spans = <TextSpan>[];
+    var start = 0;
+    while (true) {
+      final i = lower.indexOf(needle, start);
+      if (i < 0) {
+        spans.add(TextSpan(text: text.substring(start)));
+        break;
+      }
+      if (i > start) spans.add(TextSpan(text: text.substring(start, i)));
+      spans.add(
+        TextSpan(
+          text: text.substring(i, i + needle.length),
+          style: TextStyle(backgroundColor: color),
+        ),
+      );
+      start = i + needle.length;
+    }
+
+    return Text.rich(TextSpan(style: style, children: spans));
   }
 
   void closePanels() {
@@ -248,7 +1412,7 @@ class _ChatScreenState extends State<ChatScreen> {
         SnackBar(
           content: Text(
             message,
-            style: const TextStyle(fontSize: 15, color: Colors.white),
+            style: GoogleFonts.poppins(fontSize: 15, color: Colors.white),
           ),
           backgroundColor: AppColors.textDark,
           behavior: SnackBarBehavior.floating,
@@ -271,30 +1435,33 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
+        title: Text(
           'Clear chat?',
-          style: TextStyle(
+          style: GoogleFonts.poppins(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
           'All messages with ${widget.name} will be deleted.',
-          style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+          style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+              style: GoogleFonts.poppins(
+                color: AppColors.textSoft,
+                fontSize: 16,
+              ),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
+            child: Text(
               'Clear',
-              style: TextStyle(
+              style: GoogleFonts.poppins(
                 color: _error,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -314,7 +1481,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // long-press on a message: emoji reactions + Reply / Forward / Copy / Delete
   void showMessageOptions(Message msg) {
+    closePanels();
+    final mine = msg.reactions[_myUid];
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -325,26 +1496,107 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
+
+            // EMOJI REACTIONS
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (final e in _quickReactions)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        reactTo(msg, e);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: mine == e ? _mine : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(e, style: const TextStyle(fontSize: 28)),
+                      ),
+                    ),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      pickAnyEmoji(msg);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: _wallpaper,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        color: AppColors.textSoft,
+                        size: 28,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 24),
+
             ListTile(
-              leading: const Icon(Icons.copy_rounded, color: AppColors.emerald),
-              title: const Text(
-                'Copy',
-                style: TextStyle(color: AppColors.textDark, fontSize: 17),
+              leading: const Icon(Icons.reply, color: AppColors.emerald),
+              title: Text(
+                'Reply',
+                style: GoogleFonts.poppins(
+                  color: AppColors.textDark,
+                  fontSize: 17,
+                ),
               ),
               onTap: () {
-                Clipboard.setData(ClipboardData(text: msg.text));
                 Navigator.pop(sheetContext);
-                snack('Copied');
+                startReply(msg);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.forward, color: AppColors.emerald),
+              title: Text(
+                'Forward',
+                style: GoogleFonts.poppins(
+                  color: AppColors.textDark,
+                  fontSize: 17,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                forwardMessage(msg);
+              },
+            ),
+            // only text messages can be copied
+            if (msg.type == 'text')
+              ListTile(
+                leading: const Icon(
+                  Icons.copy_rounded,
+                  color: AppColors.emerald,
+                ),
+                title: Text(
+                  'Copy',
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textDark,
+                    fontSize: 17,
+                  ),
+                ),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: msg.text));
+                  Navigator.pop(sheetContext);
+                  snack('Copied');
+                },
+              ),
             // only your own messages can be deleted
             if (msg.isMe)
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: _error),
-                title: const Text(
+                title: Text(
                   'Delete',
-                  style: TextStyle(color: _error, fontSize: 17),
+                  style: GoogleFonts.poppins(color: _error, fontSize: 17),
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -361,11 +1613,11 @@ class _ChatScreenState extends State<ChatScreen> {
   void showAttachMenu() {
     closePanels();
 
-    Widget item(IconData icon, String label, Color color) {
+    Widget item(IconData icon, String label, Color color, VoidCallback action) {
       return GestureDetector(
         onTap: () {
           Navigator.pop(context);
-          snack('$label sharing is coming soon');
+          action();
         },
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -378,7 +1630,10 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(height: 8),
             Text(
               label,
-              style: const TextStyle(color: AppColors.textSoft, fontSize: 14),
+              style: GoogleFonts.poppins(
+                color: AppColors.textSoft,
+                fontSize: 14,
+              ),
             ),
           ],
         ),
@@ -394,67 +1649,43 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (sheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          child: Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 24,
+            runSpacing: 22,
             children: [
-              item(Icons.insert_drive_file, 'Document', const Color(0xFF5F66CD)),
-              item(Icons.camera_alt, 'Camera', const Color(0xFFD3396D)),
-              item(Icons.photo, 'Gallery', const Color(0xFFAC44CF)),
-              item(Icons.location_on, 'Location', const Color(0xFF1FA855)),
+              item(
+                Icons.insert_drive_file,
+                'Document',
+                const Color(0xFF5F66CD),
+                pickDocument,
+              ),
+              item(
+                Icons.camera_alt,
+                'Camera',
+                const Color(0xFFD3396D),
+                pickFromCamera,
+              ),
+              item(
+                Icons.photo,
+                'Gallery',
+                const Color(0xFFAC44CF),
+                pickFromGallery,
+              ),
+              item(
+                Icons.person,
+                'Contact',
+                const Color(0xFF0795DC),
+                shareContact,
+              ),
+              item(
+                Icons.location_on,
+                'Location',
+                const Color(0xFF1FA855),
+                    () => snack('Location sharing is coming soon'),
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  void showCallDialog(bool video) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            CircleAvatar(
-              radius: 40,
-              backgroundColor: widget.color,
-              child: Text(
-                widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 34,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              widget.name,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              video ? 'Video calling...' : 'Calling...',
-              style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
-            ),
-            const SizedBox(height: 24),
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: const Color(0xFFE53935),
-              child: IconButton(
-                icon: const Icon(Icons.call_end, color: Colors.white),
-                onPressed: () => Navigator.pop(dialogContext),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
         ),
       ),
     );
@@ -517,7 +1748,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         child: Text(
           dayLabel(day),
-          style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
+          style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 13),
         ),
       ),
     );
@@ -530,64 +1761,48 @@ class _ChatScreenState extends State<ChatScreen> {
     return const Icon(Icons.done_all, size: 17, color: _tickRead);
   }
 
-  Widget buildBubble(Message msg) {
-    return Align(
-      alignment: msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onLongPress: () => showMessageOptions(msg),
+  // the quoted message shown at the top of a reply bubble
+  Widget buildReplyQuote(Message msg) {
+    final fromMe = msg.replySenderId == _myUid;
+    final barColor = fromMe ? AppColors.emerald : _quoteOther;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
         child: Container(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.78,
-          ),
-          margin: const EdgeInsets.symmetric(vertical: 3),
-          padding: const EdgeInsets.fromLTRB(12, 8, 10, 5),
-          decoration: BoxDecoration(
-            color: msg.isMe ? _mine : _theirs,
-            borderRadius: BorderRadius.only(
-              topLeft: const Radius.circular(16),
-              topRight: const Radius.circular(16),
-              bottomLeft: Radius.circular(msg.isMe ? 16 : 4),
-              bottomRight: Radius.circular(msg.isMe ? 4 : 16),
-            ),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x14000000),
-                blurRadius: 2,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-          child: IntrinsicWidth(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+          color: const Color(0x0F000000),
+          child: IntrinsicHeight(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  msg.text,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 17,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        formatTime(msg.time),
-                        style: const TextStyle(
-                          color: AppColors.textSoft,
-                          fontSize: 12,
+                Container(width: 4, color: barColor),
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          fromMe ? 'You' : widget.name,
+                          style: GoogleFonts.poppins(
+                            color: barColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      if (msg.isMe) ...[
-                        const SizedBox(width: 4),
-                        buildTick(msg.status),
+                        Text(
+                          msg.replyText,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            color: AppColors.textSoft,
+                            fontSize: 14,
+                          ),
+                        ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -598,7 +1813,292 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget buildMessageList() {
+  // the small emoji badge under a message
+  Widget buildReactions(Message msg) {
+    final emojis = msg.reactions.values.toSet().take(3).join(' ');
+    final total = msg.reactions.length;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 2, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 3,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emojis, style: const TextStyle(fontSize: 15)),
+          if (total > 1)
+            Text(
+              ' $total',
+              style: GoogleFonts.poppins(
+                color: AppColors.textSoft,
+                fontSize: 12,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // text, image, file or contact card inside a bubble
+  Widget buildContent(Message msg) {
+    // A shared contact card
+    if (msg.type == 'contact') {
+      return InkWell(
+        onTap: () => showContactCard(msg),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: _colorFor(
+                msg.contactUid.isEmpty ? msg.contactName : msg.contactUid,
+              ),
+              child: Text(
+                msg.contactName.isNotEmpty
+                    ? msg.contactName[0].toUpperCase()
+                    : '?',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    msg.contactName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: AppColors.textDark,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '${msg.contactCountryCode} ${msg.contactPhone}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: AppColors.textSoft,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // New image messages are loaded from Base64 in Realtime Database.
+    if (msg.type == 'image' && msg.imageBase64.isNotEmpty) {
+      return GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => Scaffold(
+                backgroundColor: Colors.black,
+                appBar: AppBar(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                ),
+                body: Center(
+                  child: InteractiveViewer(
+                    child: Image.memory(
+                      base64Decode(msg.imageBase64),
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.broken_image,
+                        color: Colors.white,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.memory(
+            base64Decode(msg.imageBase64),
+            width: 220,
+            height: 260,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stack) => const SizedBox(
+              width: 220,
+              height: 120,
+              child: Icon(Icons.broken_image, size: 48),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Support older image messages that were saved as Storage URLs.
+    if (msg.type == 'image' && msg.url.isNotEmpty) {
+      return GestureDetector(
+        onTap: () => openUrl(msg.url),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.network(
+            msg.url,
+            width: 220,
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return const SizedBox(
+                width: 220,
+                height: 160,
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.emerald),
+                ),
+              );
+            },
+            errorBuilder: (context, error, stack) => const SizedBox(
+              width: 220,
+              height: 120,
+              child: Icon(Icons.broken_image, size: 48),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (msg.type == 'file') {
+      return InkWell(
+        onTap: () => openUrl(msg.url),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.insert_drive_file,
+              color: AppColors.emerald,
+              size: 32,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: _highlightedText(
+                msg.fileName.isNotEmpty ? msg.fileName : msg.text,
+                msg.id,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _highlightedText(msg.text, msg.id);
+  }
+
+  Widget buildBubble(Message msg) {
+    final bubble = GestureDetector(
+      onLongPress: () => showMessageOptions(msg),
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.fromLTRB(12, 8, 10, 5),
+        decoration: BoxDecoration(
+          color: msg.isMe ? _mine : _theirs,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(msg.isMe ? 16 : 4),
+            bottomRight: Radius.circular(msg.isMe ? 4 : 16),
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              blurRadius: 2,
+              offset: Offset(0, 1),
+            ),
+          ],
+        ),
+        child: IntrinsicWidth(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (msg.forwarded)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.forward,
+                        size: 14,
+                        color: AppColors.textSoft,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Forwarded',
+                        style: GoogleFonts.poppins(
+                          color: AppColors.textSoft,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (msg.replyToId.isNotEmpty) buildReplyQuote(msg),
+              buildContent(msg),
+              const SizedBox(height: 3),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      formatTime(msg.time),
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textSoft,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (msg.isMe) ...[
+                      const SizedBox(width: 4),
+                      buildTick(msg.status),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: msg.isMe
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [bubble, if (msg.reactions.isNotEmpty) buildReactions(msg)],
+    );
+  }
+
+  Widget buildMessageList(List<Object> items) {
     if (loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.emerald),
@@ -606,40 +2106,71 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (loadError) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Text(
             'Unable to load messages. Check your Firebase Realtime Database rules.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+            style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
           ),
         ),
       );
     }
 
     if (messages.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No messages yet\nSay hi 👋',
           textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textSoft, fontSize: 18, height: 1.5),
+          style: GoogleFonts.poppins(
+            color: AppColors.textSoft,
+            fontSize: 18,
+            height: 1.5,
+          ),
         ),
       );
     }
 
-    final items = buildItems().reversed.toList();
-
-    return ListView.builder(
-      controller: scrollController,
+    return ScrollablePositionedList.builder(
+      itemScrollController: itemScrollController,
+      itemPositionsListener: itemPositionsListener,
       reverse: true,
-      padding: const EdgeInsets.all(12),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
-        if (item is DateTime) return buildDateChip(item);
-        return buildBubble(item as Message);
+
+        if (item is DateTime) {
+          return buildDateChip(item);
+        }
+
+        final msg = item as Message;
+
+        return Dismissible(
+          key: ValueKey(msg.id),
+          direction: DismissDirection.startToEnd,
+          dismissThresholds: const {DismissDirection.startToEnd: 0.2},
+          confirmDismiss: (_) async {
+            startReply(msg);
+            return false;
+          },
+          background: const Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: EdgeInsets.only(left: 16),
+              child: Icon(Icons.reply, color: AppColors.textSoft),
+            ),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: Align(
+              alignment:
+              msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
+              child: buildBubble(msg),
+            ),
+          ),
+        );
       },
     );
   }
@@ -662,6 +2193,63 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         )
             .toList(),
+      ),
+    );
+  }
+
+  // the bar above the input while replying
+  Widget buildReplyBar() {
+    final r = replyingTo!;
+    final fromMe = r.isMe;
+    final barColor = fromMe ? AppColors.emerald : _quoteOther;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          color: Colors.white,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 4, color: barColor),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 8, 4, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          fromMe ? 'You' : widget.name,
+                          style: GoogleFonts.poppins(
+                            color: barColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          _previewOf(r),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.poppins(
+                            color: AppColors.textSoft,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: AppColors.textSoft),
+                  onPressed: () => setState(() => replyingTo = null),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -705,21 +2293,23 @@ class _ChatScreenState extends State<ChatScreen> {
                       maxLines: 5,
                       textCapitalization: TextCapitalization.sentences,
                       cursorColor: AppColors.emerald,
-                      style: const TextStyle(
+                      style: GoogleFonts.poppins(
                         color: AppColors.textDark,
                         fontSize: 17,
                       ),
                       onChanged: (value) {
                         setState(() => hasText = value.trim().isNotEmpty);
                       },
-                      decoration: const InputDecoration(
-                        hintText: 'Message',
-                        hintStyle: TextStyle(
+                      decoration: InputDecoration(
+                        hintText: listening ? 'Listening...' : 'Message',
+                        hintStyle: GoogleFonts.poppins(
                           color: AppColors.textSoft,
                           fontSize: 17,
                         ),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
                       ),
                     ),
                   ),
@@ -732,7 +2322,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   if (!hasText)
                     IconButton(
-                      onPressed: () => snack('Camera is coming soon'),
+                      onPressed: pickFromCamera,
                       icon: const Icon(
                         Icons.camera_alt,
                         color: AppColors.textSoft,
@@ -747,11 +2337,13 @@ class _ChatScreenState extends State<ChatScreen> {
             radius: 26,
             backgroundColor: AppColors.emerald,
             child: IconButton(
-              onPressed: hasText
-                  ? sendMessage
-                  : () => snack('Voice messages are coming soon'),
+              onPressed: listening
+                  ? stopListening
+                  : (hasText ? sendMessage : toggleListening),
               icon: Icon(
-                hasText ? Icons.send_rounded : Icons.mic,
+                listening
+                    ? Icons.stop
+                    : (hasText ? Icons.send_rounded : Icons.mic),
                 color: Colors.white,
               ),
             ),
@@ -761,24 +2353,81 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _wallpaper,
-      appBar: AppBar(
-        backgroundColor: AppColors.emerald,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        titleSpacing: 0,
-        title: Row(
+  // Open the WhatsApp-style contact information page from the chat header.
+  void openContactInfo() {
+    closePanels();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContactInfoScreen(
+          name: widget.name,
+          phone: widget.phone,
+          countryCode: widget.countryCode,
+          color: widget.color,
+          chatId: _chatId,
+          onAudioCall: () => openCallScreen(video: false),
+          onVideoCall: () => openCallScreen(video: true),
+          onSearch: startSearch,
+          onClearChat: clearChat,
+        ),
+      ),
+    );
+  }
+
+  // photos, documents and links shared in this chat
+  void openMedia() {
+    closePanels();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatMediaScreen(chatId: _chatId, name: widget.name),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _menuItem(
+      String value,
+      IconData icon,
+      String label, {
+        bool danger = false,
+      }) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, color: danger ? _error : AppColors.textSoft),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: GoogleFonts.poppins(
+              color: danger ? _error : AppColors.textDark,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // the normal top bar of the chat
+  AppBar buildNormalAppBar() {
+    return AppBar(
+      backgroundColor: AppColors.emerald,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 0,
+      title: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: openContactInfo,
+        child: Row(
           children: [
             CircleAvatar(
               radius: 19,
               backgroundColor: widget.color,
               child: Text(
                 widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                style: const TextStyle(
+                style: GoogleFonts.poppins(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
@@ -789,7 +2438,8 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Text(
                 widget.name,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
@@ -797,87 +2447,181 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.videocam),
-            onPressed: () => showCallDialog(true),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.videocam),
+          onPressed: () => openCallScreen(video: true),
+        ),
+        IconButton(
+          icon: const Icon(Icons.call),
+          onPressed: () => openCallScreen(video: false),
+        ),
+        PopupMenuButton<String>(
+          color: Colors.white,
+          icon: const Icon(Icons.more_vert),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
-          IconButton(
-            icon: const Icon(Icons.call),
-            onPressed: () => showCallDialog(false),
-          ),
-          PopupMenuButton<String>(
-            color: Colors.white,
-            icon: const Icon(Icons.more_vert),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
+          onSelected: (value) {
+            switch (value) {
+              case 'info':
+                openContactInfo();
+                break;
+              case 'search':
+                startSearch();
+                break;
+              case 'media':
+                openMedia();
+                break;
+              case 'clear':
+                clearChat();
+                break;
+            }
+          },
+          itemBuilder: (context) => [
+            _menuItem('info', Icons.person_outline, 'View contact'),
+            _menuItem('search', Icons.search, 'Search'),
+            _menuItem(
+              'media',
+              Icons.photo_library_outlined,
+              'Media, links, and docs',
             ),
-            onSelected: (value) {
-              if (value == 'clear') clearChat();
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem<String>(
-                value: 'clear',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_sweep, color: _error),
-                    SizedBox(width: 10),
-                    Text(
-                      'Clear chat',
-                      style: TextStyle(
-                        color: AppColors.textDark,
-                        fontSize: 16,
+            const PopupMenuDivider(),
+            _menuItem('clear', Icons.delete_sweep, 'Clear chat', danger: true),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // the top bar while searching: a text box, a counter and two arrows
+  AppBar buildSearchAppBar(int total) {
+    return AppBar(
+      backgroundColor: AppColors.emerald,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: stopSearch,
+      ),
+      title: TextField(
+        controller: searchController,
+        focusNode: searchFocus,
+        autofocus: true,
+        cursorColor: Colors.white,
+        textInputAction: TextInputAction.search,
+        style: GoogleFonts.poppins(color: Colors.white, fontSize: 17),
+        onChanged: onSearchChanged,
+        onSubmitted: (_) => goToMatch(1),
+        decoration: InputDecoration(
+          hintText: 'Search...',
+          hintStyle: GoogleFonts.poppins(
+            color: const Color(0xB3FFFFFF),
+            fontSize: 17,
+          ),
+          border: InputBorder.none,
+        ),
+      ),
+      actions: [
+        if (searchQuery.isNotEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Text(
+                total == 0 ? 'No results' : '${currentMatch + 1} of $total',
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 13),
+              ),
+            ),
+          ),
+        IconButton(
+          icon: const Icon(Icons.keyboard_arrow_up),
+          onPressed: total == 0 ? null : () => goToMatch(1),
+        ),
+        IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down),
+          onPressed: total == 0 ? null : () => goToMatch(-1),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // the list shown on screen: newest first (the list is reversed)
+    final items = buildItems().reversed.toList();
+
+    // search results: the positions of the messages that match
+    final matches = searching ? _searchMatches(items) : <int>[];
+    if (currentMatch >= matches.length) {
+      currentMatch = matches.isEmpty ? 0 : matches.length - 1;
+    }
+    _currentMatchId =
+    matches.isEmpty ? null : (items[matches[currentMatch]] as Message).id;
+
+    return PopScope(
+      // the phone's back button closes the search first
+      canPop: !searching,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && searching) stopSearch();
+      },
+      child: Scaffold(
+        backgroundColor: _wallpaper,
+        appBar: searching
+            ? buildSearchAppBar(matches.length)
+            : buildNormalAppBar(),
+        body: Column(
+          children: [
+            // MESSAGES
+            Expanded(
+              child: Stack(
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: closePanels,
+                    child: buildMessageList(items),
+                  ),
+                  if (showScrollDown && !searching)
+                    Positioned(
+                      right: 14,
+                      bottom: 12,
+                      child: FloatingActionButton.small(
+                        heroTag: null,
+                        backgroundColor: Colors.white,
+                        onPressed: scrollToBottom,
+                        child: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: AppColors.emerald,
+                          size: 30,
+                        ),
                       ),
                     ),
+                ],
+              ),
+            ),
+
+            // upload progress
+            if (uploading)
+              const LinearProgressIndicator(color: AppColors.emerald),
+
+            // BOTTOM BAR (hidden while searching, like WhatsApp)
+            if (!searching)
+              SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (replyingTo != null) buildReplyBar(),
+                    if (listening) buildListeningBar(),
+                    buildInputBar(),
+                    if (showEmoji) buildEmojiPanel(),
                   ],
                 ),
               ),
-            ],
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // MESSAGES
-          Expanded(
-            child: Stack(
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: closePanels,
-                  child: buildMessageList(),
-                ),
-                if (showScrollDown)
-                  Positioned(
-                    right: 14,
-                    bottom: 12,
-                    child: FloatingActionButton.small(
-                      heroTag: null,
-                      backgroundColor: Colors.white,
-                      onPressed: scrollToBottom,
-                      child: const Icon(
-                        Icons.keyboard_arrow_down,
-                        color: AppColors.emerald,
-                        size: 30,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // BOTTOM BAR (+ emoji panel)
-          SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                buildInputBar(),
-                if (showEmoji) buildEmojiPanel(),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

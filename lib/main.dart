@@ -5,18 +5,18 @@ import 'firebase_options.dart';
 import 'splash_screen.dart';
 
 Future<void> main() async {
-  // needed before using Firebase
   WidgetsFlutterBinding.ensureInitialized();
 
   String? startupError;
 
   try {
-    // connect to Firebase using the address in firebase_options.dart
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
   } on FirebaseException catch (e) {
-    // Android may already have started the default app: that is fine
+    // Ignore a duplicate default app; report other Firebase startup errors.
     if (e.code != 'duplicate-app') {
       debugPrint('Firebase start failed: ${e.code} ${e.message}');
       startupError = '[${e.code}] ${e.message}';
@@ -40,36 +40,32 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'WhatsApp',
-
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF25D366),
         ),
-
-        // Manually define font sizes for the entire app.
         textTheme: const TextTheme(
-          displayLarge: TextStyle(fontSize: 32),
-          displayMedium: TextStyle(fontSize: 28),
-          displaySmall: TextStyle(fontSize: 24),
-
-          headlineLarge: TextStyle(fontSize: 22),
-          headlineMedium: TextStyle(fontSize: 20),
-          headlineSmall: TextStyle(fontSize: 18),
-
-          titleLarge: TextStyle(fontSize: 18),
-          titleMedium: TextStyle(fontSize: 16),
-          titleSmall: TextStyle(fontSize: 14),
-
-          bodyLarge: TextStyle(fontSize: 16),
-          bodyMedium: TextStyle(fontSize: 14),
-          bodySmall: TextStyle(fontSize: 12),
-
-          labelLarge: TextStyle(fontSize: 14),
-          labelMedium: TextStyle(fontSize: 12),
-          labelSmall: TextStyle(fontSize: 11),
+          displayLarge: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
+          displayMedium: TextStyle(fontFamily: 'Poppins', fontSize: 28),
+          displaySmall: TextStyle(fontFamily: 'Poppins', fontSize: 24),
+          headlineLarge: TextStyle(fontFamily: 'Poppins', fontSize: 22),
+          headlineMedium: TextStyle(fontFamily: 'Poppins', fontSize: 20),
+          headlineSmall: TextStyle(fontFamily: 'Poppins', fontSize: 18),
+          titleLarge: TextStyle(fontFamily: 'Poppins', fontSize: 18),
+          titleMedium: TextStyle(fontFamily: 'Poppins', fontSize: 16),
+          titleSmall: TextStyle(fontFamily: 'Poppins', fontSize: 14),
+          bodyLarge: TextStyle(fontFamily: 'Poppins', fontSize: 16),
+          bodyMedium: TextStyle(fontFamily: 'Poppins', fontSize: 14),
+          bodySmall: TextStyle(fontFamily: 'Poppins', fontSize: 12),
+          labelLarge: TextStyle(fontFamily: 'Poppins', fontSize: 14),
+          labelMedium: TextStyle(fontFamily: 'Poppins', fontSize: 12),
+          labelSmall: TextStyle(fontFamily: 'Poppins', fontSize: 11),
         ),
       ),
-
       home: startupError == null
           ? const SplashScreen()
           : StartupErrorScreen(message: startupError!),
@@ -77,7 +73,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Shown only when Firebase could not start
 class StartupErrorScreen extends StatelessWidget {
   final String message;
 
@@ -93,14 +88,24 @@ class StartupErrorScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 48,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Firebase could not start',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 12),
-              SelectableText(message, style: const TextStyle(fontSize: 14)),
+              SelectableText(
+                message,
+                style: const TextStyle(fontSize: 14),
+              ),
             ],
           ),
         ),

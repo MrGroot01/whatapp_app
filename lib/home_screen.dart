@@ -8,6 +8,7 @@ import 'app_theme.dart';
 import 'add_contact_screen.dart';
 import 'chat_screen.dart';
 import 'database_helper.dart';
+import 'session_helper.dart';
 import 'settings_screen.dart';
 
 class Contact {
@@ -69,7 +70,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final searchController = TextEditingController();
-  final searchFocus = FocusNode();
   String searchText = '';
   File? profileImage;
 
@@ -81,27 +81,21 @@ class _HomeScreenState extends State<HomeScreen> {
   DatabaseReference get _contactsRef =>
       _database.ref('users/${_currentUid ?? ''}/contacts');
 
-  // created ONCE, so typing in the search box does not re-subscribe
-  late final Stream<DatabaseEvent>? _contactsStream;
-
   @override
   void initState() {
     super.initState();
-    _contactsStream = _currentUid == null ? null : _contactsRef.onValue;
+    SessionHelper.saveSession(widget.email);
     loadProfileImage();
   }
 
   @override
   void dispose() {
     searchController.dispose();
-    searchFocus.dispose();
     super.dispose();
   }
 
   Future<void> loadProfileImage() async {
-    final uid = _currentUid;
-    final savedPath =
-    uid == null ? null : await DatabaseHelper.getProfileImageForUid(uid);
+    final savedPath = await DatabaseHelper.getProfileImage(widget.email);
     File? file;
 
     if (savedPath != null && File(savedPath).existsSync()) {
@@ -141,79 +135,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    contacts
-        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    contacts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return contacts;
-  }
-
-  // ---------- SEARCH ----------
-  // true when the contact matches what the user typed
-  bool _matchesSearch(Contact contact) {
-    final query = searchText.trim().toLowerCase();
-    if (query.isEmpty) return true;
-
-    // 1. match the name
-    if (contact.name.toLowerCase().contains(query)) return true;
-
-    // 2. match the number: only digits are compared, so spaces,
-    //    dashes and the + sign do not matter
-    final queryDigits = query.replaceAll(RegExp(r'[^0-9]'), '');
-    if (queryDigits.isEmpty) return false;
-
-    final fullNumber = '${contact.countryCode}${contact.phone}'
-        .replaceAll(RegExp(r'[^0-9]'), '');
-    return fullNumber.contains(queryDigits);
-  }
-
-  void _clearSearch() {
-    searchController.clear();
-    setState(() => searchText = '');
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      decoration: const BoxDecoration(
-        color: AppColors.emerald,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
-          bottomRight: Radius.circular(28),
-        ),
-      ),
-      child: TextField(
-        controller: searchController,
-        focusNode: searchFocus,
-        textInputAction: TextInputAction.search,
-        style: const TextStyle(color: AppColors.textDark, fontSize: 16),
-        cursorColor: AppColors.emerald,
-        onChanged: (value) => setState(() => searchText = value),
-        // the keyboard's search key closes the keyboard
-        onSubmitted: (_) => FocusScope.of(context).unfocus(),
-        decoration: InputDecoration(
-          hintText: 'Search name or number',
-          hintStyle: const TextStyle(color: AppColors.textSoft, fontSize: 16),
-          // the magnifier opens the keyboard
-          prefixIcon: IconButton(
-            icon: const Icon(Icons.search, color: AppColors.textSoft),
-            onPressed: () => searchFocus.requestFocus(),
-          ),
-          // the X clears the text (only shown when there is text)
-          suffixIcon: searchText.isEmpty
-              ? null
-              : IconButton(
-            icon: const Icon(Icons.close, color: AppColors.textSoft),
-            onPressed: _clearSearch,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -283,18 +206,50 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          _buildSearchBar(),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            decoration: const BoxDecoration(
+              color: AppColors.emerald,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(28),
+                bottomRight: Radius.circular(28),
+              ),
+            ),
+            child: TextField(
+              controller: searchController,
+              style: const TextStyle(
+                color: AppColors.textDark,
+                fontSize: 16,
+              ),
+              cursorColor: AppColors.emerald,
+              onChanged: (value) => setState(() => searchText = value),
+              decoration: InputDecoration(
+                hintText: 'Search',
+                hintStyle: const TextStyle(
+                  color: AppColors.textSoft,
+                  fontSize: 16,
+                ),
+                prefixIcon: const Icon(Icons.search, color: AppColors.textSoft),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(30),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
           Expanded(
             child: uid == null
                 ? const Center(
               child: Text(
                 'Please log in to view your contacts.',
-                style:
-                TextStyle(color: AppColors.textSoft, fontSize: 17),
+                style: TextStyle(color: AppColors.textSoft, fontSize: 17),
               ),
             )
                 : StreamBuilder<DatabaseEvent>(
-              stream: _contactsStream,
+              stream: _contactsRef.onValue,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return const Center(
@@ -309,8 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                if (snapshot.connectionState ==
-                    ConnectionState.waiting &&
+                if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
                   return const Center(
                     child: CircularProgressIndicator(
@@ -319,13 +273,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                final allContacts =
-                _parseContacts(snapshot.data?.snapshot.value);
-                final contacts =
-                allContacts.where(_matchesSearch).toList();
+                final contacts = _parseContacts(snapshot.data?.snapshot.value)
+                    .where((contact) {
+                  final query = searchText.toLowerCase();
+                  return contact.name.toLowerCase().contains(query) ||
+                      contact.phone.contains(query);
+                }).toList();
 
-                // no contacts saved at all
-                if (allContacts.isEmpty) {
+                if (contacts.isEmpty) {
                   return const Center(
                     child: Text(
                       'No contacts yet. Tap + to add a contact.',
@@ -338,29 +293,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                // contacts exist, but none match the search
-                if (contacts.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'No contact found for "${searchText.trim()}"',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppColors.textSoft,
-                          fontSize: 17,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
                 return ListView.separated(
                   padding: const EdgeInsets.only(top: 8, bottom: 90),
-                  keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
                   itemCount: contacts.length,
-                  separatorBuilder: (_, __) => const Divider(
+                  separatorBuilder: (_, _) => const Divider(
                     height: 1,
                     indent: 88,
                     endIndent: 16,
@@ -420,7 +356,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             builder: (_) => ChatScreen(
                               name: contact.name,
                               color: contact.color,
-                              chatKey: '${uid}_${contact.id}',
+                              chatKey: '${_currentUid}_${contact.id}',
+                              phone: contact.phone,
+                              countryCode: contact.countryCode,
                             ),
                           ),
                         );

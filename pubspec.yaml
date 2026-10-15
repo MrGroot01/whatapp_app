@@ -1,3 +1,4 @@
+
 name: whatapp_app
 description: "A new Flutter project."
 publish_to: 'none'
@@ -20,11 +21,16 @@ dependencies:
   firebase_core: ^4.15.0
   firebase_database: ^12.6.0
   firebase_auth: ^6.7.0
+  firebase_storage: ^13.6.0
+  google_fonts: ^9.0.0
+  speech_to_text: ^7.5.0
+  url_launcher: ^6.3.3
+  file_picker: ^10.3.3
+  scrollable_positioned_list: ^0.3.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
 
@@ -34,7 +40,30 @@ flutter:
   assets:
     - assets/icon/app_icon.png
 
-# Settings for the app icon tool
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/google_fonts/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/google_fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/google_fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/google_fonts/Poppins-Bold.ttf
+          weight: 700
+        - asset: assets/google_fonts/Poppins-Black.ttf
+          weight: 900
+        - asset: assets/google_fonts/Poppins-BlackItalic.ttf
+          weight: 900
+          style: italic
+        - asset: assets/google_fonts/Poppins-BoldItalic.ttf
+          weight: 700
+          style: italic
+        - asset: assets/google_fonts/Poppins-ThinItalic.ttf
+          weight: 100
+          style: italic
+
 flutter_launcher_icons:
   android: true
   ios: true
