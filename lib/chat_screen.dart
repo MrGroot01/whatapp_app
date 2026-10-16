@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
+import 'create_task_screen.dart';
 import 'call_screen.dart';
 import 'contact_info_screen.dart';
 import 'chat_media_screen.dart';
@@ -385,9 +385,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ---------- CALL ----------
-  // Opens the WhatsApp-style in-app call screen.
+  // Video call -> the in-app call screen (camera)
+  // Voice call -> the phone's own dialer with the number already typed in
   void openCallScreen({required bool video}) {
     closePanels();
+
+    if (!video) {
+      dialNumber();
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -396,10 +403,34 @@ class _ChatScreenState extends State<ChatScreen> {
           color: widget.color,
           phone: widget.phone,
           countryCode: widget.countryCode,
-          video: video,
+          video: true,
         ),
       ),
     );
+  }
+
+  Future<void> dialNumber() async {
+    // remove spaces, dashes and brackets from the saved number
+    var number = widget.phone.replaceAll(RegExp(r'[\s\-()]'), '');
+
+    if (number.isEmpty) {
+      snack('No phone number saved for ${widget.name}');
+      return;
+    }
+
+    // add the country code (for example +91) unless the number already has one
+    if (!number.startsWith('+')) {
+      number =
+      '${widget.countryCode}${number.replaceFirst(RegExp(r'^0+'), '')}';
+    }
+
+    try {
+      final opened = await launchUrl(Uri(scheme: 'tel', path: number));
+      if (!opened) snack('Could not open the phone dialer');
+    } catch (e) {
+      debugPrint('Dialer failed: $e');
+      snack('Could not open the phone dialer');
+    }
   }
 
   // ---------- CAMERA / GALLERY / DOCUMENT ----------
@@ -1081,7 +1112,40 @@ class _ChatScreenState extends State<ChatScreen> {
           : 'Forwarded to $done of ${picked.length} contacts',
     );
   }
+  // ---------- CREATE A TASK FROM A MESSAGE ----------
+  // the account id of the person I am chatting with
+  String get _otherUid {
+    final parts = widget.chatKey.split('_');
+    if (parts.length != 2) return '';
+    return parts[0] == _myUid ? parts[1] : parts[0];
+  }
 
+  // ---------- CREATE A TASK FROM A MESSAGE ----------
+  void createTaskFromMessage(Message msg) {
+    final text = msg.type == 'text' ? msg.text : _previewOf(msg);
+    final firstLine = text.split('\n').first.trim();
+    final title =
+    firstLine.length > 80 ? '${firstLine.substring(0, 80)}...' : firstLine;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateTaskScreen(
+          initialTitle: title,
+          sourceText: text,
+          fromName: msg.isMe ? 'You' : widget.name,
+          sourceTime: msg.time,
+          chatId: _chatId,
+          messageId: msg.id,
+          // the chat contact can get this task
+          assigneeUid: _otherUid,
+          assigneeName: widget.name,
+          // my own message -> start with the contact selected
+          assignByDefault: msg.isMe,
+        ),
+      ),
+    );
+  }
   // ---------- SPEECH TO TEXT ----------
   // How it works:
   //  1) tap the mic  -> it starts listening
@@ -1569,7 +1633,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 Navigator.pop(sheetContext);
                 forwardMessage(msg);
               },
+
             ),
+
             // only text messages can be copied
             if (msg.type == 'text')
               ListTile(
@@ -2480,7 +2546,7 @@ class _ChatScreenState extends State<ChatScreen> {
             }
           },
           itemBuilder: (context) => [
-            _menuItem('info', Icons.person_outline, 'View contact'),
+            _menuItem('info', Icons.person_outline, 'View Profile'),
             _menuItem('search', Icons.search, 'Search'),
             _menuItem(
               'media',

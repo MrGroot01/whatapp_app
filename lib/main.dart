@@ -1,6 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-
+import 'notification_service.dart';
 import 'firebase_options.dart';
 import 'splash_screen.dart';
 
@@ -26,7 +26,8 @@ Future<void> main() async {
     debugPrintStack(stackTrace: stackTrace);
     startupError = e.toString();
   }
-
+  // prepare reminders (time zones + notification permission)
+  await NotificationService.init();
   runApp(MyApp(startupError: startupError));
 }
 

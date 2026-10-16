@@ -13,6 +13,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // needed by flutter_local_notifications (scheduled reminders)
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -45,6 +47,11 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // needed by flutter_local_notifications (scheduled reminders)
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 flutter {

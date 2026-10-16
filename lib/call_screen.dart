@@ -1,16 +1,12 @@
-import 'dart:async';
-
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class CallScreen extends StatefulWidget {
   final String name;
   final Color color;
-  final String phone; // without country code
-  final String countryCode; // e.g. +91
-  final bool video; // true = video call screen
+  final String phone;
+  final String countryCode;
+  final bool video; // true = start with the camera on
 
   const CallScreen({
     super.key,
@@ -25,329 +21,431 @@ class CallScreen extends StatefulWidget {
   State<CallScreen> createState() => _CallScreenState();
 }
 
-class _CallScreenState extends State<CallScreen> {
-  static const Color _panel = Color(0xFF161D22);
-  static const Color _button = Color(0xFF2A3236);
-  static const Color _red = Color(0xFFF0154F);
+class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
+  static const Color _panel = Color(0xCC17201D);
+  static const Color _buttonBg = Color(0x26FFFFFF);
+  static const Color _endRed = Color(0xFFF0145A);
 
-  late bool isVideo = widget.video;
-  bool muted = false;
-  bool speaker = false;
-  bool ringing = false;
-  Timer? _ringTimer;
+  CameraController? _controller;
+  List<CameraDescription> _cameras = [];
+
+  bool _cameraOn = false; // the user wants the camera on
+  bool _cameraReady = false; // the preview is running
+  bool _starting = false; // the camera is being opened right now
+  bool _front = true; // front (selfie) or back camera
+  bool _muted = false;
+  bool _speaker = false;
 
   @override
   void initState() {
     super.initState();
-    // "Calling..." turns into "Ringing..." after 3 seconds
-    _ringTimer = Timer(const Duration(seconds: 3), () {
-      if (mounted) setState(() => ringing = true);
-    });
+    WidgetsBinding.instance.addObserver(this);
+
+    // video call button -> open the camera straight away
+    if (widget.video) {
+      _cameraOn = true;
+      _startCamera();
+    }
   }
 
   @override
   void dispose() {
-    _ringTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose();
     super.dispose();
   }
 
-  // ---------- TEXTS ----------
-  String get statusText {
-    if (ringing) return 'Ringing...';
-    return isVideo ? 'Video calling...' : 'Calling...';
-  }
-
-  String get displayNumber {
-    final p = widget.phone.replaceAll(RegExp(r'\s'), '');
-    if (p.isEmpty) return '';
-    if (p.length == 10) {
-      return '${widget.countryCode} ${p.substring(0, 5)} ${p.substring(5)}';
+  // release the camera when the app goes to the background,
+  // and open it again when the user comes back
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive) {
+      final c = _controller;
+      if (c != null && c.value.isInitialized) _stopCamera();
+    } else if (state == AppLifecycleState.resumed) {
+      if (_cameraOn && _controller == null && !_starting) _startCamera();
     }
-    return '${widget.countryCode} $p';
   }
 
-  // ---------- ACTIONS ----------
-  void snack(String message) {
+  // ---------- CAMERA ----------
+  Future<void> _startCamera() async {
+    if (_starting) return;
+    _starting = true;
+
+    try {
+      if (_cameras.isEmpty) _cameras = await availableCameras();
+      if (_cameras.isEmpty) {
+        _cameraFailed('No camera found on this device');
+        return;
+      }
+
+      final wanted =
+      _front ? CameraLensDirection.front : CameraLensDirection.back;
+      final camera = _cameras.firstWhere(
+            (c) => c.lensDirection == wanted,
+        orElse: () => _cameras.first,
+      );
+
+      final controller = CameraController(
+        camera,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+      await controller.initialize();
+
+      // the user left the screen or switched the camera off meanwhile
+      if (!mounted || !_cameraOn) {
+        await controller.dispose();
+        return;
+      }
+
+      setState(() {
+        _controller = controller;
+        _cameraReady = true;
+      });
+    } on CameraException catch (e) {
+      debugPrint('Camera error: ${e.code} ${e.description}');
+      _cameraFailed(
+        e.code.startsWith('CameraAccess')
+            ? 'Camera permission denied. Allow it in the app settings.'
+            : 'Could not open the camera',
+      );
+    } catch (e) {
+      debugPrint('Camera error: $e');
+      _cameraFailed('Could not open the camera');
+    } finally {
+      _starting = false;
+    }
+  }
+
+  Future<void> _stopCamera() async {
+    final c = _controller;
+    if (mounted) {
+      setState(() {
+        _controller = null;
+        _cameraReady = false;
+      });
+    }
+    await c?.dispose();
+  }
+
+  void _cameraFailed(String message) {
+    if (!mounted) return;
+    setState(() {
+      _cameraOn = false;
+      _cameraReady = false;
+    });
+    _snack(message);
+  }
+
+  Future<void> _toggleCamera() async {
+    if (_cameraOn) {
+      setState(() => _cameraOn = false);
+      await _stopCamera();
+    } else {
+      setState(() => _cameraOn = true);
+      await _startCamera();
+    }
+  }
+
+  Future<void> _flipCamera() async {
+    if (!_cameraOn || _starting) return;
+    _front = !_front;
+    await _stopCamera();
+    await _startCamera();
+  }
+
+  void _snack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(message, style: GoogleFonts.poppins(fontSize: 15)),
+          content: Text(message),
           behavior: SnackBarBehavior.floating,
         ),
       );
   }
 
-  // a normal phone call through the phone's dialer
-  Future<void> openDialer() async {
-    if (widget.phone.isEmpty) {
-      snack('No phone number saved for ${widget.name}');
-      return;
-    }
-    try {
-      final number = '${widget.countryCode}${widget.phone}';
-      final ok = await launchUrl(Uri(scheme: 'tel', path: number));
-      if (!ok) snack('Could not open the dialer');
-    } catch (e) {
-      snack('Could not open the dialer');
-    }
+  // ---------- UI PIECES ----------
+  // the camera picture fills the whole screen (no stretching)
+  Widget _buildCameraBackground() {
+    final c = _controller!;
+    final size = MediaQuery.of(context).size;
+
+    var scale = size.aspectRatio * c.value.aspectRatio;
+    if (scale < 1) scale = 1 / scale;
+
+    return ClipRect(
+      child: SizedBox.expand(
+        child: Transform.scale(
+          scale: scale,
+          child: Center(child: CameraPreview(c)),
+        ),
+      ),
+    );
   }
 
-  void showMore() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: _panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.phone_android, color: Colors.white),
-              title: Text(
-                'Call with the phone dialer',
-                style: GoogleFonts.poppins(color: Colors.white, fontSize: 16),
-              ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                openDialer();
-              },
+  Widget _buildAvatar() {
+    return Center(
+      child: Container(
+        width: 150,
+        height: 150,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: widget.color,
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x55000000),
+              blurRadius: 24,
+              offset: Offset(0, 8),
             ),
-            const SizedBox(height: 8),
           ],
         ),
-      ),
-    );
-  }
-
-  // ---------- UI PIECES ----------
-  // small round button in the top corners
-  Widget cornerButton(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 52,
-        height: 52,
-        decoration: const BoxDecoration(
-          color: Color(0x33FFFFFF),
-          shape: BoxShape.circle,
+        child: Text(
+          widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 64,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        child: Icon(icon, color: Colors.white, size: 26),
       ),
     );
   }
 
-  // big round button with a label under it
-  Widget roundButton({
+  Widget _roundIcon(IconData icon, VoidCallback onTap) {
+    return Material(
+      color: _buttonBg,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Icon(icon, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    final number = widget.phone.isEmpty
+        ? ''
+        : '${widget.countryCode} ${widget.phone}';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _roundIcon(Icons.close_fullscreen, () => Navigator.pop(context)),
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  widget.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (number.isNotEmpty)
+                  Text(
+                    number,
+                    style: const TextStyle(
+                      color: Color(0xB3FFFFFF),
+                      fontSize: 15,
+                    ),
+                  ),
+                Text(
+                  _cameraOn ? 'Video calling...' : 'Calling...',
+                  style: const TextStyle(
+                    color: Color(0xB3FFFFFF),
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _roundIcon(
+            Icons.person_add_alt_1,
+                () => _snack('Adding people is coming soon'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _controlButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
     bool active = false,
-    bool red = false,
+    Color? background,
   }) {
-    final bg = red ? _red : (active ? Colors.white : _button);
-    final fg = red ? Colors.white : (active ? Colors.black : Colors.white);
+    final bg = background ?? (active ? Colors.white : _buttonBg);
+    final fg = background != null
+        ? Colors.white
+        : (active ? const Color(0xFF111B21) : Colors.white);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 74,
-            height: 74,
-            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-            child: Icon(icon, color: fg, size: 30),
+    return SizedBox(
+      width: 84,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Material(
+            color: bg,
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: SizedBox(
+                width: 58,
+                height: 58,
+                child: Icon(icon, color: fg, size: 26),
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          label,
-          style: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
-        ),
-      ],
-    );
-  }
-
-  Widget buildAvatar(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: widget.color,
-        shape: BoxShape.circle,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x55000000),
-            blurRadius: 30,
-            offset: Offset(0, 12),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
         ],
       ),
-      alignment: Alignment.center,
-      child: Text(
-        widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-        style: GoogleFonts.poppins(
-          color: Colors.white,
-          fontSize: size * 0.42,
-          fontWeight: FontWeight.w600,
-        ),
+    );
+  }
+
+  Widget _buildControls() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _controlButton(
+                icon: Icons.volume_up,
+                label: 'Speaker',
+                active: _speaker,
+                onTap: () => setState(() => _speaker = !_speaker),
+              ),
+              _controlButton(
+                icon: _cameraOn ? Icons.videocam : Icons.videocam_off,
+                label: 'Video',
+                active: _cameraOn,
+                onTap: _toggleCamera,
+              ),
+              _controlButton(
+                icon: Icons.mic_off,
+                label: 'Mute',
+                active: _muted,
+                onTap: () => setState(() => _muted = !_muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              if (_cameraOn)
+                _controlButton(
+                  icon: Icons.flip_camera_android,
+                  label: 'Flip',
+                  onTap: _flipCamera,
+                )
+              else
+                _controlButton(
+                  icon: Icons.more_horiz,
+                  label: 'More',
+                  onTap: () => _snack('More options are coming soon'),
+                ),
+              _controlButton(
+                icon: Icons.ios_share,
+                label: 'Share',
+                onTap: () => _snack('Sharing is coming soon'),
+              ),
+              _controlButton(
+                icon: Icons.call_end,
+                label: 'End',
+                background: _endRed,
+                onTap: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final number = displayNumber;
+    final showVideo = _cameraOn && _cameraReady && _controller != null;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        backgroundColor: const Color(0xFF08130F),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF0F3D34), Color(0xFF08130F)],
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // BACKGROUND: your camera, or the dark green gradient
+          if (showVideo)
+            _buildCameraBackground()
+          else
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF0E4D3E), Color(0xFF06140F)],
+                ),
+              ),
             ),
-          ),
-          child: SafeArea(
+
+          // dark shade over the camera, so the white text can be read
+          if (showVideo)
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0x99000000),
+                      Color(0x00000000),
+                      Color(0x99000000),
+                    ],
+                    stops: [0.0, 0.45, 1.0],
+                  ),
+                ),
+              ),
+            ),
+
+          SafeArea(
             child: Column(
               children: [
-                // ---------- TOP: minimize, name + number + status, add ----------
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      cornerButton(
-                        Icons.close_fullscreen_rounded,
-                            () => Navigator.pop(context),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Column(
-                            children: [
-                              Text(
-                                widget.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.poppins(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (number.isNotEmpty)
-                                Text(
-                                  number,
-                                  style: GoogleFonts.poppins(
-                                    color: const Color(0xCCFFFFFF),
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              const SizedBox(height: 2),
-                              Text(
-                                statusText,
-                                style: GoogleFonts.poppins(
-                                  color: const Color(0x99FFFFFF),
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      cornerButton(
-                        Icons.person_add_alt_1_rounded,
-                            () => snack('Group calls are coming soon'),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ---------- MIDDLE: big picture ----------
+                _buildTopBar(),
                 Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final size =
-                      (constraints.maxHeight - 24).clamp(90.0, 190.0);
-                      return Center(child: buildAvatar(size.toDouble()));
-                    },
-                  ),
+                  child: showVideo
+                      ? const SizedBox.shrink()
+                      : _buildAvatar(),
                 ),
-
-                // ---------- BOTTOM: the 6 buttons ----------
-                Container(
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  decoration: BoxDecoration(
-                    color: _panel,
-                    borderRadius: BorderRadius.circular(36),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          roundButton(
-                            icon: Icons.volume_up_rounded,
-                            label: 'Speaker',
-                            active: speaker,
-                            onTap: () => setState(() => speaker = !speaker),
-                          ),
-                          roundButton(
-                            icon: isVideo
-                                ? Icons.videocam_rounded
-                                : Icons.videocam_off_rounded,
-                            label: 'Video',
-                            active: isVideo,
-                            onTap: () => setState(() => isVideo = !isVideo),
-                          ),
-                          roundButton(
-                            icon: Icons.mic_off_rounded,
-                            label: 'Mute',
-                            active: muted,
-                            onTap: () => setState(() => muted = !muted),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          roundButton(
-                            icon: Icons.more_horiz_rounded,
-                            label: 'More',
-                            onTap: showMore,
-                          ),
-                          roundButton(
-                            icon: Icons.file_upload_outlined,
-                            label: 'Share',
-                            onTap: () => snack('Screen sharing is coming soon'),
-                          ),
-                          roundButton(
-                            icon: Icons.call_end_rounded,
-                            label: 'End',
-                            red: true,
-                            onTap: () => Navigator.pop(context),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                _buildControls(),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

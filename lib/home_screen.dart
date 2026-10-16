@@ -3,13 +3,14 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
-
+import 'task_service.dart';
 import 'app_theme.dart';
 import 'add_contact_screen.dart';
 import 'chat_screen.dart';
 import 'database_helper.dart';
 import 'session_helper.dart';
 import 'settings_screen.dart';
+import 'my_tasks_screen.dart';
 
 class Contact {
   final String id;
@@ -85,11 +86,13 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     SessionHelper.saveSession(widget.email);
+    TaskService.startListening();
     loadProfileImage();
   }
 
   @override
   void dispose() {
+    TaskService.stopListening();
     searchController.dispose();
     super.dispose();
   }
@@ -159,6 +162,14 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            tooltip: 'My Tasks',
+            icon: const Icon(Icons.task_alt, color: Colors.white),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MyTasksScreen()),
+            ),
+          ),
           GestureDetector(
             onTap: () async {
               await Navigator.push(
@@ -264,7 +275,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                if (snapshot.connectionState == ConnectionState.waiting &&
+                if (snapshot.connectionState ==
+                    ConnectionState.waiting &&
                     !snapshot.hasData) {
                   return const Center(
                     child: CircularProgressIndicator(
@@ -273,7 +285,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                final contacts = _parseContacts(snapshot.data?.snapshot.value)
+                final contacts =
+                _parseContacts(snapshot.data?.snapshot.value)
                     .where((contact) {
                   final query = searchText.toLowerCase();
                   return contact.name.toLowerCase().contains(query) ||
