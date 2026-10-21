@@ -1,3 +1,5 @@
+
+import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,7 +9,9 @@ import 'task_service.dart';
 import 'app_theme.dart';
 import 'add_contact_screen.dart';
 import 'chat_screen.dart';
+import 'connection_banner.dart';
 import 'database_helper.dart';
+import 'message_sync_service.dart';
 import 'session_helper.dart';
 import 'settings_screen.dart';
 import 'my_tasks_screen.dart';
@@ -82,19 +86,111 @@ class _HomeScreenState extends State<HomeScreen> {
   DatabaseReference get _contactsRef =>
       _database.ref('users/${_currentUid ?? ''}/contacts');
 
+  StreamSubscription<DatabaseEvent>? _contactsSubscription;
+  DatabaseReference? _syncedRef;
+  List<Contact> _contacts = [];
+  bool _contactsLoading = true;
+  bool _hasRemoteContacts = false;
+
   @override
   void initState() {
     super.initState();
+    final uid = _currentUid;
+    if (uid != null) {
+      _syncedRef = _contactsRef;
+      _syncedRef!.keepSynced(true);
+      _loadLocalContacts();
+      _contactsSubscription = _contactsRef.onValue.listen(
+        _handleContactsEvent,
+        onError: (Object error) {
+          debugPrint('[HomeScreen] Firebase contacts error: $error');
+          if (mounted && !_hasRemoteContacts) {
+            setState(() => _contactsLoading = false);
+          }
+        },
+      );
+    } else {
+      _contactsLoading = false;
+    }
     SessionHelper.saveSession(widget.email);
     TaskService.startListening();
+    MessageSyncService.start(); // watches the internet + sends waiting messages
     loadProfileImage();
   }
 
   @override
   void dispose() {
+    _contactsSubscription?.cancel();
+    _syncedRef?.keepSynced(false);
+    MessageSyncService.stop();
     TaskService.stopListening();
     searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadLocalContacts() async {
+    final uid = _currentUid;
+    if (uid == null) return;
+
+    try {
+      final rows = await DatabaseHelper.getContacts(uid);
+      final localContacts = rows.map((row) {
+        return Contact.fromMap(row['id'].toString(), {
+          'name': row['name'],
+          'phone': row['phone'],
+          'countryCode': row['country_code'],
+          'lastMessage': row['last_message'],
+          'time': row['time'],
+        });
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        // Use local data immediately; Firebase can refresh it afterward.
+        if (!_hasRemoteContacts) _contacts = localContacts;
+        _contactsLoading = false;
+      });
+    } catch (e) {
+      debugPrint('[HomeScreen] Failed to load local contacts: $e');
+      if (mounted) setState(() => _contactsLoading = false);
+    }
+  }
+
+  Future<void> _handleContactsEvent(DatabaseEvent event) async {
+    final uid = _currentUid;
+    if (uid == null) return;
+
+    final remoteContacts = _parseContacts(event.snapshot.value);
+
+    // A null Firebase value can mean the list is empty, but don't wipe a
+    // previously cached list because of a transient empty/offline snapshot.
+    if (event.snapshot.value == null && _contacts.isNotEmpty) {
+      if (mounted) setState(() => _contactsLoading = false);
+      return;
+    }
+
+    try {
+      await DatabaseHelper.saveContacts(
+        uid,
+        remoteContacts.map((contact) => <String, dynamic>{
+          'id': contact.id,
+          'name': contact.name,
+          'phone': contact.phone,
+          'countryCode': contact.countryCode,
+          'lastMessage': contact.message,
+          'time': contact.time,
+        }).toList(),
+      );
+    } catch (e) {
+      debugPrint('[HomeScreen] Failed to cache Firebase contacts: $e');
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _contacts = remoteContacts.isNotEmpty ? remoteContacts : _contacts;
+      _hasRemoteContacts = true;
+      _contactsLoading = false;
+    });
   }
 
   Future<void> loadProfileImage() async {
@@ -140,6 +236,102 @@ class _HomeScreenState extends State<HomeScreen> {
 
     contacts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return contacts;
+  }
+
+  Widget _buildContactsList() {
+    final contacts = _contacts.where((contact) {
+      final query = searchText.toLowerCase();
+      return contact.name.toLowerCase().contains(query) ||
+          contact.phone.contains(query);
+    }).toList();
+
+    if (contacts.isEmpty) {
+      return ValueListenableBuilder<ConnState>(
+        valueListenable: MessageSyncService.connection,
+        builder: (context, state, _) {
+          final message = state == ConnState.offline
+              ? 'You are offline. No contacts are saved on this device yet.'
+              : 'No contacts yet. Tap + to add a contact.';
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textSoft,
+                  fontSize: 17,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.only(top: 8, bottom: 90),
+      itemCount: contacts.length,
+      separatorBuilder: (_, _) => const Divider(
+        height: 1,
+        indent: 88,
+        endIndent: 16,
+        color: Color(0xFFE9E4D8),
+      ),
+      itemBuilder: (context, index) {
+        final contact = contacts[index];
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          leading: CircleAvatar(
+            radius: 26,
+            backgroundColor: contact.color,
+            child: Text(
+              contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          title: Text(
+            contact.name,
+            style: const TextStyle(
+              color: AppColors.textDark,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          subtitle: Text(
+            '${contact.countryCode} ${contact.phone}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
+          ),
+          trailing: contact.time.isEmpty
+              ? null
+              : Text(
+            contact.time,
+            style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
+          ),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatScreen(
+                  name: contact.name,
+                  color: contact.color,
+                  chatKey: '${_currentUid}_${contact.id}',
+                  phone: contact.phone,
+                  countryCode: contact.countryCode,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -251,6 +443,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+
+          // offline / connecting / back online message
+          const ConnectionBanner(),
+
           Expanded(
             child: uid == null
                 ? const Center(
@@ -259,128 +455,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(color: AppColors.textSoft, fontSize: 17),
               ),
             )
-                : StreamBuilder<DatabaseEvent>(
-              stream: _contactsRef.onValue,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text(
-                        'Unable to load contacts. Check your Firebase Realtime Database rules.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppColors.textSoft),
-                      ),
-                    ),
-                  );
-                }
-
-                if (snapshot.connectionState ==
-                    ConnectionState.waiting &&
-                    !snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.emerald,
-                    ),
-                  );
-                }
-
-                final contacts =
-                _parseContacts(snapshot.data?.snapshot.value)
-                    .where((contact) {
-                  final query = searchText.toLowerCase();
-                  return contact.name.toLowerCase().contains(query) ||
-                      contact.phone.contains(query);
-                }).toList();
-
-                if (contacts.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No contacts yet. Tap + to add a contact.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors.textSoft,
-                        fontSize: 17,
-                      ),
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.only(top: 8, bottom: 90),
-                  itemCount: contacts.length,
-                  separatorBuilder: (_, _) => const Divider(
-                    height: 1,
-                    indent: 88,
-                    endIndent: 16,
-                    color: Color(0xFFE9E4D8),
-                  ),
-                  itemBuilder: (context, index) {
-                    final contact = contacts[index];
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      leading: CircleAvatar(
-                        radius: 26,
-                        backgroundColor: contact.color,
-                        child: Text(
-                          contact.name.isNotEmpty
-                              ? contact.name[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        contact.name,
-                        style: const TextStyle(
-                          color: AppColors.textDark,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${contact.countryCode} ${contact.phone}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSoft,
-                          fontSize: 15,
-                        ),
-                      ),
-                      trailing: contact.time.isEmpty
-                          ? null
-                          : Text(
-                        contact.time,
-                        style: const TextStyle(
-                          color: AppColors.textSoft,
-                          fontSize: 13,
-                        ),
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ChatScreen(
-                              name: contact.name,
-                              color: contact.color,
-                              chatKey: '${_currentUid}_${contact.id}',
-                              phone: contact.phone,
-                              countryCode: contact.countryCode,
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
+                : _contactsLoading && _contacts.isEmpty
+                ? const Center(
+              child: CircularProgressIndicator(
+                color: AppColors.emerald,
+              ),
+            )
+                : _buildContactsList(),
           ),
         ],
       ),

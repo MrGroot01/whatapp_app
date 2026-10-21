@@ -20,6 +20,9 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'app_theme.dart';
+import 'connection_banner.dart';
+import 'database_helper.dart';
+import 'message_sync_service.dart';
 
 // One message = text / image / file / contact + who sent it + time + tick status
 class Message {
@@ -28,7 +31,8 @@ class Message {
   final bool isMe;
   final String senderId;
   final DateTime time;
-  final int status; // 0 = sent, 2 = read
+  // 0 = sent, 2 = read, -1 = waiting for the internet, -2 = refused by server
+  final int status;
   final String type; // 'text', 'image', 'file' or 'contact'
   final String url; // Storage URL for documents / older image messages
   final String
@@ -221,6 +225,11 @@ class _ChatScreenState extends State<ChatScreen> {
   // Examples: 'en_IN' (Indian English), 'hi_IN' (Hindi), 'kn_IN' (Kannada)
   static const String? _speechLocale = null;
 
+  // messages from Firebase + messages still waiting in the phone's outbox
+  List<Message> _remote = [];
+  List<Message> _pending = [];
+  Timer? _loadingTimer;
+
   List<Message> messages = [];
   bool loading = true;
   bool loadError = false;
@@ -251,6 +260,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
     itemPositionsListener.itemPositions.addListener(_onPositionsChanged);
 
+    // messages waiting for the internet (shown with a clock)
+    MessageSyncService.version.addListener(_loadPending);
+    _loadPending();
+
+    // offline and nothing came from Firebase: do not spin forever
+    _loadingTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && loading) setState(() => loading = false);
+    });
+
     focusNode.addListener(() {
       if (focusNode.hasFocus && showEmoji) {
         setState(() => showEmoji = false);
@@ -260,6 +278,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _loadingTimer?.cancel();
+    MessageSyncService.version.removeListener(_loadPending);
     _subscription?.cancel();
     _speech.cancel();
     messageController.dispose();
@@ -283,17 +303,58 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     }
 
-    // oldest first
-    list.sort((a, b) => a.time.compareTo(b.time));
-
     if (!mounted) return;
-    setState(() {
-      messages = list;
-      loading = false;
-      loadError = false;
-    });
+    _remote = list;
+    loading = false;
+    loadError = false;
+    _rebuildMessages();
 
     _markIncomingAsRead(list);
+  }
+
+  // Firebase messages + messages still waiting in the outbox.
+  // The same id is shown only once, so nothing appears twice.
+  void _rebuildMessages() {
+    if (!mounted) return;
+    final ids = _remote.map((m) => m.id).toSet();
+    final merged = <Message>[
+      ..._remote,
+      ..._pending.where((m) => !ids.contains(m.id)),
+    ]..sort((a, b) {
+      final byTime = a.time.compareTo(b.time);
+      return byTime != 0 ? byTime : a.id.compareTo(b.id);
+    });
+
+    setState(() {
+      messages = merged;
+      if (_pending.isNotEmpty) loading = false;
+    });
+  }
+
+  // reads the messages waiting in SQLite for this chat
+  Future<void> _loadPending() async {
+    final uid = _myUid;
+    if (uid.isEmpty) return;
+
+    final rows = await DatabaseHelper.outboxForChat(uid, _chatId);
+    final list = <Message>[];
+
+    for (final row in rows) {
+      try {
+        final payload = Map<dynamic, dynamic>.from(
+          jsonDecode(row['payload'] as String) as Map,
+        );
+        // -1 = waiting for the internet, -2 = the server refused it
+        payload['status'] = (row['state'] as int) == 1 ? -2 : -1;
+        list.add(Message.fromMap(row['id'] as String, payload, uid));
+      } catch (e) {
+        debugPrint('Bad outbox row: $e');
+      }
+    }
+
+    if (!mounted) return;
+    _pending = list;
+    _rebuildMessages();
   }
 
   // messages from the other person become "read" when this chat is open
@@ -363,9 +424,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final data = _withReply({
       'text': text,
       'type': 'text',
-      'senderId': _myUid,
-      'timeMs': ServerValue.timestamp,
-      'status': 0,
     });
 
     messageController.clear();
@@ -373,14 +431,14 @@ class _ChatScreenState extends State<ChatScreen> {
       hasText = false;
       replyingTo = null;
     });
-    scrollToBottom();
 
     try {
-      // push() makes a new unique key, set() writes the message there
-      await _messagesRef.push().set(data);
+      // saved on the phone first (clock icon), sent as soon as there is internet
+      await MessageSyncService.enqueue(chatId: _chatId, data: data);
+      scrollToBottom();
     } catch (e) {
       debugPrint('Send failed: $e');
-      snack('Could not send. Check your internet and database rules.');
+      snack('Could not save the message. Please try again.');
     }
   }
 
@@ -479,53 +537,86 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Images are stored as Base64 in Realtime Database (no Firebase Storage).
   // Documents still use Firebase Storage because they are binary files.
-  Future<void> _uploadAndSend(File file, String name, String type) async {
+  Future<void> _uploadAndSend(
+      File file,
+      String name,
+      String type,
+      ) async {
     if (_myUid.isEmpty) {
       snack('Please log in again');
       return;
     }
 
     if (mounted) setState(() => uploading = true);
+
     try {
       final messageData = <String, dynamic>{
         'text': type == 'image' ? '' : name,
         'type': type,
         'fileName': name,
-        'senderId': _myUid,
-        'timeMs': ServerValue.timestamp,
-        'status': 0,
       };
 
       if (type == 'image') {
+        // Read and save the compressed image into the SQLite outbox.
         final bytes = await file.readAsBytes();
         final imageBase64 = base64Encode(bytes);
-        // RTDB has a per-write size limit. Keep images compressed and small.
-        if (imageBase64.length > 10 * 1024 * 1024) {
-          snack('Image is too large. Please take a smaller photo.');
+
+        // Keep below the Realtime Database write-size limit.
+        if (imageBase64.length > 5 * 1024 * 1024) {
+          snack('Image is too large. Please choose a smaller photo.');
           return;
         }
-        messageData['imageBase64'] = imageBase64;
-      } else {
-        // Document upload still requires Firebase Storage to be enabled.
-        final ref = FirebaseStorage.instance.ref(
-          'chats/$_chatId/${DateTime.now().millisecondsSinceEpoch}_$name',
-        );
-        await ref.putFile(file);
-        messageData['url'] = await ref.getDownloadURL();
-      }
 
-      _withReply(messageData);
-      await _messagesRef.push().set(messageData);
-      if (mounted) setState(() => replyingTo = null);
-      scrollToBottom();
+        messageData['imageBase64'] = imageBase64;
+
+        await MessageSyncService.enqueue(
+          chatId: _chatId,
+          data: _withReply(messageData),
+        );
+
+        if (mounted) {
+          setState(() => replyingTo = null);
+        }
+
+        scrollToBottom();
+
+        if (MessageSyncService.connection.value != ConnState.online) {
+          snack('Photo saved. It will send when internet returns.');
+        }
+      } else {
+        // Documents still require an internet connection.
+        if (MessageSyncService.connection.value != ConnState.online) {
+          snack('Documents can only be sent when you are online.');
+          return;
+        }
+
+        final message = <String, dynamic>{
+          ..._withReply(messageData),
+          'senderId': _myUid,
+          'timeMs': ServerValue.timestamp,
+          'status': 0,
+        };
+
+        final ref = FirebaseStorage.instance.ref(
+          'chats/$_chatId/'
+              '${DateTime.now().millisecondsSinceEpoch}_$name',
+        );
+
+        await ref.putFile(file);
+        message['url'] = await ref.getDownloadURL();
+
+        await _messagesRef.push().set(message);
+
+        if (mounted) {
+          setState(() => replyingTo = null);
+        }
+
+        scrollToBottom();
+      }
     } catch (e, stackTrace) {
-      debugPrint('Message attachment save failed: $e');
+      debugPrint('Attachment save failed: $e');
       debugPrintStack(stackTrace: stackTrace);
-      snack(
-        type == 'image'
-            ? 'Could not save image. Check Realtime Database rules and connection.'
-            : 'Document upload needs Firebase Storage enabled.',
-      );
+      snack('Could not save the attachment. Please try again.');
     } finally {
       if (mounted) setState(() => uploading = false);
     }
@@ -816,24 +907,22 @@ class _ChatScreenState extends State<ChatScreen> {
     final c = picked.first;
 
     try {
-      await _messagesRef.push().set(
-        _withReply({
+      await MessageSyncService.enqueue(
+        chatId: _chatId,
+        data: _withReply({
           'text': c.name,
           'type': 'contact',
           'contactUid': c.id,
           'contactName': c.name,
           'contactPhone': c.phone,
           'contactCountryCode': c.countryCode,
-          'senderId': _myUid,
-          'timeMs': ServerValue.timestamp,
-          'status': 0,
         }),
       );
       if (mounted) setState(() => replyingTo = null);
       scrollToBottom();
     } catch (e) {
       debugPrint('Share contact failed: $e');
-      snack('Could not share the contact. Check the database rules.');
+      snack('Could not share the contact. Please try again.');
     }
   }
 
@@ -1014,6 +1103,11 @@ class _ChatScreenState extends State<ChatScreen> {
   // ---------- REACTIONS ----------
   // tap the same emoji again to remove your reaction
   Future<void> reactTo(Message msg, String emoji) async {
+    if (msg.status < 0) {
+      snack('Wait until the message is sent');
+      return;
+    }
+
     if (_myUid.isEmpty) {
       snack('Please log in again');
       return;
@@ -1067,6 +1161,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ---------- FORWARD ----------
   Future<void> forwardMessage(Message msg) async {
+    if (msg.status < 0) {
+      snack('Wait until the message is sent');
+      return;
+    }
+
     final picked = await _pickContacts(title: 'Forward to...', multi: true);
     if (picked == null || picked.isEmpty) return;
     if (_myUid.isEmpty) {
@@ -1081,9 +1180,6 @@ class _ChatScreenState extends State<ChatScreen> {
         final data = <String, dynamic>{
           'text': msg.text,
           'type': msg.type,
-          'senderId': _myUid,
-          'timeMs': ServerValue.timestamp,
-          'status': 0,
           'forwarded': true,
         };
         if (msg.url.isNotEmpty) data['url'] = msg.url;
@@ -1096,10 +1192,22 @@ class _ChatScreenState extends State<ChatScreen> {
           data['contactCountryCode'] = msg.contactCountryCode;
         }
 
-        await FirebaseDatabase.instance
-            .ref('chats/${_chatIdWith(c.id)}/messages')
-            .push()
-            .set(data);
+        if (msg.type == 'text' || msg.type == 'contact') {
+          // small: saved on the phone first, works offline
+          await MessageSyncService.enqueue(
+            chatId: _chatIdWith(c.id),
+            data: data,
+          );
+        } else {
+          // photos and documents are big: they need the internet right now
+          data['senderId'] = _myUid;
+          data['timeMs'] = ServerValue.timestamp;
+          data['status'] = 0;
+          await FirebaseDatabase.instance
+              .ref('chats/${_chatIdWith(c.id)}/messages')
+              .push()
+              .set(data);
+        }
         done++;
       } catch (e) {
         debugPrint('Forward to ${c.name} failed: $e');
@@ -1147,11 +1255,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
   // ---------- SPEECH TO TEXT ----------
-  // How it works:
-  //  1) tap the mic  -> it starts listening
-  //  2) speak        -> your words appear live in the typing box
-  //  3) tap stop (or pause 5 seconds) -> the text stays in the box
-  //  4) tap send     -> the text is sent like a normal message
   Future<bool> _initSpeech() async {
     if (_speechReady) return true;
     _speechReady = await _speech.initialize(
@@ -1486,6 +1589,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> deleteMessage(Message msg) async {
     try {
+      // a message still waiting on the phone only needs to leave the outbox
+      if (msg.status < 0) {
+        await MessageSyncService.discard(msg.id);
+        snack('Message deleted');
+        return;
+      }
       await _messagesRef.child(msg.id).remove();
       snack('Message deleted');
     } catch (e) {
@@ -1635,6 +1744,23 @@ class _ChatScreenState extends State<ChatScreen> {
               },
 
             ),
+
+            // the server refused this message: send it again
+            if (msg.status == -2)
+              ListTile(
+                leading: const Icon(Icons.refresh, color: AppColors.emerald),
+                title: Text(
+                  'Try again',
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textDark,
+                    fontSize: 17,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  MessageSyncService.retry(msg.id);
+                },
+              ),
 
             // only text messages can be copied
             if (msg.type == 'text')
@@ -1821,6 +1947,14 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget buildTick(int status) {
+    // -1 = waiting for the internet
+    if (status == -1) {
+      return const Icon(Icons.schedule, size: 16, color: _tickGrey);
+    }
+    // -2 = the server refused it (long-press, then "Try again")
+    if (status == -2) {
+      return const Icon(Icons.error_outline, size: 17, color: _error);
+    }
     if (status == 0) {
       return const Icon(Icons.done, size: 17, color: _tickGrey);
     }
@@ -2640,6 +2774,9 @@ class _ChatScreenState extends State<ChatScreen> {
             : buildNormalAppBar(),
         body: Column(
           children: [
+            // internet / waiting-to-send message
+            const ConnectionBanner(),
+
             // MESSAGES
             Expanded(
               child: Stack(

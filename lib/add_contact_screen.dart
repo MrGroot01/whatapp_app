@@ -1,8 +1,10 @@
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
+import 'database_helper.dart';
 
 class AddContactScreen extends StatefulWidget {
   const AddContactScreen({super.key});
@@ -122,6 +124,17 @@ class _AddContactScreenState extends State<AddContactScreen> {
         onTimeout: () => throw Exception(
           'Timed out while saving. Check internet connectivity and Firebase rules.',
         ),
+      );
+
+      // Save a local copy so this contact remains available offline.
+      await DatabaseHelper.saveContact(
+        owner: user.uid,
+        id: contactRef.key!,
+        name: name,
+        phone: phone,
+        countryCode: countryCode,
+        lastMessage: 'Tap to start chatting',
+        time: '',
       );
 
       debugPrint('[AddContact] Contact saved successfully');
@@ -337,3 +350,4 @@ class _AddContactScreenState extends State<AddContactScreen> {
     );
   }
 }
+

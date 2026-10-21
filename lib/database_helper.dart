@@ -1,3 +1,5 @@
+
+
 import 'dart:convert';
 import 'dart:math';
 
@@ -5,44 +7,157 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+
 class DatabaseHelper {
   static Database? _db;
 
-  // Open the notebook (and create / upgrade it)
+  // Open the local database and create or upgrade its tables.
   static Future<Database> getDatabase() async {
     if (_db != null) return _db!;
 
     final folder = await getDatabasesPath();
+
     _db = await openDatabase(
       join(folder, 'whatsapp_app.db'),
-      version: 5,
+      version: 7,
       onCreate: (db, version) async {
         await _createUsersTable(db);
         await _createChatTables(db);
         await _createProfileTable(db);
+        await _createOutboxTable(db);
+        await _createContactsTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 2) {
-          await _createChatTables(db);
-        }
         if (oldVersion < 3) {
-          // old test users have no password, so remove them
+          // Old test users have no password, so remove them.
           await db.delete('users');
-          await db.execute('ALTER TABLE users ADD COLUMN nickname TEXT');
-          await db.execute('ALTER TABLE users ADD COLUMN salt TEXT');
-          await db.execute('ALTER TABLE users ADD COLUMN password_hash TEXT');
+          await db.execute(
+            'ALTER TABLE users ADD COLUMN nickname TEXT',
+          );
+          await db.execute(
+            'ALTER TABLE users ADD COLUMN salt TEXT',
+          );
+          await db.execute(
+
+            'ALTER TABLE users ADD COLUMN password_hash TEXT',
+          );
         }
+
         if (oldVersion < 4) {
-          // new column to remember each user's profile picture
-          await db.execute('ALTER TABLE users ADD COLUMN profile_image TEXT');
+          await db.execute(
+            'ALTER TABLE users ADD COLUMN profile_image TEXT',
+          );
         }
+
         if (oldVersion < 5) {
-          // profile pictures now belong to the Firebase account id
           await _createProfileTable(db);
+        }
+
+
+        if (oldVersion < 6) {
+          await _createOutboxTable(db);
+        }
+        if (oldVersion < 7) {
+          await _createContactsTable(db);
         }
       },
     );
+
     return _db!;
+  }
+
+  // ---------- TABLE CREATION ----------
+  static Future<void> _createContactsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS contacts (
+        owner TEXT NOT NULL,
+        id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL DEFAULT '',
+        country_code TEXT NOT NULL DEFAULT '+91',
+        last_message TEXT NOT NULL DEFAULT 'Tap to start chatting',
+        time TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (owner, id)
+      )
+    ''');
+  }
+  static Future<void> _createOutboxTable(Database db) async {
+    await db.execute('''
+    CREATE TABLE IF NOT EXISTS outbox (
+      id TEXT PRIMARY KEY,
+      owner TEXT NOT NULL,
+      chat_id TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      state INTEGER NOT NULL DEFAULT 0,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_ms INTEGER NOT NULL
+    )
+  ''');
+  }
+
+  static Future<void> saveContacts(
+      String owner,
+      List<Map<String, dynamic>> contacts,
+      ) async {
+    final db = await getDatabase();
+
+    await db.transaction((txn) async {
+      for (final contact in contacts) {
+        final id = (contact['id'] ?? '').toString();
+        if (id.isEmpty) continue;
+
+        await txn.insert(
+          'contacts',
+          {
+            'owner': owner,
+            'id': id,
+            'name': (contact['name'] ?? 'Contact').toString(),
+            'phone': (contact['phone'] ?? '').toString(),
+            'country_code':
+            (contact['countryCode'] ?? '+91').toString(),
+            'last_message': (contact['lastMessage'] ??
+                'Tap to start chatting')
+                .toString(),
+            'time': (contact['time'] ?? '').toString(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
+
+  static Future<List<Map<String, Object?>>> getContacts(
+      String owner,
+      ) async {
+    final db = await getDatabase();
+
+    return db.query(
+      'contacts',
+      where: 'owner = ?',
+      whereArgs: [owner],
+      orderBy: 'name COLLATE NOCASE ASC',
+    );
+  }
+
+  static Future<void> saveContact({
+    required String owner,
+    required String id,
+    required String name,
+    required String phone,
+    required String countryCode,
+    String lastMessage = 'Tap to start chatting',
+    String time = '',
+  }) async {
+    await saveContacts(owner, [
+      {
+        'id': id,
+        'name': name,
+        'phone': phone,
+        'countryCode': countryCode,
+        'lastMessage': lastMessage,
+        'time': time,
+      },
+    ]);
   }
 
   static Future<void> _createUsersTable(Database db) async {
@@ -67,8 +182,10 @@ class DatabaseHelper {
           'time_ms INTEGER NOT NULL, '
           'status INTEGER NOT NULL DEFAULT 0)',
     );
+
     await db.execute(
-      'CREATE TABLE IF NOT EXISTS chat_seeded (contact TEXT PRIMARY KEY)',
+      'CREATE TABLE IF NOT EXISTS chat_seeded ('
+          'contact TEXT PRIMARY KEY)',
     );
   }
 
@@ -80,12 +197,123 @@ class DatabaseHelper {
     );
   }
 
+  // ---------- OFFLINE OUTBOX ----------
+
+  // Stores messages waiting for Firebase synchronization.
+  // state: 0 = pending, 1 = failed and awaiting an explicit retry.
+
+  static Future<void> outboxInsert({
+    required String id,
+    required String owner,
+    required String chatId,
+    required String payload,
+    required int createdMs,
+  }) async {
+    final db = await getDatabase();
+
+    await db.insert(
+      'outbox',
+      {
+        'id': id,
+        'owner': owner,
+        'chat_id': chatId,
+        'payload': payload,
+        'state': 0,
+        'attempts': 0,
+        'created_ms': createdMs,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  static Future<List<Map<String, Object?>>> outboxPending(
+      String owner,
+      ) async {
+    final db = await getDatabase();
+
+    return db.query(
+      'outbox',
+      where: 'owner = ? AND state = 0',
+      whereArgs: [owner],
+      orderBy: 'created_ms ASC, id ASC',
+    );
+  }
+
+  static Future<List<Map<String, Object?>>> outboxForChat(
+      String owner,
+      String chatId,
+      ) async {
+    final db = await getDatabase();
+
+    return db.query(
+      'outbox',
+      where: 'owner = ? AND chat_id = ?',
+      whereArgs: [owner, chatId],
+      orderBy: 'created_ms ASC, id ASC',
+    );
+  }
+
+  static Future<int> outboxPendingCount(String owner) async {
+    final db = await getDatabase();
+
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) AS total '
+          'FROM outbox WHERE owner = ? AND state = 0',
+      [owner],
+    );
+
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  static Future<void> outboxMarkAttempt(String id) async {
+    final db = await getDatabase();
+
+    await db.rawUpdate(
+      'UPDATE outbox SET attempts = attempts + 1 WHERE id = ?',
+      [id],
+    );
+  }
+
+  static Future<void> outboxMarkFailed(String id) async {
+    final db = await getDatabase();
+
+    await db.update(
+      'outbox',
+      {'state': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  static Future<void> outboxRetry(String id) async {
+    final db = await getDatabase();
+
+    await db.update(
+      'outbox',
+      {'state': 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  static Future<void> outboxDelete(String id) async {
+    final db = await getDatabase();
+
+    await db.delete(
+      'outbox',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // ---------- PASSWORD HELPERS ----------
-  // A salt is a random text added to the password before hashing,
-  // so two users with the same password get different hashes.
+
   static String _makeSalt() {
     final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    final bytes = List<int>.generate(
+      16,
+          (_) => random.nextInt(256),
+    );
     return base64Url.encode(bytes);
   }
 
@@ -93,14 +321,17 @@ class DatabaseHelper {
     return sha256.convert(utf8.encode('$salt$password')).toString();
   }
 
-  // ---------- USERS (old local login, no longer used by Firebase login) ----------
+  // ---------- USERS: OLD LOCAL LOGIN ----------
+
   static Future<bool> emailExists(String email) async {
     final db = await getDatabase();
+
     final rows = await db.query(
       'users',
       where: 'email = ?',
       whereArgs: [email.toLowerCase()],
     );
+
     return rows.isNotEmpty;
   }
 
@@ -111,6 +342,7 @@ class DatabaseHelper {
   }) async {
     final db = await getDatabase();
     final salt = _makeSalt();
+
     await db.insert('users', {
       'email': email.toLowerCase(),
       'nickname': nickname,
@@ -122,29 +354,35 @@ class DatabaseHelper {
 
   static Future<Map<String, Object?>?> getUser(String email) async {
     final db = await getDatabase();
+
     final rows = await db.query(
       'users',
       where: 'email = ?',
       whereArgs: [email.toLowerCase()],
       limit: 1,
     );
+
     return rows.isEmpty ? null : rows.first;
   }
 
-  static Future<bool> checkPassword(String email, String password) async {
+  static Future<bool> checkPassword(
+      String email,
+      String password,
+      ) async {
     final user = await getUser(email);
     if (user == null) return false;
 
     final salt = user['salt'] as String?;
     final saved = user['password_hash'] as String?;
+
     if (salt == null || saved == null) return false;
 
     return _hash(password, salt) == saved;
   }
 
-  // UPDATE only the verified flag. (insert + replace would erase the password)
   static Future<void> markVerified(String email) async {
     final db = await getDatabase();
+
     await db.update(
       'users',
       {'verified': 1},
@@ -155,38 +393,47 @@ class DatabaseHelper {
 
   static Future<bool> isVerified(String email) async {
     final db = await getDatabase();
+
     final rows = await db.query(
       'users',
       where: 'email = ? AND verified = ?',
       whereArgs: [email.toLowerCase(), 1],
     );
+
     return rows.isNotEmpty;
   }
 
-  // How many users have verified on this phone
   static Future<int> countVerifiedUsers() async {
     final db = await getDatabase();
+
     final result = await db.rawQuery(
       'SELECT COUNT(*) AS total FROM users WHERE verified = 1',
     );
+
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
-  // Which emails have verified on this phone
   static Future<List<String>> getVerifiedEmails() async {
     final db = await getDatabase();
+
     final rows = await db.query(
       'users',
       columns: ['email'],
       where: 'verified = ?',
       whereArgs: [1],
     );
+
     return rows.map((r) => r['email'] as String).toList();
   }
 
-  // ---------- PROFILE PICTURE (old, by email) ----------
-  static Future<void> saveProfileImage(String email, String path) async {
+  // ---------- PROFILE PICTURE: BY EMAIL ----------
+
+  static Future<void> saveProfileImage(
+      String email,
+      String path,
+      ) async {
     final db = await getDatabase();
+
     await db.update(
       'users',
       {'profile_image': path},
@@ -197,6 +444,7 @@ class DatabaseHelper {
 
   static Future<String?> getProfileImage(String email) async {
     final db = await getDatabase();
+
     final rows = await db.query(
       'users',
       columns: ['profile_image'],
@@ -204,13 +452,19 @@ class DatabaseHelper {
       whereArgs: [email.toLowerCase()],
       limit: 1,
     );
+
     if (rows.isEmpty) return null;
     return rows.first['profile_image'] as String?;
   }
 
-  // ---------- PROFILE PICTURE (new, by Firebase account id) ----------
-  static Future<void> saveProfileImageForUid(String uid, String path) async {
+  // ---------- PROFILE PICTURE: BY FIREBASE UID ----------
+
+  static Future<void> saveProfileImageForUid(
+      String uid,
+      String path,
+      ) async {
     final db = await getDatabase();
+
     await db.insert(
       'profile_images',
       {'uid': uid, 'path': path},
@@ -220,20 +474,26 @@ class DatabaseHelper {
 
   static Future<String?> getProfileImageForUid(String uid) async {
     final db = await getDatabase();
+
     final rows = await db.query(
       'profile_images',
       where: 'uid = ?',
       whereArgs: [uid],
       limit: 1,
     );
+
     if (rows.isEmpty) return null;
     return rows.first['path'] as String?;
   }
 
   // ---------- CHAT ----------
-  // "contact" now holds a unique key: <account id>_<contact id>
-  static Future<List<Map<String, Object?>>> getMessages(String contact) async {
+
+  // contact is a unique key: account ID + contact ID.
+  static Future<List<Map<String, Object?>>> getMessages(
+      String contact,
+      ) async {
     final db = await getDatabase();
+
     return db.query(
       'messages',
       where: 'contact = ?',
@@ -250,6 +510,7 @@ class DatabaseHelper {
     required int status,
   }) async {
     final db = await getDatabase();
+
     return db.insert('messages', {
       'contact': contact,
       'text': text,
@@ -259,9 +520,10 @@ class DatabaseHelper {
     });
   }
 
-  // status: 0 = sent, 1 = delivered, 2 = read
+  // Existing message status: 0 = sent, 1 = delivered, 2 = read.
   static Future<void> updateStatus(int id, int status) async {
     final db = await getDatabase();
+
     await db.update(
       'messages',
       {'status': status},
@@ -272,27 +534,41 @@ class DatabaseHelper {
 
   static Future<void> deleteMessage(int id) async {
     final db = await getDatabase();
-    await db.delete('messages', where: 'id = ?', whereArgs: [id]);
+
+    await db.delete(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   static Future<void> clearChat(String contact) async {
     final db = await getDatabase();
-    await db.delete('messages', where: 'contact = ?', whereArgs: [contact]);
+
+    await db.delete(
+      'messages',
+      where: 'contact = ?',
+      whereArgs: [contact],
+    );
   }
 
-  // So the demo messages are added only the first time a chat is opened
+  // ---------- DEMO MESSAGE SEEDING ----------
+
   static Future<bool> isSeeded(String contact) async {
     final db = await getDatabase();
+
     final rows = await db.query(
       'chat_seeded',
       where: 'contact = ?',
       whereArgs: [contact],
     );
+
     return rows.isNotEmpty;
   }
 
   static Future<void> markSeeded(String contact) async {
     final db = await getDatabase();
+
     await db.insert(
       'chat_seeded',
       {'contact': contact},
@@ -300,3 +576,4 @@ class DatabaseHelper {
     );
   }
 }
+

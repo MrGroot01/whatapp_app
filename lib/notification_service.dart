@@ -83,4 +83,39 @@ class NotificationService {
       debugPrint('Could not cancel the reminder: $e');
     }
   }
+  static Future<void> showMessageSent({
+    required String messageType,
+  }) async {
+    if (!_ready) await init();
+    if (!_ready) return;
+
+    final String body = switch (messageType) {
+      'image' => 'Photo sent successfully',
+      'file' => 'Document sent successfully',
+      'contact' => 'Contact sent successfully',
+      _ => 'Message sent successfully',
+    };
+
+    try {
+      await _plugin.show(
+        id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title: 'WhatsApp',
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'message_status',
+            'Message status',
+            channelDescription:
+            'Notifications for successfully sent messages',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Could not show sent notification: $e');
+    }
+  }
 }
