@@ -1,10 +1,12 @@
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+
 import 'notification_service.dart';
 import 'firebase_options.dart';
 import 'splash_screen.dart';
-
+import 'fcm_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,27 +31,51 @@ Future<void> main() async {
     startupError = e.toString();
   }
 
-  // keep a copy of the database on the phone, so old data shows offline
-  // (its own try, so a problem here never shows the error screen)
-  try {
-    FirebaseDatabase.instance.setPersistenceEnabled(true);
-    FirebaseDatabase.instance.setPersistenceCacheSizeBytes(100 * 1024 * 1024);
-  } catch (e) {
-    debugPrint('Offline copy not enabled: $e');
+  // Keep a copy of the database on the phone for offline access.
+  if (startupError == null) {
+    try {
+      FirebaseDatabase.instance.setPersistenceEnabled(true);
+      FirebaseDatabase.instance.setPersistenceCacheSizeBytes(
+        100 * 1024 * 1024,
+      );
+    } catch (e) {
+      debugPrint('Offline copy not enabled: $e');
+    }
   }
 
-  // prepare reminders (time zones + notification permission)
+  // Prepare existing reminders and local notifications.
   await NotificationService.init();
+
   runApp(MyApp(startupError: startupError));
 }
-class MyApp extends StatelessWidget {
+
+class MyApp extends StatefulWidget {
   final String? startupError;
 
   const MyApp({super.key, this.startupError});
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize FCM after the first frame.
+    // FcmService.init() checks for a signed-in user.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.startupError == null) {
+        FcmService.init();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: NotificationService.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'WhatsApp',
       theme: ThemeData(
@@ -62,25 +88,67 @@ class MyApp extends StatelessWidget {
             fontSize: 32,
             fontWeight: FontWeight.bold,
           ),
-          displayMedium: TextStyle(fontFamily: 'Poppins', fontSize: 28),
-          displaySmall: TextStyle(fontFamily: 'Poppins', fontSize: 24),
-          headlineLarge: TextStyle(fontFamily: 'Poppins', fontSize: 22),
-          headlineMedium: TextStyle(fontFamily: 'Poppins', fontSize: 20),
-          headlineSmall: TextStyle(fontFamily: 'Poppins', fontSize: 18),
-          titleLarge: TextStyle(fontFamily: 'Poppins', fontSize: 18),
-          titleMedium: TextStyle(fontFamily: 'Poppins', fontSize: 16),
-          titleSmall: TextStyle(fontFamily: 'Poppins', fontSize: 14),
-          bodyLarge: TextStyle(fontFamily: 'Poppins', fontSize: 16),
-          bodyMedium: TextStyle(fontFamily: 'Poppins', fontSize: 14),
-          bodySmall: TextStyle(fontFamily: 'Poppins', fontSize: 12),
-          labelLarge: TextStyle(fontFamily: 'Poppins', fontSize: 14),
-          labelMedium: TextStyle(fontFamily: 'Poppins', fontSize: 12),
-          labelSmall: TextStyle(fontFamily: 'Poppins', fontSize: 11),
+          displayMedium: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 28,
+          ),
+          displaySmall: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 24,
+          ),
+          headlineLarge: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 22,
+          ),
+          headlineMedium: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 20,
+          ),
+          headlineSmall: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 18,
+          ),
+          titleLarge: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 18,
+          ),
+          titleMedium: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 16,
+          ),
+          titleSmall: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 14,
+          ),
+          bodyLarge: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 16,
+          ),
+          bodyMedium: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 14,
+          ),
+          bodySmall: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12,
+          ),
+          labelLarge: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 14,
+          ),
+          labelMedium: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12,
+          ),
+          labelSmall: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 11,
+          ),
         ),
       ),
-      home: startupError == null
+      home: widget.startupError == null
           ? const SplashScreen()
-          : StartupErrorScreen(message: startupError!),
+          : StartupErrorScreen(message: widget.startupError!),
     );
   }
 }
@@ -88,7 +156,10 @@ class MyApp extends StatelessWidget {
 class StartupErrorScreen extends StatelessWidget {
   final String message;
 
-  const StartupErrorScreen({super.key, required this.message});
+  const StartupErrorScreen({
+    super.key,
+    required this.message,
+  });
 
   @override
   Widget build(BuildContext context) {

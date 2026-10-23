@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -9,6 +9,13 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
   FlutterLocalNotificationsPlugin();
   static bool _ready = false;
+
+  // give this key to MaterialApp so a notification tap can open a screen
+  static final GlobalKey<NavigatorState> navigatorKey =
+  GlobalKey<NavigatorState>();
+
+  // called with the notification's payload when the user taps it
+  static void Function(String payload)? onNotificationTap;
 
   static const AndroidNotificationDetails _androidDetails =
   AndroidNotificationDetails(
@@ -29,7 +36,15 @@ class NotificationService {
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(),
       );
-      await _plugin.initialize(settings: settings);
+      await _plugin.initialize(
+        settings: settings,
+        onDidReceiveNotificationResponse: (response) {
+          final payload = response.payload;
+          if (payload != null && payload.isNotEmpty) {
+            onNotificationTap?.call(payload);
+          }
+        },
+      );
 
       // Android 13+ asks the user for permission to show notifications
       await _plugin
@@ -83,6 +98,40 @@ class NotificationService {
       debugPrint('Could not cancel the reminder: $e');
     }
   }
+
+  // a new message from another person: shown at once, tap opens the chat
+  static Future<void> showIncomingMessage({
+    required int id,
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    if (!_ready) await init();
+    if (!_ready) return;
+
+    try {
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        payload: payload,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'incoming_messages',
+            'Messages',
+            channelDescription: 'New messages from your contacts',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Could not show the message notification: $e');
+    }
+  }
+
   static Future<void> showMessageSent({
     required String messageType,
   }) async {

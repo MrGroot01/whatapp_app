@@ -9,6 +9,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_core
   firebase_database
   firebase_storage
+  flutter_webrtc
   speech_to_text_windows
   url_launcher_windows
 )

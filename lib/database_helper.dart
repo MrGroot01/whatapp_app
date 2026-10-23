@@ -1,5 +1,3 @@
-
-
 import 'dart:convert';
 import 'dart:math';
 
@@ -19,7 +17,7 @@ class DatabaseHelper {
 
     _db = await openDatabase(
       join(folder, 'whatsapp_app.db'),
-      version: 7,
+      version: 8,
       onCreate: (db, version) async {
         await _createUsersTable(db);
         await _createChatTables(db);
@@ -60,6 +58,16 @@ class DatabaseHelper {
         if (oldVersion < 7) {
           await _createContactsTable(db);
         }
+        if (oldVersion < 8) {
+          // new column: when a scheduled message may be sent (0 = send now)
+          try {
+            await db.execute(
+              'ALTER TABLE outbox ADD COLUMN send_at INTEGER NOT NULL DEFAULT 0',
+            );
+          } catch (e) {
+            // the column already exists (the outbox table was just created)
+          }
+        }
       },
     );
 
@@ -90,6 +98,7 @@ class DatabaseHelper {
       payload TEXT NOT NULL,
       state INTEGER NOT NULL DEFAULT 0,
       attempts INTEGER NOT NULL DEFAULT 0,
+      send_at INTEGER NOT NULL DEFAULT 0,
       created_ms INTEGER NOT NULL
     )
   ''');
@@ -201,6 +210,8 @@ class DatabaseHelper {
 
   // Stores messages waiting for Firebase synchronization.
   // state: 0 = pending, 1 = failed and awaiting an explicit retry.
+  // send_at: 0 = send as soon as there is internet,
+  //          otherwise the time (ms) when a scheduled message may be sent.
 
   static Future<void> outboxInsert({
     required String id,
@@ -208,6 +219,7 @@ class DatabaseHelper {
     required String chatId,
     required String payload,
     required int createdMs,
+    int sendAtMs = 0,
   }) async {
     final db = await getDatabase();
 
@@ -221,20 +233,23 @@ class DatabaseHelper {
         'state': 0,
         'attempts': 0,
         'created_ms': createdMs,
+        'send_at': sendAtMs,
       },
       conflictAlgorithm: ConflictAlgorithm.ignore,
     );
   }
 
+  // messages that are ready to send (their time has come)
   static Future<List<Map<String, Object?>>> outboxPending(
       String owner,
       ) async {
     final db = await getDatabase();
+    final now = DateTime.now().millisecondsSinceEpoch;
 
     return db.query(
       'outbox',
-      where: 'owner = ? AND state = 0',
-      whereArgs: [owner],
+      where: 'owner = ? AND state = 0 AND send_at <= ?',
+      whereArgs: [owner, now],
       orderBy: 'created_ms ASC, id ASC',
     );
   }
@@ -244,25 +259,42 @@ class DatabaseHelper {
       String chatId,
       ) async {
     final db = await getDatabase();
+    final now = DateTime.now().millisecondsSinceEpoch;
 
     return db.query(
       'outbox',
-      where: 'owner = ? AND chat_id = ?',
-      whereArgs: [owner, chatId],
+      where: 'owner = ? AND chat_id = ? AND send_at <= ?',
+      whereArgs: [owner, chatId, now],
       orderBy: 'created_ms ASC, id ASC',
     );
   }
 
   static Future<int> outboxPendingCount(String owner) async {
     final db = await getDatabase();
+    final now = DateTime.now().millisecondsSinceEpoch;
 
     final result = await db.rawQuery(
       'SELECT COUNT(*) AS total '
-          'FROM outbox WHERE owner = ? AND state = 0',
-      [owner],
+          'FROM outbox WHERE owner = ? AND state = 0 AND send_at <= ?',
+      [owner, now],
     );
 
     return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // scheduled messages whose time has not come yet
+  static Future<List<Map<String, Object?>>> outboxScheduled(
+      String owner,
+      ) async {
+    final db = await getDatabase();
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    return db.query(
+      'outbox',
+      where: 'owner = ? AND state = 0 AND send_at > ?',
+      whereArgs: [owner, now],
+      orderBy: 'send_at ASC, id ASC',
+    );
   }
 
   static Future<void> outboxMarkAttempt(String id) async {
@@ -576,4 +608,3 @@ class DatabaseHelper {
     );
   }
 }
-

@@ -1,4 +1,3 @@
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
@@ -15,8 +14,10 @@ class AddContactScreen extends StatefulWidget {
 
 class _AddContactScreenState extends State<AddContactScreen> {
   final formKey = GlobalKey<FormState>();
+
   final nameController = TextEditingController();
   final phoneController = TextEditingController();
+  final emailController = TextEditingController();
 
   String countryCode = '+91';
   bool isSaving = false;
@@ -29,23 +30,47 @@ class _AddContactScreenState extends State<AddContactScreen> {
   void dispose() {
     nameController.dispose();
     phoneController.dispose();
+    emailController.dispose();
     super.dispose();
   }
 
   String? validateName(String? value) {
     final name = value?.trim() ?? '';
+
     if (name.isEmpty) return 'Enter the contact name';
-    if (name.length < 2) return 'Name must be at least 2 characters';
-    if (name.length > 40) return 'Name must be 40 characters or less';
+    if (name.length < 2) {
+      return 'Name must be at least 2 characters';
+    }
+    if (name.length > 40) {
+      return 'Name must be 40 characters or less';
+    }
+
+    return null;
+  }
+
+  String? validateEmail(String? value) {
+    final email = (value ?? '').trim();
+
+    if (email.isEmpty) {
+      return 'Enter the registered email address';
+    }
+
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      return 'Enter a valid email address';
+    }
+
     return null;
   }
 
   String? validatePhone(String? value) {
     final phone = (value ?? '').replaceAll(RegExp(r'[\s()-]'), '');
+
     if (phone.isEmpty) return 'Enter the phone number';
+
     if (!RegExp(r'^[0-9]{6,15}$').hasMatch(phone)) {
       return 'Enter a valid phone number (6–15 digits)';
     }
+
     return null;
   }
 
@@ -54,6 +79,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
     if (!formKey.currentState!.validate()) return;
 
     final user = auth.currentUser;
+
     if (user == null) {
       setState(() {
         errorMessage = 'Please log in again before saving contacts.';
@@ -63,6 +89,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
 
     final name = nameController.text.trim();
     final phone = phoneController.text.replaceAll(RegExp(r'[\s()-]'), '');
+    final email = emailController.text.trim().toLowerCase();
 
     setState(() {
       isSaving = true;
@@ -70,66 +97,84 @@ class _AddContactScreenState extends State<AddContactScreen> {
     });
 
     try {
-      final contactsRef = database.ref('users/${user.uid}/contacts');
-      final normalizedPhone = '$countryCode$phone'.replaceAll('+', '');
+      // Find the registered Firebase user by email.
+      final profilesRef = database.ref('publicProfiles');
 
-      debugPrint('[AddContact] Checking existing contacts at ${contactsRef.path}');
+      final profileSnapshot = await profilesRef
+          .orderByChild('email')
+          .equalTo(email)
+          .get()
+          .timeout(const Duration(seconds: 12));
 
-      // Bound the read so the UI cannot spin forever if the network/rules fail.
-      final existingSnapshot = await contactsRef.get().timeout(
-        const Duration(seconds: 12),
-        onTimeout: () => throw Exception(
-          'Timed out while reading contacts. Check your internet connection and Firebase rules.',
-        ),
-      );
-
-      if (existingSnapshot.value is Map) {
-        final existing =
-        Map<dynamic, dynamic>.from(existingSnapshot.value as Map);
-        final duplicate = existing.values.any((value) {
-          if (value is! Map) return false;
-          final map = Map<dynamic, dynamic>.from(value);
-          final savedCode = (map['countryCode'] ?? '+91').toString();
-          final savedPhone = (map['phone'] ?? '')
-              .toString()
-              .replaceAll(RegExp(r'[\s()-]'), '');
-          return '$savedCode$savedPhone'.replaceAll('+', '') ==
-              normalizedPhone;
-        });
-
-        if (duplicate) {
-          if (!mounted) return;
-          setState(() {
-            isSaving = false;
-            errorMessage = 'This phone number is already in your contacts.';
-          });
-          return;
-        }
+      if (!profileSnapshot.exists || profileSnapshot.value is! Map) {
+        throw Exception(
+          'No registered user found with this email address.',
+        );
       }
 
-      final contactRef = contactsRef.push();
-      debugPrint('[AddContact] Writing contact to ${contactRef.path}');
+      final profiles = Map<dynamic, dynamic>.from(
+        profileSnapshot.value as Map,
+      );
 
+      // Compare normalized email addresses.
+      final matchedEntry = profiles.entries.firstWhere(
+            (entry) {
+          if (entry.value is! Map) return false;
+
+          final profile = Map<dynamic, dynamic>.from(
+            entry.value as Map,
+          );
+
+          return (profile['email'] ?? '').toString().trim().toLowerCase() ==
+              email;
+        },
+        orElse: () => MapEntry('', null),
+      );
+
+      final otherUid = matchedEntry.key.toString();
+
+      if (otherUid.isEmpty) {
+        throw Exception(
+          'Could not identify this registered user.',
+        );
+      }
+
+      if (otherUid == user.uid) {
+        throw Exception(
+          'You cannot add your own account.',
+        );
+      }
+
+      // Use the actual Firebase UID as the contact key.
+      final contactRef = database.ref(
+        'users/${user.uid}/contacts/$otherUid',
+      );
+
+      final existingContact =
+      await contactRef.get().timeout(const Duration(seconds: 12));
+
+      if (existingContact.exists) {
+        throw Exception(
+          'This user is already in your contacts.',
+        );
+      }
+
+      // Save the contact in Firebase Realtime Database.
       await contactRef.set({
-        'uid': contactRef.key,
+        'uid': otherUid,
         'name': name,
         'phone': phone,
         'countryCode': countryCode,
-        'email': '',
+        'email': email,
         'addedAt': ServerValue.timestamp,
         'lastMessage': 'Tap to start chatting',
         'time': '',
-      }).timeout(
-        const Duration(seconds: 12),
-        onTimeout: () => throw Exception(
-          'Timed out while saving. Check internet connectivity and Firebase rules.',
-        ),
-      );
+      }).timeout(const Duration(seconds: 12));
 
-      // Save a local copy so this contact remains available offline.
+      // Save the contact in the existing local database.
       await DatabaseHelper.saveContact(
         owner: user.uid,
-        id: contactRef.key!,
+        id: otherUid,
         name: name,
         phone: phone,
         countryCode: countryCode,
@@ -137,51 +182,64 @@ class _AddContactScreenState extends State<AddContactScreen> {
         time: '',
       );
 
-      debugPrint('[AddContact] Contact saved successfully');
+      if (!mounted) return;
 
-      if (!mounted) return;
       Navigator.pop(context, true);
-    } on FirebaseException catch (e, stackTrace) {
-      debugPrint('[AddContact] Firebase error: ${e.code} - ${e.message}');
-      debugPrintStack(stackTrace: stackTrace);
+    } on FirebaseException catch (e) {
       if (!mounted) return;
+
       setState(() {
-        isSaving = false;
         errorMessage = e.code == 'permission-denied'
-            ? 'Firebase denied this write. Check Realtime Database rules.'
-            : 'Firebase error (${e.code}): ${e.message ?? 'Unknown error'}';
+            ? 'Firebase denied access. Check your database rules.'
+            : 'Firebase error (${e.code}): '
+            '${e.message ?? 'Unknown error'}';
       });
-    } catch (e, stackTrace) {
-      debugPrint('[AddContact] Error: $e');
-      debugPrintStack(stackTrace: stackTrace);
+    } catch (e) {
       if (!mounted) return;
+
       setState(() {
-        isSaving = false;
         errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
+    } finally {
+      if (mounted) {
+        setState(() => isSaving = false);
+      }
     }
   }
 
+  // the icon is optional now (the Code box has no icon, so the text fits)
   InputDecoration decoration({
     required String label,
-    required IconData icon,
+    IconData? icon,
   }) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, color: AppColors.emerald),
+      prefixIcon: icon == null
+          ? null
+          : Icon(
+        icon,
+        color: AppColors.emerald,
+      ),
       filled: true,
       fillColor: AppColors.card,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE3DED2)),
+        borderSide: const BorderSide(
+          color: Color(0xFFE3DED2),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE3DED2)),
+        borderSide: const BorderSide(
+          color: Color(0xFFE3DED2),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.emerald, width: 1.5),
+        borderSide: const BorderSide(
+          color: AppColors.emerald,
+          width: 1.5,
+        ),
       ),
     );
   }
@@ -195,7 +253,9 @@ class _AddContactScreenState extends State<AddContactScreen> {
         foregroundColor: Colors.white,
         title: const Text(
           'New contact',
-          style: TextStyle(fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+          ),
         ),
         elevation: 0,
       ),
@@ -223,6 +283,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+
                 const Text(
                   'Add contact',
                   textAlign: TextAlign.center,
@@ -233,46 +294,95 @@ class _AddContactScreenState extends State<AddContactScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+
                 const Text(
-                  'Save a name and phone number to your contacts.',
+                  'Enter the contact details and their registered email.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textSoft, fontSize: 15),
+                  style: TextStyle(
+                    color: AppColors.textSoft,
+                    fontSize: 15,
+                  ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 22),
+
+                // Contact name
                 TextFormField(
                   controller: nameController,
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
                   validator: validateName,
+                  enabled: !isSaving,
                   decoration: decoration(
                     label: 'Contact name',
                     icon: Icons.person_outline,
                   ),
                 ),
                 const SizedBox(height: 18),
+
+                // Registered email
+                TextFormField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  autocorrect: false,
+                  validator: validateEmail,
+                  enabled: !isSaving,
+                  decoration: decoration(
+                    label: 'Registered email address',
+                    icon: Icons.email_outlined,
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // Country code and phone number
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
-                      width: 116,
+                      width: 118,
                       child: DropdownButtonFormField<String>(
                         initialValue: countryCode,
-                        decoration: decoration(
-                          label: 'Code',
-                          icon: Icons.flag_outlined,
-                        ),
+                        isExpanded: true,
+                        decoration: decoration(label: 'Code'),
+                        // the closed box shows only the code, so it always fits
+                        selectedItemBuilder: (context) =>
+                            ['+91', '+1', '+44', '+61', '+971']
+                                .map(
+                                  (c) => Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(c),
+                              ),
+                            )
+                                .toList(),
                         items: const [
-                          DropdownMenuItem(value: '+91', child: Text('+91 IN')),
-                          DropdownMenuItem(value: '+1', child: Text('+1 US/CA')),
-                          DropdownMenuItem(value: '+44', child: Text('+44 UK')),
-                          DropdownMenuItem(value: '+61', child: Text('+61 AU')),
-                          DropdownMenuItem(value: '+971', child: Text('+971 UAE')),
+                          DropdownMenuItem(
+                            value: '+91',
+                            child: Text('+91 IN'),
+                          ),
+                          DropdownMenuItem(
+                            value: '+1',
+                            child: Text('+1 US/CA'),
+                          ),
+                          DropdownMenuItem(
+                            value: '+44',
+                            child: Text('+44 UK'),
+                          ),
+                          DropdownMenuItem(
+                            value: '+61',
+                            child: Text('+61 AU'),
+                          ),
+                          DropdownMenuItem(
+                            value: '+971',
+                            child: Text('+971 UAE'),
+                          ),
                         ],
                         onChanged: isSaving
                             ? null
                             : (value) {
                           if (value != null) {
-                            setState(() => countryCode = value);
+                            setState(() {
+                              countryCode = value;
+                            });
                           }
                         },
                       ),
@@ -284,6 +394,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                         keyboardType: TextInputType.phone,
                         textInputAction: TextInputAction.done,
                         validator: validatePhone,
+                        enabled: !isSaving,
                         onFieldSubmitted: (_) {
                           if (!isSaving) saveContact();
                         },
@@ -295,6 +406,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                     ),
                   ],
                 ),
+
                 if (errorMessage != null) ...[
                   const SizedBox(height: 16),
                   Container(
@@ -305,11 +417,15 @@ class _AddContactScreenState extends State<AddContactScreen> {
                     ),
                     child: Text(
                       errorMessage!,
-                      style: const TextStyle(color: Color(0xFFD94B4B)),
+                      style: const TextStyle(
+                        color: Color(0xFFD94B4B),
+                      ),
                     ),
                   ),
                 ],
+
                 const SizedBox(height: 28),
+
                 SizedBox(
                   height: 54,
                   child: ElevatedButton(
@@ -350,4 +466,3 @@ class _AddContactScreenState extends State<AddContactScreen> {
     );
   }
 }
-

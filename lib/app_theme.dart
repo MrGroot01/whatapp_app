@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppBrand {
-  static const String name = 'WhatsApp';
+  static const String name = 'Velora';
   static const String tagline = 'Messaging, beautifully simple.';
 }
 

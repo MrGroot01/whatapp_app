@@ -187,7 +187,9 @@ class MessageSyncService {
     if (_hasNetwork && !_fbConnected && _fbDownConfirmed) {
       unawaited(_kickFirebase());
     }
-    if (connection.value == ConnState.online && pendingCount.value > 0) {
+
+    // also catches scheduled messages whose time has just come
+    if (connection.value == ConnState.online) {
       unawaited(flush());
     }
   }
@@ -195,9 +197,12 @@ class MessageSyncService {
   // ---------- SAVE A MESSAGE (works without internet) ----------
   // `data` holds the message fields (text, type, reply fields...).
   // sender, time and status are added here.
+  // `sendAt` = null: send as soon as there is internet.
+  // `sendAt` = a time: keep it on the phone and send when that time comes.
   static Future<void> enqueue({
     required String chatId,
     required Map<String, dynamic> data,
+    DateTime? sendAt,
   }) async {
     final uid = _uid;
     if (uid == null) throw StateError('Not logged in');
@@ -218,6 +223,7 @@ class MessageSyncService {
       chatId: chatId,
       payload: jsonEncode(payload),
       createdMs: timeMs,
+      sendAtMs: sendAt?.millisecondsSinceEpoch ?? 0,
     );
     _bump();
 
@@ -267,12 +273,14 @@ class MessageSyncService {
 
   // true  = this message is finished (sent, or refused for good)
   // false = could not send now, try again later
+  // true = message is finished; false = retry later
   static Future<bool> _sendRow(Map<String, Object?> row) async {
     final id = row['id'] as String;
     final chatId = row['chat_id'] as String;
     final attempts = (row['attempts'] as int?) ?? 0;
 
     Map<String, dynamic>? parsed;
+
     try {
       parsed = Map<String, dynamic>.from(
         jsonDecode(row['payload'] as String) as Map,
@@ -282,7 +290,6 @@ class MessageSyncService {
     }
 
     if (parsed == null) {
-      // a broken row can never be sent
       await DatabaseHelper.outboxMarkFailed(id);
       _bump();
       return true;
@@ -291,13 +298,20 @@ class MessageSyncService {
     final payload = parsed;
     payload['status'] = 0;
 
-    final ref = FirebaseDatabase.instance.ref('chats/$chatId/messages/$id');
+    // For a scheduled message, use the actual sending time.
+    final sendAt = (row['send_at'] as int?) ?? 0;
+    if (sendAt > 0) {
+      payload['timeMs'] = nowMs();
+    }
+
+    final ref =
+    FirebaseDatabase.instance.ref('chats/$chatId/messages/$id');
 
     try {
-      // an earlier try may have reached the server although we never heard
-      // back: if the message is already there, do not write it again
+      // Avoid duplicate messages after a retry.
       if (attempts > 0) {
         final existing = await ref.get().timeout(_timeout);
+
         if (existing.exists) {
           await DatabaseHelper.outboxDelete(id);
           _bump();
@@ -307,12 +321,13 @@ class MessageSyncService {
 
       await DatabaseHelper.outboxMarkAttempt(id);
 
-      // the SAME id every time, so a retry can never make a copy
+      // Save the message to Firebase.
       await ref.set(payload).timeout(_timeout);
 
       await DatabaseHelper.outboxDelete(id);
       _bump();
 
+      // This notification appears on the SENDER'S device.
       unawaited(
         NotificationService.showMessageSent(
           messageType: (payload['type'] ?? 'text').toString(),
@@ -322,18 +337,20 @@ class MessageSyncService {
       return true;
     } on FirebaseException catch (e) {
       debugPrint('Send failed: ${e.code} ${e.message}');
+
       if (e.code == 'permission-denied') {
-        // retrying will never help: show the red mark
         await DatabaseHelper.outboxMarkFailed(id);
         _bump();
         return true;
       }
+
       return false;
     } catch (e) {
       debugPrint('Send failed: $e');
       return false;
     }
   }
+
 
   // ---------- COUNTS ----------
   static void _bump() {

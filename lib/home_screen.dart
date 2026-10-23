@@ -15,6 +15,7 @@ import 'message_sync_service.dart';
 import 'session_helper.dart';
 import 'settings_screen.dart';
 import 'my_tasks_screen.dart';
+import 'incoming_message_notifier.dart';
 
 class Contact {
   final String id;
@@ -113,6 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _contactsLoading = false;
     }
     SessionHelper.saveSession(widget.email);
+    IncomingMessageNotifier.start();
     TaskService.startListening();
     MessageSyncService.start(); // watches the internet + sends waiting messages
     loadProfileImage();
@@ -123,6 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _contactsSubscription?.cancel();
     _syncedRef?.keepSynced(false);
     MessageSyncService.stop();
+    IncomingMessageNotifier.stop();
     TaskService.stopListening();
     searchController.dispose();
     super.dispose();

@@ -18,7 +18,7 @@ import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
-
+import 'incoming_message_notifier.dart';
 import 'app_theme.dart';
 import 'connection_banner.dart';
 import 'database_helper.dart';
@@ -177,7 +177,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // the message list can jump to any message (Search needs this)
   final ItemScrollController itemScrollController = ItemScrollController();
   final ItemPositionsListener itemPositionsListener =
-  ItemPositionsListener.create();
+    ItemPositionsListener.create();
 
   // ---------- SEARCH IN CHAT ----------
   bool searching = false;
@@ -215,6 +215,13 @@ class _ChatScreenState extends State<ChatScreen> {
   // camera / gallery
   final ImagePicker _picker = ImagePicker();
 
+  // Image selected for sending or scheduling with an optional text message.
+  File? _draftImageFile;
+  String _draftImageName = '';
+
+  bool get _hasDraftContent =>
+      messageController.text.trim().isNotEmpty || _draftImageFile != null;
+
   // speech to text
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechReady = false;
@@ -223,7 +230,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // language the mic understands. null = phone default.
   // Examples: 'en_IN' (Indian English), 'hi_IN' (Hindi), 'kn_IN' (Kannada)
-  static const String? _speechLocale = null;
+  static const String? _speechLocale = 'en_IN';
 
   // messages from Firebase + messages still waiting in the phone's outbox
   List<Message> _remote = [];
@@ -245,6 +252,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    IncomingMessageNotifier.activeChatId = _chatId;
 
     // LIVE: this runs every time anything in the chat changes in Firebase
     _subscription = _messagesRef.onValue.listen(
@@ -287,6 +295,9 @@ class _ChatScreenState extends State<ChatScreen> {
     searchController.dispose();
     searchFocus.dispose();
     focusNode.dispose();
+    if (IncomingMessageNotifier.activeChatId == _chatId) {
+      IncomingMessageNotifier.activeChatId = '';
+    }
     super.dispose();
   }
 
@@ -308,6 +319,7 @@ class _ChatScreenState extends State<ChatScreen> {
     loading = false;
     loadError = false;
     _rebuildMessages();
+
 
     _markIncomingAsRead(list);
   }
@@ -358,13 +370,31 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // messages from the other person become "read" when this chat is open
-  void _markIncomingAsRead(List<Message> list) {
+
+  Future<void> _markIncomingAsDelivered(List<Message> list) async {
     for (final m in list) {
-      if (!m.isMe && m.status != 2) {
-        _messagesRef.child(m.id).update({'status': 2});
+      if (!m.isMe && m.status == 0) {
+        try {
+          await _messagesRef.child(m.id).update({'status': 1});
+        } catch (e) {
+          debugPrint('Delivery status update failed: $e');
+        }
       }
     }
   }
+
+  Future<void> _markIncomingAsRead(List<Message> list) async {
+    for (final m in list) {
+      if (!m.isMe && m.status != 2) {
+        try {
+          await _messagesRef.child(m.id).update({'status': 2});
+        } catch (e) {
+          debugPrint('Read status update failed: $e');
+        }
+      }
+    }
+  }
+
 
   // ---------- REPLY HELPERS ----------
   // a short text that describes any kind of message
@@ -405,40 +435,301 @@ class _ChatScreenState extends State<ChatScreen> {
     focusNode.requestFocus();
   }
 
-  // ---------- SENDING TEXT ----------
+  // ---------- SENDING TEXT / IMAGE ----------
   Future<void> sendMessage() async {
-    // stop the microphone if it is still listening
     if (listening) {
       await _speech.stop();
       if (mounted) setState(() => listening = false);
     }
 
     final text = messageController.text.trim();
-    if (text.isEmpty) return;
+    final imageFile = _draftImageFile;
+    final imageName = _draftImageName;
 
+    if (text.isEmpty && imageFile == null) return;
     if (_myUid.isEmpty) {
       snack('Please log in again');
       return;
     }
 
-    final data = _withReply({
-      'text': text,
-      'type': 'text',
-    });
-
-    messageController.clear();
-    setState(() {
-      hasText = false;
-      replyingTo = null;
-    });
-
     try {
-      // saved on the phone first (clock icon), sent as soon as there is internet
-      await MessageSyncService.enqueue(chatId: _chatId, data: data);
+      final data = <String, dynamic>{
+        'text': text,
+        'type': imageFile != null ? 'image' : 'text',
+      };
+
+      if (imageFile != null) {
+        final imageBase64 = base64Encode(await imageFile.readAsBytes());
+        if (imageBase64.length > 5 * 1024 * 1024) {
+          snack('Image is too large. Please choose a smaller photo.');
+          return;
+        }
+        data['imageBase64'] = imageBase64;
+        data['fileName'] = imageName;
+      }
+
+      await MessageSyncService.enqueue(
+        chatId: _chatId,
+        data: _withReply(data),
+      );
+
+      if (!mounted) return;
+      messageController.clear();
+      setState(() {
+        hasText = false;
+        replyingTo = null;
+        _draftImageFile = null;
+        _draftImageName = '';
+      });
       scrollToBottom();
     } catch (e) {
       debugPrint('Send failed: $e');
-      snack('Could not save the message. Please try again.');
+      snack('Could not send the message. Please try again.');
+    }
+  }
+
+  // ---------- SCHEDULE A MESSAGE OR IMAGE ("Send later") ----------
+  int _daysFromToday(DateTime when) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(when.year, when.month, when.day);
+    return day.difference(today).inDays;
+  }
+
+  String _scheduleLabel(DateTime when) {
+    final diff = _daysFromToday(when);
+    final time = formatTime(when);
+    if (diff == 0) return 'today at $time';
+    if (diff == 1) return 'tomorrow at $time';
+    return 'on ${dayLabel(when)} at $time';
+  }
+
+  Future<void> showScheduleSheet() async {
+    final text = messageController.text.trim();
+    final imageFile = _draftImageFile;
+    final imageName = _draftImageName;
+
+    if (text.isEmpty && imageFile == null) {
+      snack('Type a message or select an image first');
+      return;
+    }
+    if (_myUid.isEmpty) {
+      snack('Please log in again');
+      return;
+    }
+    closePanels();
+
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    var when = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 9, 0);
+
+    final picked = await showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final valid = when.isAfter(
+              DateTime.now().add(const Duration(minutes: 1)),
+            );
+            final dateText = _daysFromToday(when) == 1
+                ? 'Tomorrow, ${dayLabel(when)}'
+                : dayLabel(when);
+
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD5D5D5),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Schedule sending',
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textDark,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final now = DateTime.now();
+                              final d = await showDatePicker(
+                                context: context,
+                                initialDate: when,
+                                firstDate: DateTime(now.year, now.month, now.day),
+                                lastDate: now.add(const Duration(days: 365)),
+                              );
+                              if (d != null) {
+                                setSheetState(() {
+                                  when = DateTime(
+                                    d.year, d.month, d.day,
+                                    when.hour, when.minute,
+                                  );
+                                });
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              child: Text(
+                                dateText,
+                                style: GoogleFonts.poppins(
+                                  color: AppColors.textDark,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () async {
+                            final t = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(when),
+                            );
+                            if (t != null) {
+                              setSheetState(() {
+                                when = DateTime(
+                                  when.year, when.month, when.day,
+                                  t.hour, t.minute,
+                                );
+                              });
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 14,
+                            ),
+                            child: Text(
+                              formatTime(when),
+                              style: GoogleFonts.poppins(
+                                color: AppColors.emerald,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: valid
+                            ? () => Navigator.pop(sheetContext, when)
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.emerald,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFFBFD8D2),
+                          disabledForegroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          valid
+                              ? 'Send ${_scheduleLabel(when)}'
+                              : 'Pick a time in the future',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        child: Text(
+                          'Cancel',
+                          style: GoogleFonts.poppins(
+                            color: AppColors.emerald,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (picked == null || !mounted) return;
+    await _scheduleMessage(
+      text,
+      picked,
+      imageFile: imageFile,
+      imageName: imageName,
+    );
+  }
+
+  Future<void> _scheduleMessage(
+      String text,
+      DateTime when, {
+        File? imageFile,
+        String imageName = '',
+      }) async {
+    try {
+      final data = <String, dynamic>{
+        'text': text,
+        'type': imageFile != null ? 'image' : 'text',
+      };
+
+      if (imageFile != null) {
+        final imageBase64 = base64Encode(await imageFile.readAsBytes());
+        if (imageBase64.length > 5 * 1024 * 1024) {
+          snack('Image is too large. Please choose a smaller photo.');
+          return;
+        }
+        data['imageBase64'] = imageBase64;
+        data['fileName'] = imageName;
+      }
+
+      await MessageSyncService.enqueue(
+        chatId: _chatId,
+        data: _withReply(data),
+        sendAt: when,
+      );
+
+      if (!mounted) return;
+      messageController.clear();
+      setState(() {
+        hasText = false;
+        replyingTo = null;
+        _draftImageFile = null;
+        _draftImageName = '';
+      });
+      snack('Message scheduled for ${_scheduleLabel(when)}');
+    } catch (e) {
+      debugPrint('Schedule failed: $e');
+      snack('Could not schedule the message. Please try again.');
     }
   }
 
@@ -453,6 +744,13 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
+    final otherUid = _otherUid;
+
+    if (_myUid.isEmpty || otherUid.isEmpty) {
+      snack('Could not identify the contact account');
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -462,6 +760,8 @@ class _ChatScreenState extends State<ChatScreen> {
           phone: widget.phone,
           countryCode: widget.countryCode,
           video: true,
+          myUid: _myUid,
+          otherUid: otherUid,
         ),
       ),
     );
@@ -500,8 +800,11 @@ class _ChatScreenState extends State<ChatScreen> {
         maxWidth: 700,
         maxHeight: 700,
       );
-      if (x == null) return;
-      await _uploadAndSend(File(x.path), x.name, 'image');
+      if (x == null || !mounted) return;
+      setState(() {
+        _draftImageFile = File(x.path);
+        _draftImageName = x.name;
+      });
     } catch (e) {
       snack('Could not open the camera. Check camera permission.');
     }
@@ -515,8 +818,11 @@ class _ChatScreenState extends State<ChatScreen> {
         maxWidth: 700,
         maxHeight: 700,
       );
-      if (x == null) return;
-      await _uploadAndSend(File(x.path), x.name, 'image');
+      if (x == null || !mounted) return;
+      setState(() {
+        _draftImageFile = File(x.path);
+        _draftImageName = x.name;
+      });
     } catch (e) {
       snack('Could not open the gallery');
     }
@@ -1273,6 +1579,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _onSpeechError(SpeechRecognitionError e) {
     if (!mounted) return;
+    debugPrint('Speech error: ${e.errorMsg}');
     setState(() => listening = false);
 
     if (e.errorMsg == 'error_speech_timeout' ||
@@ -1284,8 +1591,14 @@ class _ChatScreenState extends State<ChatScreen> {
     } else if (e.errorMsg == 'error_permission') {
       snack('Please allow the microphone permission for this app');
     } else if (e.errorMsg == 'error_network' ||
-        e.errorMsg == 'error_network_timeout') {
-      snack('Speech needs an internet connection');
+        e.errorMsg == 'error_network_timeout' ||
+        e.errorMsg == 'error_language_unavailable' ||
+        e.errorMsg == 'error_language_not_supported') {
+      snack(
+        'Voice error: ${e.errorMsg}\n'
+            'Download your language in the phone settings '
+            '(Offline speech recognition), or type your message.',
+      );
     } else {
       snack('Speech error: ${e.errorMsg}');
     }
@@ -1318,6 +1631,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _textBeforeMic = messageController.text.trim();
     _heardWords = false;
     setState(() => listening = true);
+
     await _speech.listen(
       onResult: _onSpeechResult,
       listenOptions: stt.SpeechListenOptions(
@@ -1946,20 +2260,52 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+
   Widget buildTick(int status) {
-    // -1 = waiting for the internet
+    // Waiting for internet
     if (status == -1) {
-      return const Icon(Icons.schedule, size: 16, color: _tickGrey);
+      return const Icon(
+        Icons.schedule,
+        size: 16,
+        color: _tickGrey,
+      );
     }
-    // -2 = the server refused it (long-press, then "Try again")
+
+    // Failed to send
     if (status == -2) {
-      return const Icon(Icons.error_outline, size: 17, color: _error);
+      return const Icon(
+        Icons.error_outline,
+        size: 17,
+        color: _error,
+      );
     }
+
+    // Sent: one grey tick
     if (status == 0) {
-      return const Icon(Icons.done, size: 17, color: _tickGrey);
+      return const Icon(
+        Icons.done,
+        size: 17,
+        color: _tickGrey,
+      );
     }
-    return const Icon(Icons.done_all, size: 17, color: _tickRead);
+
+    // Delivered: two grey ticks
+    if (status == 1) {
+      return const Icon(
+        Icons.done_all,
+        size: 17,
+        color: _tickGrey,
+      );
+    }
+
+    // Read: two blue ticks
+    return const Icon(
+      Icons.done_all,
+      size: 17,
+      color: _tickRead,
+    );
   }
+
 
   // the quoted message shown at the top of a reply bubble
   Widget buildReplyQuote(Message msg) {
@@ -2108,77 +2454,99 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // New image messages are loaded from Base64 in Realtime Database.
     if (msg.type == 'image' && msg.imageBase64.isNotEmpty) {
-      return GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => Scaffold(
-                backgroundColor: Colors.black,
-                appBar: AppBar(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                ),
-                body: Center(
-                  child: InteractiveViewer(
-                    child: Image.memory(
-                      base64Decode(msg.imageBase64),
-                      errorBuilder: (_, _, _) => const Icon(
-                        Icons.broken_image,
-                        color: Colors.white,
-                        size: 48,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    backgroundColor: Colors.black,
+                    appBar: AppBar(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                    ),
+                    body: Center(
+                      child: InteractiveViewer(
+                        child: Image.memory(
+                          base64Decode(msg.imageBase64),
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.broken_image,
+                            color: Colors.white,
+                            size: 48,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
+              );
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.memory(
+                base64Decode(msg.imageBase64),
+                width: 220,
+                height: 260,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stack) => const SizedBox(
+                  width: 220,
+                  height: 120,
+                  child: Icon(Icons.broken_image, size: 48),
+                ),
               ),
             ),
-          );
-        },
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.memory(
-            base64Decode(msg.imageBase64),
-            width: 220,
-            height: 260,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stack) => const SizedBox(
-              width: 220,
-              height: 120,
-              child: Icon(Icons.broken_image, size: 48),
-            ),
           ),
-        ),
+          if (msg.text.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 2, right: 2),
+              child: _highlightedText(msg.text, msg.id),
+            ),
+        ],
       );
     }
 
     // Support older image messages that were saved as Storage URLs.
     if (msg.type == 'image' && msg.url.isNotEmpty) {
-      return GestureDetector(
-        onTap: () => openUrl(msg.url),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.network(
-            msg.url,
-            width: 220,
-            fit: BoxFit.cover,
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              return const SizedBox(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: () => openUrl(msg.url),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(
+                msg.url,
                 width: 220,
-                height: 160,
-                child: Center(
-                  child: CircularProgressIndicator(color: AppColors.emerald),
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) {
+                  if (progress == null) return child;
+                  return const SizedBox(
+                    width: 220,
+                    height: 160,
+                    child: Center(
+                      child: CircularProgressIndicator(color: AppColors.emerald),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stack) => const SizedBox(
+                  width: 220,
+                  height: 120,
+                  child: Icon(Icons.broken_image, size: 48),
                 ),
-              );
-            },
-            errorBuilder: (context, error, stack) => const SizedBox(
-              width: 220,
-              height: 120,
-              child: Icon(Icons.broken_image, size: 48),
+              ),
             ),
           ),
-        ),
+          if (msg.text.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 2, right: 2),
+              child: _highlightedText(msg.text, msg.id),
+            ),
+        ],
       );
     }
 
@@ -2457,14 +2825,17 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget buildInputBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Container(
+          if (_draftImageFile != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
+                borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x14000000),
@@ -2474,79 +2845,127 @@ class _ChatScreenState extends State<ChatScreen> {
                 ],
               ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      _draftImageFile!,
+                      width: 64,
+                      height: 64,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Text('Photo attached')),
                   IconButton(
-                    onPressed: toggleEmoji,
-                    icon: Icon(
-                      showEmoji
-                          ? Icons.keyboard_alt_outlined
-                          : Icons.emoji_emotions_outlined,
-                      color: AppColors.textSoft,
-                    ),
+                    tooltip: 'Remove photo',
+                    onPressed: () {
+                      setState(() {
+                        _draftImageFile = null;
+                        _draftImageName = '';
+                      });
+                    },
+                    icon: const Icon(Icons.close),
                   ),
-                  Expanded(
-                    child: TextField(
-                      controller: messageController,
-                      focusNode: focusNode,
-                      minLines: 1,
-                      maxLines: 5,
-                      textCapitalization: TextCapitalization.sentences,
-                      cursorColor: AppColors.emerald,
-                      style: GoogleFonts.poppins(
-                        color: AppColors.textDark,
-                        fontSize: 17,
-                      ),
-                      onChanged: (value) {
-                        setState(() => hasText = value.trim().isNotEmpty);
-                      },
-                      decoration: InputDecoration(
-                        hintText: listening ? 'Listening...' : 'Message',
-                        hintStyle: GoogleFonts.poppins(
-                          color: AppColors.textSoft,
-                          fontSize: 17,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: showAttachMenu,
-                    icon: const Icon(
-                      Icons.attach_file,
-                      color: AppColors.textSoft,
-                    ),
-                  ),
-                  if (!hasText)
-                    IconButton(
-                      onPressed: pickFromCamera,
-                      icon: const Icon(
-                        Icons.camera_alt,
-                        color: AppColors.textSoft,
-                      ),
-                    ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: AppColors.emerald,
-            child: IconButton(
-              onPressed: listening
-                  ? stopListening
-                  : (hasText ? sendMessage : toggleListening),
-              icon: Icon(
-                listening
-                    ? Icons.stop
-                    : (hasText ? Icons.send_rounded : Icons.mic),
-                color: Colors.white,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x14000000),
+                        blurRadius: 4,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        onPressed: toggleEmoji,
+                        icon: Icon(
+                          showEmoji
+                              ? Icons.keyboard_alt_outlined
+                              : Icons.emoji_emotions_outlined,
+                          color: AppColors.textSoft,
+                        ),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: messageController,
+                          focusNode: focusNode,
+                          minLines: 1,
+                          maxLines: 5,
+                          textCapitalization: TextCapitalization.sentences,
+                          cursorColor: AppColors.emerald,
+                          style: GoogleFonts.poppins(
+                            color: AppColors.textDark,
+                            fontSize: 17,
+                          ),
+                          onChanged: (value) {
+                            setState(() => hasText = value.trim().isNotEmpty);
+                          },
+                          decoration: InputDecoration(
+                            hintText: listening ? 'Listening...' : 'Message',
+                            hintStyle: GoogleFonts.poppins(
+                              color: AppColors.textSoft,
+                              fontSize: 17,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: showAttachMenu,
+                        icon: const Icon(
+                          Icons.attach_file,
+                          color: AppColors.textSoft,
+                        ),
+                      ),
+                      if (!hasText)
+                        IconButton(
+                          onPressed: pickFromCamera,
+                          icon: const Icon(
+                            Icons.camera_alt,
+                            color: AppColors.textSoft,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                // long-press the send button = "Send later"
+                onLongPress: (_hasDraftContent && !listening) ? showScheduleSheet : null,
+                child: CircleAvatar(
+                  radius: 26,
+                  backgroundColor: AppColors.emerald,
+                  child: IconButton(
+                    onPressed: listening
+                        ? stopListening
+                        : (_hasDraftContent ? sendMessage : toggleListening),
+                    icon: Icon(
+                      listening
+                          ? Icons.stop
+                          : (_hasDraftContent ? Icons.send_rounded : Icons.mic),
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

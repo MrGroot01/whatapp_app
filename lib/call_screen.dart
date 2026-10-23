@@ -6,12 +6,17 @@ class CallScreen extends StatefulWidget {
   final Color color;
   final String phone;
   final String countryCode;
-  final bool video; // true = start with the camera on
+  final bool video;
+  // true = start with the camera on
+  final String myUid;
+  final String otherUid;
 
   const CallScreen({
     super.key,
     required this.name,
     required this.color,
+    required this.myUid,
+    required this.otherUid,
     this.phone = '',
     this.countryCode = '+91',
     this.video = false,
