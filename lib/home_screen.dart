@@ -19,6 +19,8 @@ import 'settings_screen.dart';
 import 'my_tasks_screen.dart';
 import 'incoming_message_notifier.dart';
 import 'push_service.dart';
+import 'status_service.dart'; // NEW: StatusContact
+import 'updates_screen.dart'; // NEW: the Updates tab
 
 class Contact {
   final String id;
@@ -81,6 +83,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final searchController = TextEditingController();
   String searchText = '';
   File? profileImage;
+
+  // NEW: 0 = Chats, 1 = Updates (status)
+  int _tab = 0;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseDatabase _database = FirebaseDatabase.instance;
@@ -584,7 +589,7 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Text(
-          AppBrand.name,
+          _tab == 0 ? AppBrand.name : 'Updates', // CHANGED
           style: const TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w800,
@@ -662,14 +667,53 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 16),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+
+      // CHANGED: only the Chats tab has the "New chat" button
+      // (the Updates tab has its own pencil and camera buttons)
+      floatingActionButton: _tab != 0
+          ? null
+          : FloatingActionButton(
         onPressed: _openNewChatSheet,
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
         tooltip: 'New chat',
         child: const Icon(Icons.add_comment),
       ),
-      body: Column(
+
+      // NEW: bottom bar to switch between Chats and Updates
+      bottomNavigationBar: NavigationBar(
+        backgroundColor: Colors.white,
+        indicatorColor: const Color(0xFFE3F1ED),
+        selectedIndex: _tab,
+        onDestinationSelected: (i) => setState(() => _tab = i),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble, color: AppColors.emerald),
+            label: 'Chats',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.donut_large_outlined),
+            selectedIcon: Icon(Icons.donut_large, color: AppColors.emerald),
+            label: 'Updates',
+          ),
+        ],
+      ),
+
+      // CHANGED: Updates tab shows the status screen
+      body: _tab == 1
+          ? UpdatesScreen(
+        contacts: _contacts
+            .map(
+              (c) => StatusContact(
+            id: c.id,
+            name: c.name,
+            color: c.color,
+          ),
+        )
+            .toList(),
+      )
+          : Column(
         children: [
           Container(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
