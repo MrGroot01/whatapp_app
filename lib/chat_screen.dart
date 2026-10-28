@@ -4,6 +4,9 @@ import 'dart:io';
 import 'create_task_screen.dart';
 import 'call_screen.dart';
 import 'contact_info_screen.dart';
+import 'group_info_screen.dart';
+import 'group_service.dart';
+import 'push_queue.dart';
 import 'chat_media_screen.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:file_picker/file_picker.dart';
@@ -47,6 +50,7 @@ class Message {
   final String contactName;
   final String contactPhone;
   final String contactCountryCode;
+  final int expireAtMs; // disappearing messages: 0 = never disappears
 
   Message({
     required this.id,
@@ -68,6 +72,7 @@ class Message {
     this.contactName = '',
     this.contactPhone = '',
     this.contactCountryCode = '',
+    this.expireAtMs = 0,
   });
 
   factory Message.fromMap(String id, Map<dynamic, dynamic> data, String myUid) {
@@ -106,6 +111,9 @@ class Message {
       contactName: (data['contactName'] ?? '').toString(),
       contactPhone: (data['contactPhone'] ?? '').toString(),
       contactCountryCode: (data['contactCountryCode'] ?? '').toString(),
+      expireAtMs: data['expireAtMs'] is num
+          ? (data['expireAtMs'] as num).toInt()
+          : 0,
     );
   }
 }
@@ -131,6 +139,8 @@ class ChatScreen extends StatefulWidget {
   final String chatKey; // unique per account + contact
   final String phone; // contact phone number (without country code)
   final String countryCode; // e.g. +91
+  // true = a group chat. Then chatKey is the group id and name is the group name.
+  final bool isGroup;
 
   const ChatScreen({
     super.key,
@@ -139,6 +149,7 @@ class ChatScreen extends StatefulWidget {
     required this.chatKey,
     this.phone = '',
     this.countryCode = '+91',
+    this.isGroup = false,
   });
 
   @override
@@ -177,7 +188,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // the message list can jump to any message (Search needs this)
   final ItemScrollController itemScrollController = ItemScrollController();
   final ItemPositionsListener itemPositionsListener =
-    ItemPositionsListener.create();
+  ItemPositionsListener.create();
 
   // ---------- SEARCH IN CHAT ----------
   bool searching = false;
@@ -193,6 +204,8 @@ class _ChatScreenState extends State<ChatScreen> {
   late final String _chatId = _makeChatId();
 
   String _makeChatId() {
+    // a group uses its own id as the chat id
+    if (widget.isGroup) return widget.chatKey;
     final parts = widget.chatKey.split('_');
     if (parts.length != 2) return widget.chatKey;
     parts.sort();
@@ -210,7 +223,128 @@ class _ChatScreenState extends State<ChatScreen> {
   );
   StreamSubscription<DatabaseEvent>? _subscription;
 
+  // ---------- DISAPPEARING MESSAGES ----------
+  late final DatabaseReference _disappearRef = FirebaseDatabase.instance.ref(
+    'chats/$_chatId/settings/disappearAfterMs',
+  );
+  StreamSubscription<DatabaseEvent>? _settingsSub;
+  Timer? _expiryTimer;
+  int _disappearMs = 0; // 0 = off
+  final Set<String> _purging = {};
+
+  String _disappearLabel(int ms) {
+    if (ms == 300000) return '5 minutes';
+    if (ms == 86400000) return '1 day';
+    if (ms == 604800000) return '7 days';
+    return 'Off';
+  }
+
   String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  // ---------- GROUP CHAT ----------
+  StreamSubscription<DatabaseEvent>? _groupSub;
+  String _groupName = '';
+  List<String> _memberIds = [];
+  Set<String> _adminIds = {};
+  final Map<String, String> _memberNames = {}; // account id -> name to show
+  final Set<String> _resolving = {};
+  bool _leftGroup = false;
+
+  bool get _isAdmin => _adminIds.contains(_myUid);
+
+  String get _title =>
+      widget.isGroup && _groupName.isNotEmpty ? _groupName : widget.name;
+
+  // "You, Asha, Ravi" under the group name
+  String get _membersLine {
+    final names = <String>[];
+    for (final id in _memberIds) {
+      names.add(id == _myUid ? 'You' : (_memberNames[id] ?? '...'));
+    }
+    names.sort((a, b) {
+      if (a == 'You') return -1;
+      if (b == 'You') return 1;
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+    return names.join(', ');
+  }
+
+  // who wrote a message ("You", the contact, or a group member)
+  String _senderLabel(String senderId) {
+    if (senderId == _myUid) return 'You';
+    if (!widget.isGroup) return widget.name;
+    return _memberNames[senderId] ?? 'Member';
+  }
+
+  void _listenGroup() {
+    _groupSub = FirebaseDatabase.instance
+        .ref('groups/${widget.chatKey}')
+        .onValue
+        .listen(
+          (event) {
+        final v = event.snapshot.value;
+        if (v is! Map) {
+          _leaveScreen();
+          return;
+        }
+        final g = GroupItem.fromMap(
+          widget.chatKey,
+          Map<dynamic, dynamic>.from(v),
+        );
+        if (!g.members.contains(_myUid)) {
+          _leaveScreen();
+          return;
+        }
+        if (!mounted) return;
+        setState(() {
+          _groupName = g.name;
+          _memberIds = g.members;
+          _adminIds = g.admins;
+        });
+        _resolveNames(g.members);
+      },
+      onError: (Object e) {
+        debugPrint('Group listener error: $e');
+        if (e is FirebaseException && e.code == 'permission-denied') {
+          _leaveScreen();
+        }
+      },
+    );
+  }
+
+  // I left the group, was removed, or the group was deleted
+  void _leaveScreen() {
+    if (_leftGroup || !mounted) return;
+    _leftGroup = true;
+    snack('You are no longer in this group');
+    final route = ModalRoute.of(context);
+    if (route != null && route.isActive) {
+      Navigator.of(context).removeRoute(route);
+    }
+  }
+
+  // finds the names of group members (saved contact name, or "~ their name")
+  Future<void> _resolveNames(Iterable<String> ids) async {
+    final todo = ids
+        .where(
+          (id) =>
+      id.isNotEmpty &&
+          id != _myUid &&
+          !_memberNames.containsKey(id) &&
+          !_resolving.contains(id),
+    )
+        .toList();
+    if (todo.isEmpty) return;
+
+    _resolving.addAll(todo);
+    final found = await GroupService.resolveMembers(todo);
+    _resolving.removeAll(todo);
+
+    if (!mounted) return;
+    setState(() {
+      found.forEach((id, info) => _memberNames[id] = info.name);
+    });
+  }
 
   // camera / gallery
   final ImagePicker _picker = ImagePicker();
@@ -282,6 +416,21 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() => showEmoji = false);
       }
     });
+
+    // the disappearing-messages setting of this chat (shared by both people)
+    _settingsSub = _disappearRef.onValue.listen((event) {
+      final v = event.snapshot.value;
+      if (!mounted) return;
+      setState(() => _disappearMs = v is num ? v.toInt() : 0);
+    });
+
+    // every second: hide + delete messages whose time is over
+    _expiryTimer = Timer.periodic(
+      const Duration(seconds: 1),
+          (_) => _purgeExpired(),
+    );
+
+    if (widget.isGroup) _listenGroup();
   }
 
   @override
@@ -289,6 +438,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _loadingTimer?.cancel();
     MessageSyncService.version.removeListener(_loadPending);
     _subscription?.cancel();
+    _settingsSub?.cancel();
+    _groupSub?.cancel();
+    _expiryTimer?.cancel();
     _speech.cancel();
     messageController.dispose();
     itemPositionsListener.itemPositions.removeListener(_onPositionsChanged);
@@ -299,6 +451,28 @@ class _ChatScreenState extends State<ChatScreen> {
       IncomingMessageNotifier.activeChatId = '';
     }
     super.dispose();
+  }
+
+  // ---------- DISAPPEARING: DELETE EXPIRED MESSAGES ----------
+  // Deletes expired messages from Firebase and hides them at once.
+  void _purgeExpired() {
+    if (!mounted) return;
+    final now = MessageSyncService.nowMs();
+    final expired = _remote
+        .where((m) => m.expireAtMs > 0 && m.expireAtMs <= now)
+        .toList();
+    if (expired.isEmpty) return;
+
+    for (final m in expired) {
+      if (_purging.add(m.id)) {
+        _messagesRef.child(m.id).remove().catchError((Object e) {
+          debugPrint('Expire delete failed: $e');
+          _purging.remove(m.id);
+        });
+      }
+    }
+    _remote = _remote.where((m) => !expired.contains(m)).toList();
+    _rebuildMessages();
   }
 
   // ---------- LIVE MESSAGES ----------
@@ -319,18 +493,26 @@ class _ChatScreenState extends State<ChatScreen> {
     loading = false;
     loadError = false;
     _rebuildMessages();
+    // messages that expired while the app was closed
+    _purgeExpired();
 
-
-    _markIncomingAsRead(list);
+    if (widget.isGroup) {
+      // groups have no read ticks: just learn the names of the senders
+      _resolveNames(list.map((m) => m.senderId).toSet());
+    } else {
+      _markIncomingAsRead(list);
+    }
   }
 
   // Firebase messages + messages still waiting in the outbox.
   // The same id is shown only once, so nothing appears twice.
+  // Expired disappearing messages are never shown.
   void _rebuildMessages() {
     if (!mounted) return;
+    final now = MessageSyncService.nowMs();
     final ids = _remote.map((m) => m.id).toSet();
     final merged = <Message>[
-      ..._remote,
+      ..._remote.where((m) => m.expireAtMs == 0 || m.expireAtMs > now),
       ..._pending.where((m) => !ids.contains(m.id)),
     ]..sort((a, b) {
       final byTime = a.time.compareTo(b.time);
@@ -417,6 +599,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // adds the "reply to" fields when the user is replying to a message
+  // and the disappearing timer when it is switched on for this chat
   Map<String, dynamic> _withReply(Map<String, dynamic> data) {
     final r = replyingTo;
     if (r != null) {
@@ -424,6 +607,7 @@ class _ChatScreenState extends State<ChatScreen> {
       data['replyText'] = _previewOf(r);
       data['replySenderId'] = r.senderId;
     }
+    if (_disappearMs > 0) data['expireAfterMs'] = _disappearMs;
     return data;
   }
 
@@ -739,6 +923,11 @@ class _ChatScreenState extends State<ChatScreen> {
   void openCallScreen({required bool video}) {
     closePanels();
 
+    if (widget.isGroup) {
+      snack('Calls are not available in groups yet');
+      return;
+    }
+
     if (!video) {
       dialNumber();
       return;
@@ -903,6 +1092,12 @@ class _ChatScreenState extends State<ChatScreen> {
           'status': 0,
         };
 
+        // disappearing messages: turn the timer into an expiry time
+        final after = message.remove('expireAfterMs');
+        if (after is num && after > 0) {
+          message['expireAtMs'] = MessageSyncService.nowMs() + after.toInt();
+        }
+
         final ref = FirebaseStorage.instance.ref(
           'chats/$_chatId/'
               '${DateTime.now().millisecondsSinceEpoch}_$name',
@@ -911,7 +1106,15 @@ class _ChatScreenState extends State<ChatScreen> {
         await ref.putFile(file);
         message['url'] = await ref.getDownloadURL();
 
-        await _messagesRef.push().set(message);
+        final newMessageRef = _messagesRef.push();
+        await newMessageRef.set(message);
+        unawaited(
+          PushQueue.add(
+            chatId: _chatId,
+            messageId: newMessageRef.key ?? '',
+            data: {'type': 'file', 'fileName': name, 'text': name},
+          ),
+        );
 
         if (mounted) {
           setState(() => replyingTo = null);
@@ -1509,10 +1712,17 @@ class _ChatScreenState extends State<ChatScreen> {
           data['senderId'] = _myUid;
           data['timeMs'] = ServerValue.timestamp;
           data['status'] = 0;
-          await FirebaseDatabase.instance
+          final forwardRef = FirebaseDatabase.instance
               .ref('chats/${_chatIdWith(c.id)}/messages')
-              .push()
-              .set(data);
+              .push();
+          await forwardRef.set(data);
+          unawaited(
+            PushQueue.add(
+              chatId: _chatIdWith(c.id),
+              messageId: forwardRef.key ?? '',
+              data: data,
+            ),
+          );
         }
         done++;
       } catch (e) {
@@ -1930,7 +2140,9 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         content: Text(
-          'All messages with ${widget.name} will be deleted.',
+          widget.isGroup
+              ? 'All messages in ${_title} will be deleted for everyone.'
+              : 'All messages with ${widget.name} will be deleted.',
           style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
@@ -2331,7 +2543,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          fromMe ? 'You' : widget.name,
+                          _senderLabel(msg.replySenderId),
                           style: GoogleFonts.poppins(
                             color: barColor,
                             fontSize: 13,
@@ -2607,6 +2819,21 @@ class _ChatScreenState extends State<ChatScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // in a group: who wrote this message
+              if (widget.isGroup && !msg.isMe)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Text(
+                    _senderLabel(msg.senderId),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: _colorFor(msg.senderId),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               if (msg.forwarded)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
@@ -2638,6 +2865,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // small timer icon: this message will disappear
+                    if (msg.expireAtMs > 0) ...[
+                      const Icon(
+                        Icons.timer_outlined,
+                        size: 12,
+                        color: AppColors.textSoft,
+                      ),
+                      const SizedBox(width: 3),
+                    ],
                     Text(
                       formatTime(msg.time),
                       style: GoogleFonts.poppins(
@@ -2647,7 +2883,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     if (msg.isMe) ...[
                       const SizedBox(width: 4),
-                      buildTick(msg.status),
+                      buildTick(widget.isGroup && msg.status > 0 ? 0 : msg.status),
                     ],
                   ],
                 ),
@@ -2790,7 +3026,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          fromMe ? 'You' : widget.name,
+                          _senderLabel(r.senderId),
                           style: GoogleFonts.poppins(
                             color: barColor,
                             fontSize: 13,
@@ -2974,6 +3210,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Open the WhatsApp-style contact information page from the chat header.
   void openContactInfo() {
+    if (widget.isGroup) {
+      openGroupInfo();
+      return;
+    }
     closePanels();
     Navigator.push(
       context,
@@ -2984,10 +3224,25 @@ class _ChatScreenState extends State<ChatScreen> {
           countryCode: widget.countryCode,
           color: widget.color,
           chatId: _chatId,
+
           onAudioCall: () => openCallScreen(video: false),
           onVideoCall: () => openCallScreen(video: true),
           onSearch: startSearch,
           onClearChat: clearChat,
+        ),
+      ),
+    );
+  }
+
+  // members, name, exit group ...
+  void openGroupInfo() {
+    closePanels();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GroupInfoScreen(
+          groupId: widget.chatKey,
+          groupName: _title,
         ),
       ),
     );
@@ -2999,7 +3254,7 @@ class _ChatScreenState extends State<ChatScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatMediaScreen(chatId: _chatId, name: widget.name),
+        builder: (_) => ChatMediaScreen(chatId: _chatId, name: _title),
       ),
     );
   }
@@ -3029,6 +3284,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // the normal top bar of the chat
+  // the normal top bar of the chat
   AppBar buildNormalAppBar() {
     return AppBar(
       backgroundColor: AppColors.emerald,
@@ -3041,41 +3297,93 @@ class _ChatScreenState extends State<ChatScreen> {
         onTap: openContactInfo,
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 19,
-              backgroundColor: widget.color,
-              child: Text(
-                widget.name.isNotEmpty ? widget.name[0].toUpperCase() : '?',
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            // the contact's DP (live), or the first letter / group icon
+            StreamBuilder<DatabaseEvent>(
+              stream: widget.isGroup || _otherUid.isEmpty
+                  ? null
+                  : FirebaseDatabase.instance
+                  .ref('publicProfiles/$_otherUid/photoBase64')
+                  .onValue,
+              builder: (context, snapshot) {
+                final value = snapshot.data?.snapshot.value;
+
+                ImageProvider? profilePhoto;
+
+                if (value is String && value.isNotEmpty) {
+                  try {
+                    profilePhoto = MemoryImage(base64Decode(value));
+                  } catch (e) {
+                    debugPrint('Error loading contact DP: $e');
+                  }
+                }
+
+                return CircleAvatar(
+                  radius: 19,
+                  backgroundColor: widget.color,
+                  backgroundImage: profilePhoto,
+                  child: profilePhoto != null
+                      ? null
+                      : widget.isGroup
+                      ? const Icon(
+                    Icons.group,
+                    color: Colors.white,
+                    size: 22,
+                  )
+                      : Text(
+                    widget.name.isNotEmpty
+                        ? widget.name[0].toUpperCase()
+                        : '?',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              },
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                widget.name,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (widget.isGroup && _memberIds.isNotEmpty)
+                    Text(
+                      _membersLine,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        color: const Color(0xCCFFFFFF),
+                        fontSize: 12,
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
         ),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.videocam),
-          onPressed: () => openCallScreen(video: true),
-        ),
-        IconButton(
-          icon: const Icon(Icons.call),
-          onPressed: () => openCallScreen(video: false),
-        ),
+        if (!widget.isGroup) ...[
+          IconButton(
+            icon: const Icon(Icons.videocam),
+            onPressed: () => openCallScreen(video: true),
+          ),
+          IconButton(
+            icon: const Icon(Icons.call),
+            onPressed: () => openCallScreen(video: false),
+          ),
+        ],
         PopupMenuButton<String>(
           color: Colors.white,
           icon: const Icon(Icons.more_vert),
@@ -3099,15 +3407,27 @@ class _ChatScreenState extends State<ChatScreen> {
             }
           },
           itemBuilder: (context) => [
-            _menuItem('info', Icons.person_outline, 'View Profile'),
+            _menuItem(
+              'info',
+              widget.isGroup ? Icons.group_outlined : Icons.person_outline,
+              widget.isGroup ? 'Group info' : 'View Profile',
+            ),
             _menuItem('search', Icons.search, 'Search'),
             _menuItem(
               'media',
               Icons.photo_library_outlined,
               'Media, links, and docs',
             ),
-            const PopupMenuDivider(),
-            _menuItem('clear', Icons.delete_sweep, 'Clear chat', danger: true),
+            // in a group only the admin can clear the chat for everyone
+            if (!widget.isGroup || _isAdmin) ...[
+              const PopupMenuDivider(),
+              _menuItem(
+                'clear',
+                Icons.delete_sweep,
+                'Clear chat',
+                danger: true,
+              ),
+            ],
           ],
         ),
       ],
@@ -3195,6 +3515,25 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             // internet / waiting-to-send message
             const ConnectionBanner(),
+
+            // disappearing messages notice
+            if (_disappearMs > 0)
+              Container(
+                width: double.infinity,
+                color: const Color(0xFFFFF4D6),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 12,
+                ),
+                child: Text(
+                  '⏱ Disappearing messages: ${_disappearLabel(_disappearMs)}',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textDark,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
 
             // MESSAGES
             Expanded(

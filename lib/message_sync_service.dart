@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'notification_service.dart';
+import 'push_queue.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -304,6 +304,13 @@ class MessageSyncService {
       payload['timeMs'] = nowMs();
     }
 
+    // Disappearing messages: the timer starts when the message is really sent.
+    final after = payload.remove('expireAfterMs');
+    if (after is num && after > 0) {
+      payload['expireAtMs'] =
+          (payload['timeMs'] as num).toInt() + after.toInt();
+    }
+
     final ref =
     FirebaseDatabase.instance.ref('chats/$chatId/messages/$id');
 
@@ -327,11 +334,9 @@ class MessageSyncService {
       await DatabaseHelper.outboxDelete(id);
       _bump();
 
-      // This notification appears on the SENDER'S device.
+      // Ask the push server to notify the OTHER people in this chat.
       unawaited(
-        NotificationService.showMessageSent(
-          messageType: (payload['type'] ?? 'text').toString(),
-        ),
+        PushQueue.add(chatId: chatId, messageId: id, data: payload),
       );
 
       return true;

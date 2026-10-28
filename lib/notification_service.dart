@@ -15,7 +15,14 @@ class NotificationService {
   GlobalKey<NavigatorState>();
 
   // called with the notification's payload when the user taps it
+  // (task reminders and other notifications)
   static void Function(String payload)? onNotificationTap;
+
+  // called when the user taps a CHAT notification (payload starts with "chat|")
+  static void Function(String payload)? onChatNotificationTap;
+
+  // set when the app was started (from closed) by tapping a notification
+  static String? launchPayload;
 
   static const AndroidNotificationDetails _androidDetails =
   AndroidNotificationDetails(
@@ -26,37 +33,86 @@ class NotificationService {
     priority: Priority.high,
   );
 
+  // the same message always gets the same number, in every part of the app,
+  // so a message never shows two notifications
+  static int idFor(String chatId, String messageId) {
+    var h = 0x811c9dc5; // FNV-1a
+    for (final unit in '$chatId/$messageId'.codeUnits) {
+      h ^= unit;
+      h = (h * 0x01000193) & 0xFFFFFFFF;
+    }
+    final id = h & 0x3fffffff;
+    return id == 0 ? 1 : id;
+  }
+
+  static const InitializationSettings _settings = InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    iOS: DarwinInitializationSettings(),
+  );
+
+  static void _onResponse(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+
+    if (payload.startsWith('chat|')) {
+      onChatNotificationTap?.call(payload);
+      return;
+    }
+    onNotificationTap?.call(payload);
+  }
+
   // call once when the app starts
+
   static Future<void> init() async {
     if (_ready) return;
+
     try {
       tzdata.initializeTimeZones();
 
-      const settings = InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        iOS: DarwinInitializationSettings(),
-      );
       await _plugin.initialize(
-        settings: settings,
-        onDidReceiveNotificationResponse: (response) {
-          final payload = response.payload;
-          if (payload != null && payload.isNotEmpty) {
-            onNotificationTap?.call(payload);
-          }
-        },
+        settings: _settings,
+        onDidReceiveNotificationResponse: _onResponse,
       );
 
-      // Android 13+ asks the user for permission to show notifications
-      await _plugin
+      // was the app opened by tapping a notification?
+      final launch = await _plugin.getNotificationAppLaunchDetails();
+      if (launch != null && launch.didNotificationLaunchApp) {
+        launchPayload = launch.notificationResponse?.payload;
+      }
+
+      final android = _plugin
           .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
+          AndroidFlutterLocalNotificationsPlugin>();
+
+      final granted =
+      await android?.requestNotificationsPermission();
+
+      debugPrint('Notification permission granted: $granted');
 
       _ready = true;
-    } catch (e) {
-      debugPrint('Notifications are not available: $e');
+      debugPrint('Notification service initialized');
+    } catch (e, stackTrace) {
+      debugPrint('Notification initialization failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
+
+  // Used when a push arrives while the app is closed (background isolate):
+  // no permission question, no screen needed.
+  static Future<void> initQuiet() async {
+    if (_ready) return;
+
+    try {
+      await _plugin.initialize(
+        settings: _settings,
+        onDidReceiveNotificationResponse: _onResponse,
+      );
+      _ready = true;
+    } catch (e) {
+      debugPrint('Quiet notification init failed: $e');
+    }
+  }
+
 
   // returns true if the reminder was scheduled
   static Future<bool> schedule({
@@ -123,6 +179,8 @@ class NotificationService {
             importance: Importance.high,
             priority: Priority.high,
             icon: '@mipmap/ic_launcher',
+            // the same message shown twice replaces itself without a new sound
+            onlyAlertOnce: true,
           ),
           iOS: DarwinNotificationDetails(),
         ),

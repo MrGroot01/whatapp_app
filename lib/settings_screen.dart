@@ -1,5 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'app_theme.dart';
 import 'database_helper.dart';
 import 'login_screen.dart';
+import 'fcm_service.dart';
 
 // One row in the settings list
 class SettingsItem {
@@ -36,6 +38,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // the picture and nickname of this user
   File? profileImage;
   String? nickname;
+  bool _uploadingPhoto = false;
+  String? profilePhotoBase64;
+  StreamSubscription<DatabaseEvent>? _photoBase64Subscription;
 
   final List<SettingsItem> items = const [
     SettingsItem(Icons.vpn_key_outlined, 'Account',
@@ -58,10 +63,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     loadSavedImage();
     loadNickname();
+    listenForProfilePhoto();
   }
 
   @override
   void dispose() {
+    _photoBase64Subscription?.cancel();
     searchController.dispose();
     super.dispose();
   }
@@ -87,58 +94,184 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => nickname = name);
   }
 
-  // ---------- READ THE SAVED PICTURE ----------
+  // ---------- READ THE SAVED PICTURE FROM THE LOCAL CACHE ----------
   Future<void> loadSavedImage() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final savedPath = await DatabaseHelper.getProfileImageForUid(uid);
-    if (savedPath == null) return;
+    try {
+      final savedPath = await DatabaseHelper.getProfileImageForUid(uid);
+      if (savedPath == null) return;
 
-    final file = File(savedPath);
-    if (!file.existsSync()) return;
-    if (!mounted) return;
+      final file = File(savedPath);
+      if (!file.existsSync()) return;
+      if (!mounted) return;
 
-    setState(() => profileImage = file);
+      setState(() => profileImage = file);
+    } catch (e) {
+      debugPrint('Could not load local profile picture: $e');
+    }
   }
 
-  // ---------- PICK A PICTURE AND SAVE IT ----------
-  Future<void> pickImage() async {
-    final picker = ImagePicker();
-
-    // open the photo album and wait until the user chooses
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-
-    // the user pressed back without choosing: do nothing
-    if (picked == null) return;
-
-    // 1. copy the photo into the app's own drawer
-    final folder = await getApplicationDocumentsDirectory();
-    final fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final savedFile = await File(picked.path).copy('${folder.path}/$fileName');
-
-    // 2. remember the old picture's address, then save the new one
+  // Listen to the shared image stored in Realtime Database so DPs update live.
+  void listenForProfilePhoto() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final oldPath = await DatabaseHelper.getProfileImageForUid(uid);
-    await DatabaseHelper.saveProfileImageForUid(uid, savedFile.path);
-    debugPrint('Saved picture: ${savedFile.path}');
 
-    // 3. delete the old picture file so the phone does not fill up
-    if (oldPath != null) {
-      final oldFile = File(oldPath);
-      if (oldFile.existsSync()) {
-        await oldFile.delete();
+    _photoBase64Subscription = FirebaseDatabase.instance
+        .ref('publicProfiles/$uid/photoBase64')
+        .onValue
+        .listen((event) {
+      final value = event.snapshot.value;
+      final encoded = value is String && value.trim().isNotEmpty
+          ? value.trim()
+          : null;
+      if (!mounted) return;
+      setState(() => profilePhotoBase64 = encoded);
+    }, onError: (Object error) {
+      debugPrint('Could not listen for profile picture changes: $error');
+    });
+  }
+
+  Widget _initialAvatar(String displayName) {
+    return Center(
+      child: Text(
+        displayName.isEmpty ? '?' : displayName[0].toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 48,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileAvatar(String displayName) {
+    final encoded = profilePhotoBase64;
+    if (encoded != null && encoded.isNotEmpty) {
+      try {
+        return ClipOval(
+          child: Image.memory(
+            base64Decode(encoded),
+            width: 112,
+            height: 112,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              if (profileImage != null) {
+                return Image.file(
+                  profileImage!,
+                  width: 112,
+                  height: 112,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _initialAvatar(displayName),
+                );
+              }
+              return _initialAvatar(displayName);
+            },
+          ),
+        );
+      } catch (e) {
+        debugPrint('Invalid shared profile picture data: $e');
       }
     }
 
-    if (!mounted) return;
+    if (profileImage != null) {
+      return ClipOval(
+        child: Image.file(
+          profileImage!,
+          width: 112,
+          height: 112,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _initialAvatar(displayName),
+        ),
+      );
+    }
 
-    // 4. show the new picture
-    setState(() => profileImage = savedFile);
+    return _initialAvatar(displayName);
+  }
+
+  // ---------- PICK AND SHARE THE PROFILE PICTURE WITHOUT CLOUD STORAGE ----------
+  Future<void> pickImage() async {
+    if (_uploadingPhoto) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showMessage('Please log in again before changing your picture.');
+      return;
+    }
+
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 50,
+        maxWidth: 480,
+        maxHeight: 480,
+      );
+
+      // The user cancelled the gallery.
+      if (picked == null) return;
+      if (!mounted) return;
+      setState(() => _uploadingPhoto = true);
+
+      final imageBytes = await picked.readAsBytes();
+      // Keep each photo small: Base64 adds about one-third to the image size.
+      // This cap keeps the profile update under roughly 1 MB.
+      if (imageBytes.length > 650 * 1024) {
+        _showMessage('This picture is too large. Please choose a smaller image.');
+        return;
+      }
+      final encoded = base64Encode(imageBytes);
+
+      // Save a local copy so this phone can show its own DP immediately/offline.
+      final folder = await getApplicationDocumentsDirectory();
+      final fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final savedFile = await File(picked.path).copy('${folder.path}/$fileName');
+
+      // Share the compressed image in Realtime Database (no Storage bucket needed).
+      await FirebaseDatabase.instance
+          .ref('publicProfiles/${user.uid}')
+          .update({
+        'uid': user.uid,
+        'photoBase64': encoded,
+        'photoUpdatedAt': ServerValue.timestamp,
+      });
+
+      // Keep the existing local cache used by Settings and Home.
+      final oldPath = await DatabaseHelper.getProfileImageForUid(user.uid);
+      await DatabaseHelper.saveProfileImageForUid(user.uid, savedFile.path);
+
+      if (oldPath != null && oldPath != savedFile.path) {
+        final oldFile = File(oldPath);
+        if (oldFile.existsSync()) {
+          try {
+            await oldFile.delete();
+          } catch (e) {
+            debugPrint('Could not delete old profile image: $e');
+          }
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        profileImage = savedFile;
+        profilePhotoBase64 = encoded;
+      });
+      _showMessage('Profile picture updated. Your contacts can now see it.');
+    } catch (e, stackTrace) {
+      debugPrint('Profile picture update failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      _showMessage('Profile update failed: $e');
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   // ---------- LOGOUT ----------
@@ -183,10 +316,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (shouldLogout == true && mounted) {
-      // 1. sign out of Firebase
+      // 1. remove this phone's push token from the account (must be before sign out)
+      await FcmService.removeCurrentToken();
+
+      // 2. sign out of Firebase
       await FirebaseAuth.instance.signOut();
 
-      // 2. erase the old local "who is logged in" note
       if (!mounted) return;
 
       // 3. go to the Login page and remove all old pages
@@ -299,40 +434,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: CircleAvatar(
                           radius: 56,
                           backgroundColor: AppColors.gold,
-                          // show the saved picture if there is one
-                          backgroundImage: profileImage != null
-                              ? FileImage(profileImage!)
-                              : null,
-                          // otherwise show the first letter of the name
-                          child: profileImage == null
-                              ? Text(
-                            displayName.isEmpty
-                                ? '?'
-                                : displayName[0].toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 48,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
-                              : null,
+                          child: _buildProfileAvatar(displayName),
                         ),
                       ),
                       Positioned(
                         right: 0,
                         bottom: 0,
                         child: GestureDetector(
-                          onTap: pickImage,
+                          onTap: _uploadingPhoto ? null : pickImage,
                           child: Container(
                             padding: const EdgeInsets.all(3),
                             decoration: const BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
                             ),
-                            child: const CircleAvatar(
+                            child: CircleAvatar(
                               radius: 17,
                               backgroundColor: AppColors.gold,
-                              child: Icon(
+                              child: _uploadingPhoto
+                                  ? const Padding(
+                                padding: EdgeInsets.all(8),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                                  : const Icon(
                                 Icons.camera_alt,
                                 size: 18,
                                 color: Colors.white,

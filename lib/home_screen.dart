@@ -1,5 +1,5 @@
-
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,11 +11,14 @@ import 'add_contact_screen.dart';
 import 'chat_screen.dart';
 import 'connection_banner.dart';
 import 'database_helper.dart';
+import 'group_member_picker.dart';
+import 'group_service.dart';
 import 'message_sync_service.dart';
 import 'session_helper.dart';
 import 'settings_screen.dart';
 import 'my_tasks_screen.dart';
 import 'incoming_message_notifier.dart';
+import 'push_service.dart';
 
 class Contact {
   final String id;
@@ -93,6 +96,12 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _contactsLoading = true;
   bool _hasRemoteContacts = false;
 
+  // ---------- GROUPS ----------
+  // users/<me>/groups lists the group ids; each group is watched separately
+  StreamSubscription<DatabaseEvent>? _groupIndexSub;
+  final Map<String, StreamSubscription<DatabaseEvent>> _groupSubs = {};
+  final Map<String, GroupItem> _groups = {};
+
   @override
   void initState() {
     super.initState();
@@ -110,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         },
       );
+      _listenGroups(uid);
     } else {
       _contactsLoading = false;
     }
@@ -118,17 +128,80 @@ class _HomeScreenState extends State<HomeScreen> {
     TaskService.startListening();
     MessageSyncService.start(); // watches the internet + sends waiting messages
     loadProfileImage();
+
+    // the app was opened by tapping a message notification: open that chat
+    WidgetsBinding.instance.addPostFrameCallback(
+          (_) => PushService.openPendingChat(),
+    );
   }
 
   @override
   void dispose() {
     _contactsSubscription?.cancel();
+    _groupIndexSub?.cancel();
+    for (final s in _groupSubs.values) {
+      s.cancel();
+    }
+    _groupSubs.clear();
     _syncedRef?.keepSynced(false);
     MessageSyncService.stop();
     IncomingMessageNotifier.stop();
     TaskService.stopListening();
     searchController.dispose();
     super.dispose();
+  }
+
+  // ---------- GROUP LIST ----------
+  void _listenGroups(String uid) {
+    _groupIndexSub = _database.ref('users/$uid/groups').onValue.listen(
+          (event) {
+        if (!mounted) return;
+
+        final ids = <String>{};
+        final value = event.snapshot.value;
+        if (value is Map) {
+          value.forEach((key, v) {
+            if (v == true) ids.add(key.toString());
+          });
+        }
+
+        // stop watching groups I left
+        for (final id in _groupSubs.keys.toList()) {
+          if (!ids.contains(id)) {
+            _groupSubs.remove(id)?.cancel();
+            _groups.remove(id);
+          }
+        }
+
+        // start watching new groups
+        for (final id in ids) {
+          if (_groupSubs.containsKey(id)) continue;
+          _groupSubs[id] = _database.ref('groups/$id').onValue.listen(
+                (e) {
+              if (!mounted) return;
+              final gv = e.snapshot.value;
+              setState(() {
+                if (gv is Map) {
+                  _groups[id] = GroupItem.fromMap(
+                    id,
+                    Map<dynamic, dynamic>.from(gv),
+                  );
+                } else {
+                  _groups.remove(id);
+                }
+              });
+            },
+            onError: (Object err) {
+              debugPrint('[HomeScreen] Group $id error: $err');
+              if (mounted) setState(() => _groups.remove(id));
+            },
+          );
+        }
+
+        setState(() {});
+      },
+      onError: (Object e) => debugPrint('[HomeScreen] Group list error: $e'),
+    );
   }
 
   Future<void> _loadLocalContacts() async {
@@ -197,15 +270,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> loadProfileImage() async {
-    final savedPath = await DatabaseHelper.getProfileImage(widget.email);
-    File? file;
+    // Settings saves the current user's local image using their Firebase UID.
+    final uid = _currentUid;
+    if (uid == null) return;
 
-    if (savedPath != null && File(savedPath).existsSync()) {
-      file = File(savedPath);
+    try {
+      final savedPath = await DatabaseHelper.getProfileImageForUid(uid);
+      File? file;
+      if (savedPath != null && File(savedPath).existsSync()) {
+        file = File(savedPath);
+      }
+      if (!mounted) return;
+      setState(() => profileImage = file);
+    } catch (e) {
+      debugPrint('[HomeScreen] Could not load local profile picture: $e');
     }
-
-    if (!mounted) return;
-    setState(() => profileImage = file);
   }
 
   Future<void> openAddContact() async {
@@ -218,6 +297,96 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Contact saved successfully.')),
       );
+    }
+  }
+
+  // New group: pick members -> type the name -> open the new group chat
+  Future<void> openNewGroup() async {
+    final result = await Navigator.push<Object>(
+      context,
+      MaterialPageRoute(builder: (_) => const GroupMemberPickerScreen()),
+    );
+    if (!mounted || result is! GroupRef) return;
+
+    openGroupChat(result.id, result.name);
+  }
+
+  void openGroupChat(String id, String name) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          name: name,
+          color: GroupService.colorFor(id),
+          chatKey: id,
+          isGroup: true,
+        ),
+      ),
+    );
+  }
+
+  // the "+" button: New group / New contact (like WhatsApp's "New chat")
+  Future<void> _openNewChatSheet() async {
+    Widget option(IconData icon, String label, String value, BuildContext c) {
+      return ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+        leading: CircleAvatar(
+          radius: 24,
+          backgroundColor: AppColors.emerald,
+          child: Icon(icon, color: Colors.white),
+        ),
+        title: Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textDark,
+            fontSize: 17,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        onTap: () => Navigator.pop(c, value),
+      );
+    }
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(24, 20, 24, 8),
+              child: Text(
+                'New chat',
+                style: TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            option(Icons.group_add, 'New group', 'group', sheetContext),
+            option(
+              Icons.person_add_alt_1,
+              'New contact',
+              'contact',
+              sheetContext,
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || choice == null) return;
+    if (choice == 'group') {
+      openNewGroup();
+    } else {
+      openAddContact();
     }
   }
 
@@ -241,20 +410,134 @@ class _HomeScreenState extends State<HomeScreen> {
     return contacts;
   }
 
-  Widget _buildContactsList() {
+  // one group row in the list
+  Widget _buildGroupTile(GroupItem group) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      leading: CircleAvatar(
+        radius: 26,
+        backgroundColor: GroupService.colorFor(group.id),
+        child: const Icon(Icons.group, color: Colors.white, size: 28),
+      ),
+      title: Text(
+        group.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.textDark,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        '${group.members.length} members',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
+      ),
+      onTap: () => openGroupChat(group.id, group.name),
+    );
+  }
+
+  // one contact row in the list
+  Widget _buildContactTile(Contact contact) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      leading: StreamBuilder<DatabaseEvent>(
+        // This listener receives DP changes from the contact's public profile.
+        stream: _database.ref('publicProfiles/${contact.id}/photoBase64').onValue,
+        builder: (context, snapshot) {
+          final value = snapshot.data?.snapshot.value;
+          final encoded = value is String ? value : '';
+          final initial =
+          contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?';
+
+          MemoryImage? photo;
+          if (encoded.isNotEmpty) {
+            try {
+              photo = MemoryImage(base64Decode(encoded));
+            } catch (e) {
+              debugPrint('Invalid DP data for ${contact.id}: $e');
+            }
+          }
+
+          return CircleAvatar(
+            radius: 26,
+            backgroundColor: contact.color,
+            backgroundImage: photo,
+            child: photo == null
+                ? Text(
+              initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            )
+                : null,
+          );
+        },
+      ),
+      title: Text(
+        contact.name,
+        style: const TextStyle(
+          color: AppColors.textDark,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(
+        '${contact.countryCode} ${contact.phone}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
+      ),
+      trailing: contact.time.isEmpty
+          ? null
+          : Text(
+        contact.time,
+        style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
+      ),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChatScreen(
+              name: contact.name,
+              color: contact.color,
+              chatKey: '${_currentUid}_${contact.id}',
+              phone: contact.phone,
+              countryCode: contact.countryCode,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // groups first, then the contacts
+  Widget _buildChatList() {
+    final query = searchText.toLowerCase();
+
+    final groups = _groups.values
+        .where((g) => g.name.toLowerCase().contains(query))
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
     final contacts = _contacts.where((contact) {
-      final query = searchText.toLowerCase();
       return contact.name.toLowerCase().contains(query) ||
           contact.phone.contains(query);
     }).toList();
 
-    if (contacts.isEmpty) {
+    final total = groups.length + contacts.length;
+
+    if (total == 0) {
       return ValueListenableBuilder<ConnState>(
         valueListenable: MessageSyncService.connection,
         builder: (context, state, _) {
           final message = state == ConnState.offline
               ? 'You are offline. No contacts are saved on this device yet.'
-              : 'No contacts yet. Tap + to add a contact.';
+              : 'No chats yet. Tap + to add a contact or create a group.';
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -275,7 +558,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return ListView.separated(
       padding: const EdgeInsets.only(top: 8, bottom: 90),
-      itemCount: contacts.length,
+      itemCount: total,
       separatorBuilder: (_, _) => const Divider(
         height: 1,
         indent: 88,
@@ -283,56 +566,8 @@ class _HomeScreenState extends State<HomeScreen> {
         color: Color(0xFFE9E4D8),
       ),
       itemBuilder: (context, index) {
-        final contact = contacts[index];
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          leading: CircleAvatar(
-            radius: 26,
-            backgroundColor: contact.color,
-            child: Text(
-              contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          title: Text(
-            contact.name,
-            style: const TextStyle(
-              color: AppColors.textDark,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          subtitle: Text(
-            '${contact.countryCode} ${contact.phone}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
-          ),
-          trailing: contact.time.isEmpty
-              ? null
-              : Text(
-            contact.time,
-            style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
-          ),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ChatScreen(
-                  name: contact.name,
-                  color: contact.color,
-                  chatKey: '${_currentUid}_${contact.id}',
-                  phone: contact.phone,
-                  countryCode: contact.countryCode,
-                ),
-              ),
-            );
-          },
-        );
+        if (index < groups.length) return _buildGroupTile(groups[index]);
+        return _buildContactTile(contacts[index - groups.length]);
       },
     );
   }
@@ -365,6 +600,7 @@ class _HomeScreenState extends State<HomeScreen> {
               MaterialPageRoute(builder: (_) => const MyTasksScreen()),
             ),
           ),
+
           GestureDetector(
             onTap: () async {
               await Navigator.push(
@@ -381,22 +617,45 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Colors.white,
                 shape: BoxShape.circle,
               ),
-              child: CircleAvatar(
-                radius: 17,
-                backgroundColor: AppColors.gold,
-                backgroundImage:
-                profileImage != null ? FileImage(profileImage!) : null,
-                child: profileImage == null
-                    ? Text(
-                  widget.email.isNotEmpty
+              child: StreamBuilder<DatabaseEvent>(
+                // Prefer the shared image; keep the local file as an offline fallback.
+                stream: uid == null
+                    ? null
+                    : _database.ref('publicProfiles/$uid/photoBase64').onValue,
+                builder: (context, snapshot) {
+                  final value = snapshot.data?.snapshot.value;
+                  final encoded = value is String ? value : '';
+                  final initial = widget.email.isNotEmpty
                       ? widget.email[0].toUpperCase()
-                      : '?',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-                    : null,
+                      : '?';
+
+                  ImageProvider? imageProvider;
+                  if (encoded.isNotEmpty) {
+                    try {
+                      imageProvider = MemoryImage(base64Decode(encoded));
+                    } catch (e) {
+                      debugPrint('Invalid own DP data: $e');
+                    }
+                  }
+                  imageProvider ??= profileImage != null
+                      ? FileImage(profileImage!)
+                      : null;
+
+                  return CircleAvatar(
+                    radius: 17,
+                    backgroundColor: AppColors.gold,
+                    backgroundImage: imageProvider,
+                    child: imageProvider == null
+                        ? Text(
+                      initial,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                        : null,
+                  );
+                },
               ),
             ),
           ),
@@ -404,11 +663,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: openAddContact,
+        onPressed: _openNewChatSheet,
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
-        tooltip: 'Add contact',
-        child: const Icon(Icons.person_add_alt_1),
+        tooltip: 'New chat',
+        child: const Icon(Icons.add_comment),
       ),
       body: Column(
         children: [
@@ -458,13 +717,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(color: AppColors.textSoft, fontSize: 17),
               ),
             )
-                : _contactsLoading && _contacts.isEmpty
+                : _contactsLoading && _contacts.isEmpty && _groups.isEmpty
                 ? const Center(
               child: CircularProgressIndicator(
                 color: AppColors.emerald,
               ),
             )
-                : _buildContactsList(),
+                : _buildChatList(),
           ),
         ],
       ),

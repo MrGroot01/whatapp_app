@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -97,6 +96,26 @@ class FcmService {
       'token': token,
       'updatedAt': ServerValue.timestamp,
     });
+  }
+
+  // Call this BEFORE signing out. Without it, this phone would keep getting
+  // the notifications of the account that just logged out.
+  static Future<void> removeCurrentToken() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      final token = await _messaging.getToken();
+      if (token == null || token.isEmpty) return;
+
+      await FirebaseDatabase.instance
+          .ref('users/$uid/fcmTokens/${Uri.encodeComponent(token)}')
+          .remove();
+
+      debugPrint('FCM token removed for user: $uid');
+    } catch (e) {
+      debugPrint('Could not remove the FCM token: $e');
+    }
   }
 
   static Future<void> dispose() async {

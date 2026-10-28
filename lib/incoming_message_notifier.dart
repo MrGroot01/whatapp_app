@@ -7,7 +7,8 @@ import 'package:flutter/widgets.dart';
 import 'message_sync_service.dart';
 import 'notification_service.dart';
 
-// Shows a notification on THIS phone when somebody sends me a new message.
+// Shows a notification on THIS phone when somebody sends me a new message
+// (in a 1-to-1 chat or in a group).
 class IncomingMessageNotifier {
   IncomingMessageNotifier._();
 
@@ -16,8 +17,13 @@ class IncomingMessageNotifier {
   static bool _appInForeground = true;
 
   static StreamSubscription<DatabaseEvent>? _contactsSub;
+  static StreamSubscription<DatabaseEvent>? _groupIdsSub;
   static AppLifecycleListener? _lifecycle;
   static final Map<String, StreamSubscription<DatabaseEvent>> _chatSubs = {};
+  // group id -> [name listener, message listener]
+  static final Map<String, List<StreamSubscription<DatabaseEvent>>>
+  _groupSubs = {};
+  static final Map<String, String> _groupNames = {}; // group id -> group name
   static final Map<String, String> _names = {}; // contact id -> name I saved
   static final Set<String> _notified = {};
   static int _startMs = 0;
@@ -59,6 +65,24 @@ class IncomingMessageNotifier {
       },
       onError: (Object e) => debugPrint('Contacts listener error: $e'),
     );
+
+    // the groups I am in
+    _groupIdsSub = FirebaseDatabase.instance
+        .ref('users/$me/groups')
+        .onValue
+        .listen(
+          (event) {
+        final ids = <String>{};
+        final value = event.snapshot.value;
+        if (value is Map) {
+          value.forEach((key, v) {
+            if (v == true) ids.add(key.toString());
+          });
+        }
+        _syncGroupListeners(me, ids);
+      },
+      onError: (Object e) => debugPrint('Groups listener error: $e'),
+    );
   }
 
   // one listener for each contact's chat (also for contacts added later)
@@ -87,6 +111,43 @@ class IncomingMessageNotifier {
             (event) => _onMessage(me, uid, chatId, event),
         onError: (Object e) => debugPrint('Chat listener error: $e'),
       );
+    }
+  }
+
+  // one listener for each group (also for groups I join later)
+  static void _syncGroupListeners(String me, Set<String> ids) {
+    // stop listening to groups I left
+    for (final id in _groupSubs.keys.toList()) {
+      if (!ids.contains(id)) {
+        final subs = _groupSubs.remove(id);
+        if (subs != null) {
+          for (final s in subs) {
+            s.cancel();
+          }
+        }
+        _groupNames.remove(id);
+      }
+    }
+
+    // start listening to new groups
+    final db = FirebaseDatabase.instance;
+    for (final id in ids) {
+      if (_groupSubs.containsKey(id)) continue;
+
+      _groupSubs[id] = [
+        db.ref('groups/$id/name').onValue.listen(
+              (event) => _groupNames[id] = (event.snapshot.value ?? '').toString(),
+          onError: (Object e) => debugPrint('Group name listener error: $e'),
+        ),
+        db
+            .ref('chats/$id/messages')
+            .limitToLast(20)
+            .onChildAdded
+            .listen(
+              (event) => _onGroupMessage(me, id, event),
+          onError: (Object e) => debugPrint('Group chat listener error: $e'),
+        ),
+      ];
     }
   }
 
@@ -120,18 +181,47 @@ class IncomingMessageNotifier {
 
     final name = _names[contactUid] ?? '';
     unawaited(
-      NotificationService.schedule(
-        id: _notificationId(chatId, key),
+      NotificationService.showIncomingMessage(
+        id: NotificationService.idFor(chatId, key),
         title: name.isEmpty ? 'New message' : name,
         body: _preview(data),
-        when: DateTime.now().add(const Duration(seconds: 1)),
+        payload: 'chat|$chatId|0|$contactUid',
       ),
     );
   }
 
-  static int _notificationId(String chatId, String key) {
-    final id = '$chatId/$key'.hashCode & 0x3fffffff;
-    return id == 0 ? 1 : id;
+  // a new message in one of my groups: "Group name" / "Asha: hello"
+  static void _onGroupMessage(
+      String me,
+      String groupId,
+      DatabaseEvent event,
+      ) {
+    final data = event.snapshot.value;
+    final key = event.snapshot.key ?? '';
+    if (data is! Map || key.isEmpty) return;
+
+    if (!_notified.add('$groupId/$key')) return;
+
+    final sender = (data['senderId'] ?? '').toString();
+    if (sender == me) return;
+
+    final ts = data['timeMs'];
+    final timeMs = ts is num ? ts.toInt() : 0;
+    if (timeMs < _startMs) return;
+
+    if (_appInForeground && activeChatId == groupId) return;
+
+    final groupName = _groupNames[groupId] ?? '';
+    final who = _names[sender] ?? 'Someone';
+
+    unawaited(
+      NotificationService.showIncomingMessage(
+        id: NotificationService.idFor(groupId, key),
+        title: groupName.isEmpty ? 'New group message' : groupName,
+        body: '$who: ${_preview(data)}',
+        payload: 'chat|$groupId|1|$sender',
+      ),
+    );
   }
 
   // a short text for any kind of message
@@ -153,12 +243,21 @@ class IncomingMessageNotifier {
   static void stop() {
     _contactsSub?.cancel();
     _contactsSub = null;
+    _groupIdsSub?.cancel();
+    _groupIdsSub = null;
     _lifecycle?.dispose();
     _lifecycle = null;
     for (final s in _chatSubs.values) {
       s.cancel();
     }
     _chatSubs.clear();
+    for (final subs in _groupSubs.values) {
+      for (final s in subs) {
+        s.cancel();
+      }
+    }
+    _groupSubs.clear();
+    _groupNames.clear();
     _names.clear();
     _notified.clear();
     activeChatId = '';

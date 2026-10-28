@@ -21,7 +21,7 @@ dependencies:
   firebase_core: ^4.15.0
   firebase_database: ^12.6.0
   firebase_auth: ^6.7.0
-  firebase_storage: ^13.6.0
+  firebase_storage: ^13.6.1
   firebase_messaging: ^16.2.0
   google_fonts: ^9.0.0
   speech_to_text: ^7.5.0

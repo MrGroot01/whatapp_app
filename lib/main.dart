@@ -1,12 +1,13 @@
-
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
 import 'notification_service.dart';
 import 'firebase_options.dart';
 import 'splash_screen.dart';
 import 'fcm_service.dart';
+import 'push_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +47,11 @@ Future<void> main() async {
   // Prepare existing reminders and local notifications.
   await NotificationService.init();
 
+  // Pushes that arrive while the app is closed or in the background.
+  if (startupError == null) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
+
   runApp(MyApp(startupError: startupError));
 }
 
@@ -68,6 +74,7 @@ class _MyAppState extends State<MyApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.startupError == null) {
         FcmService.init();
+        PushService.init(); // shows pushes and opens the chat on tap
       }
     });
   }
