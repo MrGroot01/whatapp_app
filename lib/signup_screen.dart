@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'app_theme.dart';
 import 'otp_screen.dart';
+import 'phone_helper.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -19,9 +22,11 @@ class _SignupScreenState extends State<SignupScreen> {
   final formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final nicknameController = TextEditingController();
+  final phoneController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
 
+  String countryCode = PhoneHelper.defaultCode;
   bool hidePassword = true;
   bool hideConfirm = true;
   bool isLoading = false;
@@ -32,6 +37,7 @@ class _SignupScreenState extends State<SignupScreen> {
   void dispose() {
     emailController.dispose();
     nicknameController.dispose();
+    phoneController.dispose();
     passwordController.dispose();
     confirmController.dispose();
     super.dispose();
@@ -104,7 +110,44 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  // ---------- REGISTER: account -> OTP -> Login ----------
+  // ---------- PHONE NUMBER CHECKS ----------
+
+  // true = free, false = already used, null = could not check
+  Future<bool?> _isPhoneFree(String phoneKey) async {
+    try {
+      final snap = await FirebaseDatabase.instance
+          .ref('phoneIndex/$phoneKey')
+          .get()
+          .timeout(const Duration(seconds: 10));
+      return !snap.exists;
+    } catch (e) {
+      debugPrint('Phone check failed: $e');
+      return null;
+    }
+  }
+
+  // write phoneIndex/{key} = uid (the rules allow this only once per number)
+  // returns null when it worked, otherwise the message to show
+  Future<String?> _claimPhone(String phoneKey, String uid) async {
+    try {
+      await FirebaseDatabase.instance
+          .ref('phoneIndex/$phoneKey')
+          .set(uid)
+          .timeout(const Duration(seconds: 10));
+      return null;
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        return 'This phone number was just registered by another account. '
+            'Please use a different number.';
+      }
+      return 'Could not save the phone number (${e.code}). Please try again.';
+    } catch (e) {
+      return 'Could not save the phone number. '
+          'Check your internet connection and try again.';
+    }
+  }
+
+  // ---------- REGISTER: account -> phone check -> OTP -> Login ----------
   Future<void> onRegisterPressed() async {
     if (!formKey.currentState!.validate()) return;
 
@@ -115,6 +158,9 @@ class _SignupScreenState extends State<SignupScreen> {
 
     final email = emailController.text.trim().toLowerCase();
     final nickname = nicknameController.text.trim();
+    final phone = PhoneHelper.clean(phoneController.text);
+    final code = countryCode;
+    final phoneKey = PhoneHelper.indexKey(code, phone);
 
     // STEP 1: create the Firebase account.
     // This also checks that the email is new, before we ask for an OTP.
@@ -153,6 +199,23 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
+    // STEP 1b: is the phone number free? (reading needs a signed-in user,
+    // so we check right after the account is created)
+    final phoneFree = await _isPhoneFree(phoneKey);
+    if (phoneFree != true) {
+      await _cancelSignup(newUser); // no half-created account is left behind
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        errorMessage = phoneFree == false
+            ? 'This phone number is already registered with another '
+            'account. Please use a different number.'
+            : 'Could not check the phone number. '
+            'Check your internet connection and try again.';
+      });
+      return;
+    }
+
     if (!mounted) return;
     setState(() => isLoading = false);
 
@@ -181,24 +244,44 @@ class _SignupScreenState extends State<SignupScreen> {
     // show the loading circle while the profile is being saved
     if (mounted) setState(() => isLoading = true);
 
-    // STEP 4: the OTP was correct -> save the name and the public profile
+    // STEP 4a: the OTP was correct -> claim the phone number (write once)
+    final claimError = await _claimPhone(phoneKey, newUser.uid);
+    if (claimError != null) {
+      await _cancelSignup(newUser);
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        errorMessage = claimError;
+      });
+      return;
+    }
+
+    // STEP 4b: save the name and the public profile (with the phone)
     try {
       await newUser.updateDisplayName(nickname);
     } catch (e) {
       debugPrint('Display name not saved: $e');
     }
 
-    try {
-      await FirebaseDatabase.instance
-          .ref('publicProfiles/${newUser.uid}')
-          .set({
-        'uid': newUser.uid,
-        'email': email,
-        'name': nickname,
-        'createdAt': ServerValue.timestamp,
-      }).timeout(const Duration(seconds: 10));
-    } catch (e) {
-      debugPrint('Public profile not saved: $e');
+    final profile = {
+      'uid': newUser.uid,
+      'email': email,
+      'name': nickname,
+      'phone': phone,
+      'countryCode': code,
+      'createdAt': ServerValue.timestamp,
+    };
+
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await FirebaseDatabase.instance
+            .ref('publicProfiles/${newUser.uid}')
+            .set(profile)
+            .timeout(const Duration(seconds: 10));
+        break;
+      } catch (e) {
+        debugPrint('Public profile not saved (try ${attempt + 1}): $e');
+      }
     }
 
     // sign out, so the user comes back to the Login screen
@@ -208,7 +291,7 @@ class _SignupScreenState extends State<SignupScreen> {
     Navigator.pop(context, email);
   }
 
-  // delete the half-made account (used when the OTP step is cancelled)
+  // delete the half-made account (used when sign-up is cancelled or fails)
   Future<void> _cancelSignup(User user) async {
     try {
       await user.delete(); // this also signs the user out
@@ -227,7 +310,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   InputDecoration fieldDecoration({
     required String label,
-    required IconData icon,
+    IconData? icon,
     Widget? suffix,
   }) {
     return InputDecoration(
@@ -235,7 +318,7 @@ class _SignupScreenState extends State<SignupScreen> {
       labelStyle: const TextStyle(color: AppColors.textSoft, fontSize: 16),
       floatingLabelStyle:
       const TextStyle(color: AppColors.emerald, fontSize: 16),
-      prefixIcon: Icon(icon, color: AppColors.emerald),
+      prefixIcon: icon == null ? null : Icon(icon, color: AppColors.emerald),
       suffixIcon: suffix,
       filled: true,
       fillColor: AppColors.card,
@@ -359,6 +442,56 @@ class _SignupScreenState extends State<SignupScreen> {
                       icon: Icons.person_outline,
                     ),
                     validator: validateNickname,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Country code + phone number
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 108,
+                        child: CountryCodeDropdown(
+                          value: countryCode,
+                          decoration: fieldDecoration(label: 'Code'),
+                          onChanged: isLoading
+                              ? null
+                              : (value) => setState(() {
+                            countryCode = value;
+                            errorMessage = null;
+                          }),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: phoneController,
+                          keyboardType: TextInputType.phone,
+                          textInputAction: TextInputAction.next,
+                          autovalidateMode: AutovalidateMode.onUserInteraction,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9\s()\-]'),
+                            ),
+                          ],
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 17,
+                          ),
+                          cursorColor: AppColors.emerald,
+                          onChanged: (_) {
+                            if (errorMessage != null) {
+                              setState(() => errorMessage = null);
+                            }
+                          },
+                          decoration: fieldDecoration(
+                            label: 'Phone number',
+                            icon: Icons.phone_outlined,
+                          ),
+                          validator: PhoneHelper.validate,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   TextFormField(

@@ -10,6 +10,8 @@ import 'app_theme.dart';
 import 'database_helper.dart';
 import 'login_screen.dart';
 import 'fcm_service.dart';
+import 'phone_helper.dart';
+import 'profile_screen.dart';
 
 // One row in the settings list
 class SettingsItem {
@@ -35,12 +37,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final searchController = TextEditingController();
   String searchText = '';
 
-  // the picture and nickname of this user
+  // the picture, name, phone and email of this user (read live)
   File? profileImage;
   String? nickname;
+  String? phone;
+  String? phoneCountryCode;
+  String? profileEmail;
   bool _uploadingPhoto = false;
   String? profilePhotoBase64;
-  StreamSubscription<DatabaseEvent>? _photoBase64Subscription;
+  StreamSubscription<DatabaseEvent>? _profileSubscription;
 
   final List<SettingsItem> items = const [
     SettingsItem(Icons.vpn_key_outlined, 'Account',
@@ -61,37 +66,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    // show the Firebase display name at once; the live data replaces it
+    nickname = FirebaseAuth.instance.currentUser?.displayName;
     loadSavedImage();
-    loadNickname();
-    listenForProfilePhoto();
+    listenForProfile();
   }
 
   @override
   void dispose() {
-    _photoBase64Subscription?.cancel();
+    _profileSubscription?.cancel();
     searchController.dispose();
     super.dispose();
   }
 
-  // ---------- READ THE NAME FROM FIREBASE ----------
-  Future<void> loadNickname() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+  // ---------- READ NAME, PHONE, EMAIL AND PICTURE LIVE ----------
+  // One listener on publicProfiles/{uid}: edits show immediately.
+  void listenForProfile() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
 
-    String? name = user.displayName;
-    try {
-      final snap = await FirebaseDatabase.instance
-          .ref('publicProfiles/${user.uid}/name')
-          .get()
-          .timeout(const Duration(seconds: 8));
-      final value = snap.value;
-      if (value is String && value.trim().isNotEmpty) name = value;
-    } catch (e) {
-      debugPrint('Could not load name: $e');
-    }
+    _profileSubscription = FirebaseDatabase.instance
+        .ref('publicProfiles/$uid')
+        .onValue
+        .listen((event) {
+      final value = event.snapshot.value;
 
-    if (!mounted) return;
-    setState(() => nickname = name);
+      String name = '';
+      String phoneValue = '';
+      String codeValue = '';
+      String emailValue = '';
+      String photo = '';
+
+      if (value is Map) {
+        String read(String key) => (value[key] ?? '').toString().trim();
+        name = read('name');
+        phoneValue = read('phone');
+        codeValue = read('countryCode');
+        emailValue = read('email');
+        photo = read('photoBase64');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        if (name.isNotEmpty) nickname = name;
+        phone = phoneValue.isEmpty ? null : phoneValue;
+        phoneCountryCode = codeValue.isEmpty ? null : codeValue;
+        profileEmail = emailValue.isEmpty ? null : emailValue;
+        profilePhotoBase64 = photo.isEmpty ? null : photo;
+      });
+    }, onError: (Object error) {
+      debugPrint('Could not listen for profile changes: $error');
+    });
   }
 
   // ---------- READ THE SAVED PICTURE FROM THE LOCAL CACHE ----------
@@ -111,26 +136,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       debugPrint('Could not load local profile picture: $e');
     }
-  }
-
-  // Listen to the shared image stored in Realtime Database so DPs update live.
-  void listenForProfilePhoto() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    _photoBase64Subscription = FirebaseDatabase.instance
-        .ref('publicProfiles/$uid/photoBase64')
-        .onValue
-        .listen((event) {
-      final value = event.snapshot.value;
-      final encoded = value is String && value.trim().isNotEmpty
-          ? value.trim()
-          : null;
-      if (!mounted) return;
-      setState(() => profilePhotoBase64 = encoded);
-    }, onError: (Object error) {
-      debugPrint('Could not listen for profile picture changes: $error');
-    });
   }
 
   Widget _initialAvatar(String displayName) {
@@ -274,6 +279,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // open the Profile screen (tap on the header)
+  void openProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileScreen(email: widget.email),
+      ),
+    );
+  }
+
   // ---------- LOGOUT ----------
   Future<void> confirmLogout() async {
     final shouldLogout = await showDialog<bool>(
@@ -387,6 +402,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final displayName =
     (nickname != null && nickname!.trim().isNotEmpty) ? nickname! : emailName;
 
+    // phone with country code (old accounts have none, so nothing is shown)
+    final phoneValue = phone;
+    final fullPhone = (phoneValue != null && phoneValue.isNotEmpty)
+        ? PhoneHelper.display(
+      phoneCountryCode ?? PhoneHelper.defaultCode,
+      phoneValue,
+    )
+        : null;
+    final shownEmail = profileEmail ?? widget.email;
+
     // keep only the rows that match the search text
     final shownItems = items
         .where((i) => i.title.toLowerCase().contains(searchText.toLowerCase()))
@@ -397,7 +422,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // ---------- GREEN HEADER: back arrow, picture, name, email ----------
+          // ---------- GREEN HEADER: back arrow, picture, name, phone, email ----------
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -425,16 +450,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // BIG ROUND PICTURE with a white ring and a gold camera button
                   Stack(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: CircleAvatar(
-                          radius: 56,
-                          backgroundColor: AppColors.gold,
-                          child: _buildProfileAvatar(displayName),
+                      GestureDetector(
+                        onTap: openProfile,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: CircleAvatar(
+                            radius: 56,
+                            backgroundColor: AppColors.gold,
+                            child: _buildProfileAvatar(displayName),
+                          ),
                         ),
                       ),
                       Positioned(
@@ -472,21 +500,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // NAME and EMAIL
-                  Text(
-                    displayName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    widget.email,
-                    style: const TextStyle(
-                      color: Color(0xCCFFFFFF),
-                      fontSize: 14,
+                  // NAME, PHONE and EMAIL (tap = open the Profile screen)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: openProfile,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        children: [
+                          Text(
+                            displayName,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          if (fullPhone != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              fullPhone,
+                              style: const TextStyle(
+                                color: Color(0xE6FFFFFF),
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            shownEmail,
+                            style: const TextStyle(
+                              color: Color(0xCCFFFFFF),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 28),

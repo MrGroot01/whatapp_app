@@ -100,14 +100,10 @@ class StatusItem {
 class StatusService {
   StatusService._();
 
-  // ---------------------------------------------------------------
-  // HOW LONG A STATUS STAYS VISIBLE.
-  // 5 minutes for the demo. For the real WhatsApp behaviour use:
-  //   static const Duration lifetime = Duration(hours: 24);
-  // ---------------------------------------------------------------
+
   static const Duration lifetime = Duration(minutes: 5);
 
-  // photos are stored as Base64 text; keep them small
+
   static const int _maxImageChars = 1200000;
 
   // background colours for text statuses
