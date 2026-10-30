@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // NEW
 import 'task_service.dart';
 import 'app_theme.dart';
 import 'add_contact_screen.dart';
@@ -14,13 +15,14 @@ import 'database_helper.dart';
 import 'group_member_picker.dart';
 import 'group_service.dart';
 import 'message_sync_service.dart';
+import 'search_provider.dart'; // NEW
 import 'session_helper.dart';
 import 'settings_screen.dart';
 import 'my_tasks_screen.dart';
 import 'incoming_message_notifier.dart';
 import 'push_service.dart';
-import 'status_service.dart'; // NEW: StatusContact
-import 'updates_screen.dart'; // NEW: the Updates tab
+import 'status_service.dart'; // StatusContact
+import 'updates_screen.dart'; // the Updates tab
 
 class Contact {
   final String id;
@@ -81,10 +83,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final searchController = TextEditingController();
-  String searchText = '';
+  // REMOVED: String searchText = '';  (now lives in SearchProvider)
   File? profileImage;
 
-  // NEW: 0 = Chats, 1 = Updates (status)
+  // 0 = Chats, 1 = Updates (status)
   int _tab = 0;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -110,6 +112,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    context.read<SearchProvider>().reset(); // NEW: start with search closed
+
     final uid = _currentUid;
     if (uid != null) {
       _syncedRef = _contactsRef;
@@ -253,14 +257,16 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await DatabaseHelper.saveContacts(
         uid,
-        remoteContacts.map((contact) => <String, dynamic>{
+        remoteContacts
+            .map((contact) => <String, dynamic>{
           'id': contact.id,
           'name': contact.name,
           'phone': contact.phone,
           'countryCode': contact.countryCode,
           'lastMessage': contact.message,
           'time': contact.time,
-        }).toList(),
+        })
+            .toList(),
       );
     } catch (e) {
       debugPrint('[HomeScreen] Failed to cache Firebase contacts: $e');
@@ -411,7 +417,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    contacts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    contacts
+        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return contacts;
   }
 
@@ -450,7 +457,8 @@ class _HomeScreenState extends State<HomeScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: StreamBuilder<DatabaseEvent>(
         // This listener receives DP changes from the contact's public profile.
-        stream: _database.ref('publicProfiles/${contact.id}/photoBase64').onValue,
+        stream:
+        _database.ref('publicProfiles/${contact.id}/photoBase64').onValue,
         builder: (context, snapshot) {
           final value = snapshot.data?.snapshot.value;
           final encoded = value is String ? value : '';
@@ -521,7 +529,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // groups first, then the contacts
-  Widget _buildChatList() {
+  // CHANGED: the search text now comes in as a parameter from SearchProvider
+  Widget _buildChatList(String searchText) {
     final query = searchText.toLowerCase();
 
     final groups = _groups.values
@@ -589,7 +598,7 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         title: Text(
-          _tab == 0 ? AppBrand.name : 'Updates', // CHANGED
+          _tab == 0 ? AppBrand.name : 'Updates',
           style: const TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w800,
@@ -597,6 +606,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
+          // NEW: search icon (only on the Chats tab)
+          if (_tab == 0)
+            Consumer<SearchProvider>(
+              builder: (_, search, _) => IconButton(
+                tooltip: search.isSearching ? 'Close search' : 'Search',
+                icon: Icon(
+                  search.isSearching ? Icons.close : Icons.search,
+                  color: Colors.white,
+                ),
+                onPressed: () {
+                  searchController.clear();
+                  context.read<SearchProvider>().toggle();
+                },
+              ),
+            ),
+
           IconButton(
             tooltip: 'My Tasks',
             icon: const Icon(Icons.task_alt, color: Colors.white),
@@ -668,7 +693,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
-      // CHANGED: only the Chats tab has the "New chat" button
+      // only the Chats tab has the "New chat" button
       // (the Updates tab has its own pencil and camera buttons)
       floatingActionButton: _tab != 0
           ? null
@@ -680,7 +705,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.add_comment),
       ),
 
-      // NEW: bottom bar to switch between Chats and Updates
+      // bottom bar to switch between Chats and Updates
       bottomNavigationBar: NavigationBar(
         backgroundColor: Colors.white,
         indicatorColor: const Color(0xFFE3F1ED),
@@ -700,7 +725,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
 
-      // CHANGED: Updates tab shows the status screen
+      // Updates tab shows the status screen
       body: _tab == 1
           ? UpdatesScreen(
         contacts: _contacts
@@ -715,39 +740,51 @@ class _HomeScreenState extends State<HomeScreen> {
       )
           : Column(
         children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            decoration: const BoxDecoration(
-              color: AppColors.emerald,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(28),
-                bottomRight: Radius.circular(28),
-              ),
-            ),
-            child: TextField(
-              controller: searchController,
-              style: const TextStyle(
-                color: AppColors.textDark,
-                fontSize: 16,
-              ),
-              cursorColor: AppColors.emerald,
-              onChanged: (value) => setState(() => searchText = value),
-              decoration: InputDecoration(
-                hintText: 'Search',
-                hintStyle: const TextStyle(
-                  color: AppColors.textSoft,
-                  fontSize: 16,
+          // CHANGED: search bar now shows/hides from SearchProvider
+          Consumer<SearchProvider>(
+            builder: (_, search, _) {
+              if (!search.isSearching) return const SizedBox.shrink();
+              return Container(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                decoration: const BoxDecoration(
+                  color: AppColors.emerald,
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
                 ),
-                prefixIcon: const Icon(Icons.search, color: AppColors.textSoft),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
+                child: TextField(
+                  controller: searchController,
+                  autofocus: true,
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 16,
+                  ),
+                  cursorColor: AppColors.emerald,
+                  onChanged: (value) =>
+                      context.read<SearchProvider>().setQuery(value),
+                  decoration: InputDecoration(
+                    hintText: 'Search',
+                    hintStyle: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 16,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: AppColors.textSoft,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding:
+                    const EdgeInsets.symmetric(vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
 
           // offline / connecting / back online message
@@ -758,7 +795,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const Center(
               child: Text(
                 'Please log in to view your contacts.',
-                style: TextStyle(color: AppColors.textSoft, fontSize: 17),
+                style: TextStyle(
+                  color: AppColors.textSoft,
+                  fontSize: 17,
+                ),
               ),
             )
                 : _contactsLoading && _contacts.isEmpty && _groups.isEmpty
@@ -767,7 +807,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: AppColors.emerald,
               ),
             )
-                : _buildChatList(),
+            // CHANGED: the list reads the query from SearchProvider
+                : Consumer<SearchProvider>(
+              builder: (_, search, _) =>
+                  _buildChatList(search.query),
+            ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
+import 'forgot_password_sheet.dart'; // NEW
 import 'home_screen.dart';
 import 'signup_screen.dart';
 
@@ -164,6 +165,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // NEW: opens the "Forgot password?" bottom sheet.
+  // The email typed on this screen is copied into the sheet.
+  Future<void> openForgotPassword() async {
+    await showForgotPasswordSheet(
+      context,
+      initialEmail: emailController.text.trim(),
+    );
+  }
+
   Future<void> openSignup() async {
     final newEmail = await Navigator.push<String>(
       context,
@@ -320,8 +330,24 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     validator: validatePassword,
                   ),
+
+                  // NEW: "Forgot password?" link
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: isLoading ? null : openForgotPassword,
+                      child: const Text(
+                        'Forgot password?',
+                        style: TextStyle(
+                          color: AppColors.emerald,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+
                   if (errorMessage != null) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -363,7 +389,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                   ],
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   SizedBox(
                     height: 56,
                     child: ElevatedButton(

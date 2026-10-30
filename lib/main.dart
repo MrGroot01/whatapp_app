@@ -8,6 +8,8 @@ import 'firebase_options.dart';
 import 'splash_screen.dart';
 import 'fcm_service.dart';
 import 'push_service.dart';
+import 'package:provider/provider.dart';
+import 'search_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,7 +54,12 @@ Future<void> main() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
 
-  runApp(MyApp(startupError: startupError));
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => SearchProvider(),
+      child: MyApp(startupError: startupError),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
