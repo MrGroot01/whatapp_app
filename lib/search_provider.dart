@@ -9,7 +9,7 @@ class SearchProvider extends ChangeNotifier {
 
   void toggle() {
     _isSearching = !_isSearching;
-    if (!_isSearching) _query = ''; // closing clears the text
+    if (!_isSearching) _query = '';
     notifyListeners();
   }
 

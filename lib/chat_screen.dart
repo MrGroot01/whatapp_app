@@ -1,122 +1,34 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'create_task_screen.dart';
 import 'call_screen.dart';
 import 'contact_info_screen.dart';
 import 'group_info_screen.dart';
-import 'group_service.dart';
-import 'push_queue.dart';
 import 'chat_media_screen.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:speech_to_text/speech_recognition_error.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'incoming_message_notifier.dart';
 import 'app_theme.dart';
 import 'connection_banner.dart';
-import 'database_helper.dart';
 import 'message_sync_service.dart';
+import 'models/message.dart';
+import 'providers/chat_search_provider.dart';
+import 'providers/composer_provider.dart';
+import 'providers/group_chat_provider.dart';
+import 'providers/messages_provider.dart';
+import 'providers/voice_input_provider.dart';
 
-// One message = text / image / file / contact + who sent it + time + tick status
-class Message {
-  final String id; // the Firebase key of this message
-  final String text;
-  final bool isMe;
-  final String senderId;
-  final DateTime time;
-  // 0 = sent, 2 = read, -1 = waiting for the internet, -2 = refused by server
-  final int status;
-  final String type; // 'text', 'image', 'file' or 'contact'
-  final String url; // Storage URL for documents / older image messages
-  final String
-  imageBase64; // compressed image stored directly in Realtime Database
-  final String fileName;
-  final bool forwarded;
-  final String replyToId; // the message this one replies to
-  final String replyText; // short preview of that message
-  final String replySenderId; // who wrote that message
-  final Map<String, String> reactions; // account id -> emoji
-  final String contactUid; // shared contact: account id
-  final String contactName;
-  final String contactPhone;
-  final String contactCountryCode;
-  final int expireAtMs; // disappearing messages: 0 = never disappears
-
-  Message({
-    required this.id,
-    required this.text,
-    required this.isMe,
-    required this.senderId,
-    required this.time,
-    this.status = 0,
-    this.type = 'text',
-    this.url = '',
-    this.imageBase64 = '',
-    this.fileName = '',
-    this.forwarded = false,
-    this.replyToId = '',
-    this.replyText = '',
-    this.replySenderId = '',
-    this.reactions = const {},
-    this.contactUid = '',
-    this.contactName = '',
-    this.contactPhone = '',
-    this.contactCountryCode = '',
-    this.expireAtMs = 0,
-  });
-
-  factory Message.fromMap(String id, Map<dynamic, dynamic> data, String myUid) {
-    final ts = data['timeMs'];
-    final st = data['status'];
-
-    final reactions = <String, String>{};
-    final rawReactions = data['reactions'];
-    if (rawReactions is Map) {
-      rawReactions.forEach((key, value) {
-        if (value != null) reactions[key.toString()] = value.toString();
-      });
-    }
-
-    final sender = (data['senderId'] ?? '').toString();
-
-    return Message(
-      id: id,
-      text: (data['text'] ?? '').toString(),
-      isMe: sender == myUid,
-      senderId: sender,
-      time: DateTime.fromMillisecondsSinceEpoch(
-        ts is num ? ts.toInt() : DateTime.now().millisecondsSinceEpoch,
-      ),
-      status: st is num ? st.toInt() : 0,
-      type: (data['type'] ?? 'text').toString(),
-      url: (data['url'] ?? '').toString(),
-      imageBase64: (data['imageBase64'] ?? '').toString(),
-      fileName: (data['fileName'] ?? '').toString(),
-      forwarded: data['forwarded'] == true,
-      replyToId: (data['replyToId'] ?? '').toString(),
-      replyText: (data['replyText'] ?? '').toString(),
-      replySenderId: (data['replySenderId'] ?? '').toString(),
-      reactions: reactions,
-      contactUid: (data['contactUid'] ?? '').toString(),
-      contactName: (data['contactName'] ?? '').toString(),
-      contactPhone: (data['contactPhone'] ?? '').toString(),
-      contactCountryCode: (data['contactCountryCode'] ?? '').toString(),
-      expireAtMs: data['expireAtMs'] is num
-          ? (data['expireAtMs'] as num).toInt()
-          : 0,
-    );
-  }
-}
+// Message moved to models/message.dart. This line keeps every file that
+// still imports it from chat_screen.dart working.
+export 'models/message.dart';
 
 // One saved contact, used by the "share contact" and "forward" pickers
 class _SavedContact {
@@ -184,20 +96,19 @@ class _ChatScreenState extends State<ChatScreen> {
     '💻', '📱', '🚗', '🏠', '🌞', '🌙', '🌧️', '✅',
   ];
 
+  // ---------- THINGS THAT BELONG TO WIDGETS (they stay here) ----------
   final messageController = TextEditingController();
   // the message list can jump to any message (Search needs this)
   final ItemScrollController itemScrollController = ItemScrollController();
   final ItemPositionsListener itemPositionsListener =
   ItemPositionsListener.create();
-
-  // ---------- SEARCH IN CHAT ----------
-  bool searching = false;
-  String searchQuery = '';
-  int currentMatch = 0; // 0 = the newest match
-  String? _currentMatchId;
   final searchController = TextEditingController();
   final searchFocus = FocusNode();
   final focusNode = FocusNode();
+  final ImagePicker _picker = ImagePicker();
+  bool showScrollDown = false;
+
+  String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   // the "notice board" for this chat in Firebase
   // both people use the SAME board: the two account ids, sorted, joined by "_"
@@ -212,25 +123,50 @@ class _ChatScreenState extends State<ChatScreen> {
     return parts.join('_');
   }
 
-  // the chat board between ME and another account (used by "forward")
-  String _chatIdWith(String otherUid) {
-    final parts = [_myUid, otherUid]..sort();
-    return parts.join('_');
+  // the account id of the person I am chatting with
+  String get _otherUid {
+    final parts = widget.chatKey.split('_');
+    if (parts.length != 2) return '';
+    return parts[0] == _myUid ? parts[1] : parts[0];
   }
 
-  late final DatabaseReference _messagesRef = FirebaseDatabase.instance.ref(
-    'chats/$_chatId/messages',
+  // ---------- PROVIDERS (created and disposed by this screen) ----------
+  // search inside this chat
+  late final ChatSearchProvider _search = ChatSearchProvider();
+  // group name, members, admins (only used in a group)
+  late final GroupChatProvider _group = GroupChatProvider(
+    groupId: widget.chatKey,
+    myUid: _myUid,
   );
-  StreamSubscription<DatabaseEvent>? _subscription;
+  // speech to text
+  late final VoiceInputProvider _voice = VoiceInputProvider();
+  // the list of messages (Firebase + outbox), disappearing, read, delete
+  late final MessagesProvider _messages = MessagesProvider(
+    chatId: _chatId,
+    myUid: _myUid,
+    isGroup: widget.isGroup,
+  );
+  // reply, draft photo, send, send later, forward, documents
+  late final ComposerProvider _composer = ComposerProvider(
+    chatId: _chatId,
+    myUid: _myUid,
+    getDisappearMs: () => _messages.disappearMs,
+  );
 
-  // ---------- DISAPPEARING MESSAGES ----------
-  late final DatabaseReference _disappearRef = FirebaseDatabase.instance.ref(
-    'chats/$_chatId/settings/disappearAfterMs',
-  );
-  StreamSubscription<DatabaseEvent>? _settingsSub;
-  Timer? _expiryTimer;
-  int _disappearMs = 0; // 0 = off
-  final Set<String> _purging = {};
+  String get _title => widget.isGroup && _group.groupName.isNotEmpty
+      ? _group.groupName
+      : widget.name;
+
+  // who wrote a message ("You", the contact, or a group member)
+  String _senderLabel(String senderId) {
+    if (senderId == _myUid) return 'You';
+    if (!widget.isGroup) return widget.name;
+    return _group.nameOf(senderId) ?? 'Member';
+  }
+
+  bool get _hasDraftContent =>
+      messageController.text.trim().isNotEmpty ||
+          _composer.draftImageFile != null;
 
   String _disappearLabel(int ms) {
     if (ms == 300000) return '5 minutes';
@@ -239,83 +175,54 @@ class _ChatScreenState extends State<ChatScreen> {
     return 'Off';
   }
 
-  String get _myUid => FirebaseAuth.instance.currentUser?.uid ?? '';
+  @override
+  void initState() {
+    super.initState();
+    IncomingMessageNotifier.activeChatId = _chatId;
 
-  // ---------- GROUP CHAT ----------
-  StreamSubscription<DatabaseEvent>? _groupSub;
-  String _groupName = '';
-  List<String> _memberIds = [];
-  Set<String> _adminIds = {};
-  final Map<String, String> _memberNames = {}; // account id -> name to show
-  final Set<String> _resolving = {};
-  bool _leftGroup = false;
+    // the voice provider asks the screen to type text / show a message
+    _voice.onText = _setComposerText;
+    _voice.onMessage = snack;
 
-  bool get _isAdmin => _adminIds.contains(_myUid);
+    // in a group, learn the names of the people who wrote messages
+    _messages.onSenderIds = (ids) => _group.resolveNames(ids);
+    _messages.start();
 
-  String get _title =>
-      widget.isGroup && _groupName.isNotEmpty ? _groupName : widget.name;
-
-  // "You, Asha, Ravi" under the group name
-  String get _membersLine {
-    final names = <String>[];
-    for (final id in _memberIds) {
-      names.add(id == _myUid ? 'You' : (_memberNames[id] ?? '...'));
+    if (widget.isGroup) {
+      _group.onLeft = _leaveScreen;
+      _group.start();
     }
-    names.sort((a, b) {
-      if (a == 'You') return -1;
-      if (b == 'You') return 1;
-      return a.toLowerCase().compareTo(b.toLowerCase());
+
+    itemPositionsListener.itemPositions.addListener(_onPositionsChanged);
+
+    focusNode.addListener(() {
+      if (focusNode.hasFocus && _composer.showEmoji) {
+        _composer.setShowEmoji(false);
+      }
     });
-    return names.join(', ');
   }
 
-  // who wrote a message ("You", the contact, or a group member)
-  String _senderLabel(String senderId) {
-    if (senderId == _myUid) return 'You';
-    if (!widget.isGroup) return widget.name;
-    return _memberNames[senderId] ?? 'Member';
-  }
-
-  void _listenGroup() {
-    _groupSub = FirebaseDatabase.instance
-        .ref('groups/${widget.chatKey}')
-        .onValue
-        .listen(
-          (event) {
-        final v = event.snapshot.value;
-        if (v is! Map) {
-          _leaveScreen();
-          return;
-        }
-        final g = GroupItem.fromMap(
-          widget.chatKey,
-          Map<dynamic, dynamic>.from(v),
-        );
-        if (!g.members.contains(_myUid)) {
-          _leaveScreen();
-          return;
-        }
-        if (!mounted) return;
-        setState(() {
-          _groupName = g.name;
-          _memberIds = g.members;
-          _adminIds = g.admins;
-        });
-        _resolveNames(g.members);
-      },
-      onError: (Object e) {
-        debugPrint('Group listener error: $e');
-        if (e is FirebaseException && e.code == 'permission-denied') {
-          _leaveScreen();
-        }
-      },
-    );
+  @override
+  void dispose() {
+    itemPositionsListener.itemPositions.removeListener(_onPositionsChanged);
+    messageController.dispose();
+    searchController.dispose();
+    searchFocus.dispose();
+    focusNode.dispose();
+    _search.dispose();
+    _group.dispose();
+    _voice.dispose();
+    _messages.dispose();
+    _composer.dispose();
+    if (IncomingMessageNotifier.activeChatId == _chatId) {
+      IncomingMessageNotifier.activeChatId = '';
+    }
+    super.dispose();
   }
 
   // I left the group, was removed, or the group was deleted
   void _leaveScreen() {
-    if (_leftGroup || !mounted) return;
-    _leftGroup = true;
+    if (!mounted) return;
     snack('You are no longer in this group');
     final route = ModalRoute.of(context);
     if (route != null && route.isActive) {
@@ -323,353 +230,36 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // finds the names of group members (saved contact name, or "~ their name")
-  Future<void> _resolveNames(Iterable<String> ids) async {
-    final todo = ids
-        .where(
-          (id) =>
-      id.isNotEmpty &&
-          id != _myUid &&
-          !_memberNames.containsKey(id) &&
-          !_resolving.contains(id),
-    )
-        .toList();
-    if (todo.isEmpty) return;
-
-    _resolving.addAll(todo);
-    final found = await GroupService.resolveMembers(todo);
-    _resolving.removeAll(todo);
-
-    if (!mounted) return;
-    setState(() {
-      found.forEach((id, info) => _memberNames[id] = info.name);
-    });
-  }
-
-  // camera / gallery
-  final ImagePicker _picker = ImagePicker();
-
-  // Image selected for sending or scheduling with an optional text message.
-  File? _draftImageFile;
-  String _draftImageName = '';
-
-  bool get _hasDraftContent =>
-      messageController.text.trim().isNotEmpty || _draftImageFile != null;
-
-  // speech to text
-  final stt.SpeechToText _speech = stt.SpeechToText();
-  bool _speechReady = false;
-  String _textBeforeMic = ''; // what was already typed before pressing the mic
-  bool _heardWords = false;
-
-  // language the mic understands. null = phone default.
-  // Examples: 'en_IN' (Indian English), 'hi_IN' (Hindi), 'kn_IN' (Kannada)
-  static const String? _speechLocale = 'en_IN';
-
-  // messages from Firebase + messages still waiting in the phone's outbox
-  List<Message> _remote = [];
-  List<Message> _pending = [];
-  Timer? _loadingTimer;
-
-  List<Message> messages = [];
-  bool loading = true;
-  bool loadError = false;
-  bool hasText = false;
-  bool showEmoji = false;
-  bool showScrollDown = false;
-  bool uploading = false;
-  bool listening = false;
-
-  // the message the user is replying to (null = not replying)
-  Message? replyingTo;
-
-  @override
-  void initState() {
-    super.initState();
-    IncomingMessageNotifier.activeChatId = _chatId;
-
-    // LIVE: this runs every time anything in the chat changes in Firebase
-    _subscription = _messagesRef.onValue.listen(
-      _onMessagesChanged,
-      onError: (_) {
-        if (!mounted) return;
-        setState(() {
-          loading = false;
-          loadError = true;
-        });
-      },
+  // puts text in the message box (typing, or the voice provider)
+  void _setComposerText(String text) {
+    messageController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
     );
-
-    itemPositionsListener.itemPositions.addListener(_onPositionsChanged);
-
-    // messages waiting for the internet (shown with a clock)
-    MessageSyncService.version.addListener(_loadPending);
-    _loadPending();
-
-    // offline and nothing came from Firebase: do not spin forever
-    _loadingTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted && loading) setState(() => loading = false);
-    });
-
-    focusNode.addListener(() {
-      if (focusNode.hasFocus && showEmoji) {
-        setState(() => showEmoji = false);
-      }
-    });
-
-    // the disappearing-messages setting of this chat (shared by both people)
-    _settingsSub = _disappearRef.onValue.listen((event) {
-      final v = event.snapshot.value;
-      if (!mounted) return;
-      setState(() => _disappearMs = v is num ? v.toInt() : 0);
-    });
-
-    // every second: hide + delete messages whose time is over
-    _expiryTimer = Timer.periodic(
-      const Duration(seconds: 1),
-          (_) => _purgeExpired(),
-    );
-
-    if (widget.isGroup) _listenGroup();
+    _composer.setHasText(text.trim().isNotEmpty);
   }
 
-  @override
-  void dispose() {
-    _loadingTimer?.cancel();
-    MessageSyncService.version.removeListener(_loadPending);
-    _subscription?.cancel();
-    _settingsSub?.cancel();
-    _groupSub?.cancel();
-    _expiryTimer?.cancel();
-    _speech.cancel();
-    messageController.dispose();
-    itemPositionsListener.itemPositions.removeListener(_onPositionsChanged);
-    searchController.dispose();
-    searchFocus.dispose();
-    focusNode.dispose();
-    if (IncomingMessageNotifier.activeChatId == _chatId) {
-      IncomingMessageNotifier.activeChatId = '';
-    }
-    super.dispose();
-  }
-
-  // ---------- DISAPPEARING: DELETE EXPIRED MESSAGES ----------
-  // Deletes expired messages from Firebase and hides them at once.
-  void _purgeExpired() {
-    if (!mounted) return;
-    final now = MessageSyncService.nowMs();
-    final expired = _remote
-        .where((m) => m.expireAtMs > 0 && m.expireAtMs <= now)
-        .toList();
-    if (expired.isEmpty) return;
-
-    for (final m in expired) {
-      if (_purging.add(m.id)) {
-        _messagesRef.child(m.id).remove().catchError((Object e) {
-          debugPrint('Expire delete failed: $e');
-          _purging.remove(m.id);
-        });
-      }
-    }
-    _remote = _remote.where((m) => !expired.contains(m)).toList();
-    _rebuildMessages();
-  }
-
-  // ---------- LIVE MESSAGES ----------
-  void _onMessagesChanged(DatabaseEvent event) {
-    final value = event.snapshot.value;
-    final list = <Message>[];
-
-    if (value is Map) {
-      value.forEach((key, data) {
-        if (data is Map) {
-          list.add(Message.fromMap(key.toString(), data, _myUid));
-        }
-      });
-    }
-
-    if (!mounted) return;
-    _remote = list;
-    loading = false;
-    loadError = false;
-    _rebuildMessages();
-    // messages that expired while the app was closed
-    _purgeExpired();
-
-    if (widget.isGroup) {
-      // groups have no read ticks: just learn the names of the senders
-      _resolveNames(list.map((m) => m.senderId).toSet());
-    } else {
-      _markIncomingAsRead(list);
-    }
-  }
-
-  // Firebase messages + messages still waiting in the outbox.
-  // The same id is shown only once, so nothing appears twice.
-  // Expired disappearing messages are never shown.
-  void _rebuildMessages() {
-    if (!mounted) return;
-    final now = MessageSyncService.nowMs();
-    final ids = _remote.map((m) => m.id).toSet();
-    final merged = <Message>[
-      ..._remote.where((m) => m.expireAtMs == 0 || m.expireAtMs > now),
-      ..._pending.where((m) => !ids.contains(m.id)),
-    ]..sort((a, b) {
-      final byTime = a.time.compareTo(b.time);
-      return byTime != 0 ? byTime : a.id.compareTo(b.id);
-    });
-
-    setState(() {
-      messages = merged;
-      if (_pending.isNotEmpty) loading = false;
-    });
-  }
-
-  // reads the messages waiting in SQLite for this chat
-  Future<void> _loadPending() async {
-    final uid = _myUid;
-    if (uid.isEmpty) return;
-
-    final rows = await DatabaseHelper.outboxForChat(uid, _chatId);
-    final list = <Message>[];
-
-    for (final row in rows) {
-      try {
-        final payload = Map<dynamic, dynamic>.from(
-          jsonDecode(row['payload'] as String) as Map,
-        );
-        // -1 = waiting for the internet, -2 = the server refused it
-        payload['status'] = (row['state'] as int) == 1 ? -2 : -1;
-        list.add(Message.fromMap(row['id'] as String, payload, uid));
-      } catch (e) {
-        debugPrint('Bad outbox row: $e');
-      }
-    }
-
-    if (!mounted) return;
-    _pending = list;
-    _rebuildMessages();
-  }
-
-  // messages from the other person become "read" when this chat is open
-
-  Future<void> _markIncomingAsDelivered(List<Message> list) async {
-    for (final m in list) {
-      if (!m.isMe && m.status == 0) {
-        try {
-          await _messagesRef.child(m.id).update({'status': 1});
-        } catch (e) {
-          debugPrint('Delivery status update failed: $e');
-        }
-      }
-    }
-  }
-
-  Future<void> _markIncomingAsRead(List<Message> list) async {
-    for (final m in list) {
-      if (!m.isMe && m.status != 2) {
-        try {
-          await _messagesRef.child(m.id).update({'status': 2});
-        } catch (e) {
-          debugPrint('Read status update failed: $e');
-        }
-      }
-    }
-  }
-
-
-  // ---------- REPLY HELPERS ----------
-  // a short text that describes any kind of message
-  String _previewOf(Message m) {
-    String t;
-    switch (m.type) {
-      case 'image':
-        t = '📷 Photo';
-        break;
-      case 'file':
-        t = '📄 ${m.fileName.isNotEmpty ? m.fileName : m.text}';
-        break;
-      case 'contact':
-        t = '👤 ${m.contactName}';
-        break;
-      default:
-        t = m.text;
-    }
-    return t.length > 100 ? '${t.substring(0, 100)}…' : t;
-  }
-
-  // adds the "reply to" fields when the user is replying to a message
-  // and the disappearing timer when it is switched on for this chat
-  Map<String, dynamic> _withReply(Map<String, dynamic> data) {
-    final r = replyingTo;
-    if (r != null) {
-      data['replyToId'] = r.id;
-      data['replyText'] = _previewOf(r);
-      data['replySenderId'] = r.senderId;
-    }
-    if (_disappearMs > 0) data['expireAfterMs'] = _disappearMs;
-    return data;
-  }
-
+  // ---------- REPLY ----------
   void startReply(Message msg) {
-    setState(() {
-      replyingTo = msg;
-      showEmoji = false;
-    });
+    _composer.startReply(msg);
     focusNode.requestFocus();
   }
 
   // ---------- SENDING TEXT / IMAGE ----------
   Future<void> sendMessage() async {
-    if (listening) {
-      await _speech.stop();
-      if (mounted) setState(() => listening = false);
-    }
+    await _voice.stop();
 
     final text = messageController.text.trim();
-    final imageFile = _draftImageFile;
-    final imageName = _draftImageName;
+    if (text.isEmpty && _composer.draftImageFile == null) return;
 
-    if (text.isEmpty && imageFile == null) return;
-    if (_myUid.isEmpty) {
-      snack('Please log in again');
+    final error = await _composer.sendMessage(text);
+    if (!mounted) return;
+    if (error != null) {
+      snack(error);
       return;
     }
-
-    try {
-      final data = <String, dynamic>{
-        'text': text,
-        'type': imageFile != null ? 'image' : 'text',
-      };
-
-      if (imageFile != null) {
-        final imageBase64 = base64Encode(await imageFile.readAsBytes());
-        if (imageBase64.length > 5 * 1024 * 1024) {
-          snack('Image is too large. Please choose a smaller photo.');
-          return;
-        }
-        data['imageBase64'] = imageBase64;
-        data['fileName'] = imageName;
-      }
-
-      await MessageSyncService.enqueue(
-        chatId: _chatId,
-        data: _withReply(data),
-      );
-
-      if (!mounted) return;
-      messageController.clear();
-      setState(() {
-        hasText = false;
-        replyingTo = null;
-        _draftImageFile = null;
-        _draftImageName = '';
-      });
-      scrollToBottom();
-    } catch (e) {
-      debugPrint('Send failed: $e');
-      snack('Could not send the message. Please try again.');
-    }
+    messageController.clear();
+    scrollToBottom();
   }
 
   // ---------- SCHEDULE A MESSAGE OR IMAGE ("Send later") ----------
@@ -690,10 +280,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> showScheduleSheet() async {
     final text = messageController.text.trim();
-    final imageFile = _draftImageFile;
-    final imageName = _draftImageName;
 
-    if (text.isEmpty && imageFile == null) {
+    if (text.isEmpty && _composer.draftImageFile == null) {
       snack('Type a message or select an image first');
       return;
     }
@@ -866,55 +454,15 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     if (picked == null || !mounted) return;
-    await _scheduleMessage(
-      text,
-      picked,
-      imageFile: imageFile,
-      imageName: imageName,
-    );
-  }
 
-  Future<void> _scheduleMessage(
-      String text,
-      DateTime when, {
-        File? imageFile,
-        String imageName = '',
-      }) async {
-    try {
-      final data = <String, dynamic>{
-        'text': text,
-        'type': imageFile != null ? 'image' : 'text',
-      };
-
-      if (imageFile != null) {
-        final imageBase64 = base64Encode(await imageFile.readAsBytes());
-        if (imageBase64.length > 5 * 1024 * 1024) {
-          snack('Image is too large. Please choose a smaller photo.');
-          return;
-        }
-        data['imageBase64'] = imageBase64;
-        data['fileName'] = imageName;
-      }
-
-      await MessageSyncService.enqueue(
-        chatId: _chatId,
-        data: _withReply(data),
-        sendAt: when,
-      );
-
-      if (!mounted) return;
-      messageController.clear();
-      setState(() {
-        hasText = false;
-        replyingTo = null;
-        _draftImageFile = null;
-        _draftImageName = '';
-      });
-      snack('Message scheduled for ${_scheduleLabel(when)}');
-    } catch (e) {
-      debugPrint('Schedule failed: $e');
-      snack('Could not schedule the message. Please try again.');
+    final error = await _composer.scheduleMessage(text, picked);
+    if (!mounted) return;
+    if (error != null) {
+      snack(error);
+      return;
     }
+    messageController.clear();
+    snack('Message scheduled for ${_scheduleLabel(picked)}');
   }
 
   // ---------- CALL ----------
@@ -990,10 +538,7 @@ class _ChatScreenState extends State<ChatScreen> {
         maxHeight: 700,
       );
       if (x == null || !mounted) return;
-      setState(() {
-        _draftImageFile = File(x.path);
-        _draftImageName = x.name;
-      });
+      _composer.setDraftImage(File(x.path), x.name);
     } catch (e) {
       snack('Could not open the camera. Check camera permission.');
     }
@@ -1008,127 +553,34 @@ class _ChatScreenState extends State<ChatScreen> {
         maxHeight: 700,
       );
       if (x == null || !mounted) return;
-      setState(() {
-        _draftImageFile = File(x.path);
-        _draftImageName = x.name;
-      });
+      _composer.setDraftImage(File(x.path), x.name);
     } catch (e) {
       snack('Could not open the gallery');
     }
   }
 
   Future<void> pickDocument() async {
+    String? path;
+    String name = '';
     try {
       final res = await FilePicker.platform.pickFiles();
       if (res == null || res.files.isEmpty) return;
       final picked = res.files.single;
-      final path = picked.path;
-      if (path == null) return;
-      await _uploadAndSend(File(path), picked.name, 'file');
+      path = picked.path;
+      name = picked.name;
     } catch (e) {
       snack('Could not pick the document');
-    }
-  }
-
-  // Images are stored as Base64 in Realtime Database (no Firebase Storage).
-  // Documents still use Firebase Storage because they are binary files.
-  Future<void> _uploadAndSend(
-      File file,
-      String name,
-      String type,
-      ) async {
-    if (_myUid.isEmpty) {
-      snack('Please log in again');
       return;
     }
+    if (path == null) return;
 
-    if (mounted) setState(() => uploading = true);
-
-    try {
-      final messageData = <String, dynamic>{
-        'text': type == 'image' ? '' : name,
-        'type': type,
-        'fileName': name,
-      };
-
-      if (type == 'image') {
-        // Read and save the compressed image into the SQLite outbox.
-        final bytes = await file.readAsBytes();
-        final imageBase64 = base64Encode(bytes);
-
-        // Keep below the Realtime Database write-size limit.
-        if (imageBase64.length > 5 * 1024 * 1024) {
-          snack('Image is too large. Please choose a smaller photo.');
-          return;
-        }
-
-        messageData['imageBase64'] = imageBase64;
-
-        await MessageSyncService.enqueue(
-          chatId: _chatId,
-          data: _withReply(messageData),
-        );
-
-        if (mounted) {
-          setState(() => replyingTo = null);
-        }
-
-        scrollToBottom();
-
-        if (MessageSyncService.connection.value != ConnState.online) {
-          snack('Photo saved. It will send when internet returns.');
-        }
-      } else {
-        // Documents still require an internet connection.
-        if (MessageSyncService.connection.value != ConnState.online) {
-          snack('Documents can only be sent when you are online.');
-          return;
-        }
-
-        final message = <String, dynamic>{
-          ..._withReply(messageData),
-          'senderId': _myUid,
-          'timeMs': ServerValue.timestamp,
-          'status': 0,
-        };
-
-        // disappearing messages: turn the timer into an expiry time
-        final after = message.remove('expireAfterMs');
-        if (after is num && after > 0) {
-          message['expireAtMs'] = MessageSyncService.nowMs() + after.toInt();
-        }
-
-        final ref = FirebaseStorage.instance.ref(
-          'chats/$_chatId/'
-              '${DateTime.now().millisecondsSinceEpoch}_$name',
-        );
-
-        await ref.putFile(file);
-        message['url'] = await ref.getDownloadURL();
-
-        final newMessageRef = _messagesRef.push();
-        await newMessageRef.set(message);
-        unawaited(
-          PushQueue.add(
-            chatId: _chatId,
-            messageId: newMessageRef.key ?? '',
-            data: {'type': 'file', 'fileName': name, 'text': name},
-          ),
-        );
-
-        if (mounted) {
-          setState(() => replyingTo = null);
-        }
-
-        scrollToBottom();
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Attachment save failed: $e');
-      debugPrintStack(stackTrace: stackTrace);
-      snack('Could not save the attachment. Please try again.');
-    } finally {
-      if (mounted) setState(() => uploading = false);
+    final error = await _composer.sendDocument(File(path), name);
+    if (!mounted) return;
+    if (error != null) {
+      snack(error);
+      return;
     }
+    scrollToBottom();
   }
 
   Future<void> openUrl(String url) async {
@@ -1408,31 +860,20 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> shareContact() async {
     final picked = await _pickContacts(title: 'Share contact', multi: false);
     if (picked == null || picked.isEmpty) return;
-    if (_myUid.isEmpty) {
-      snack('Please log in again');
-      return;
-    }
 
     final c = picked.first;
-
-    try {
-      await MessageSyncService.enqueue(
-        chatId: _chatId,
-        data: _withReply({
-          'text': c.name,
-          'type': 'contact',
-          'contactUid': c.id,
-          'contactName': c.name,
-          'contactPhone': c.phone,
-          'contactCountryCode': c.countryCode,
-        }),
-      );
-      if (mounted) setState(() => replyingTo = null);
-      scrollToBottom();
-    } catch (e) {
-      debugPrint('Share contact failed: $e');
-      snack('Could not share the contact. Please try again.');
+    final error = await _composer.sendSharedContact(
+      uid: c.id,
+      name: c.name,
+      phone: c.phone,
+      countryCode: c.countryCode,
+    );
+    if (!mounted) return;
+    if (error != null) {
+      snack(error);
+      return;
     }
+    scrollToBottom();
   }
 
   // tap on a shared contact card
@@ -1610,30 +1051,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ---------- REACTIONS ----------
-  // tap the same emoji again to remove your reaction
   Future<void> reactTo(Message msg, String emoji) async {
-    if (msg.status < 0) {
-      snack('Wait until the message is sent');
-      return;
-    }
-
-    if (_myUid.isEmpty) {
-      snack('Please log in again');
-      return;
-    }
-
-    final ref = _messagesRef.child(msg.id).child('reactions').child(_myUid);
-
-    try {
-      if (msg.reactions[_myUid] == emoji) {
-        await ref.remove();
-      } else {
-        await ref.set(emoji);
-      }
-    } catch (e) {
-      debugPrint('Reaction failed: $e');
-      snack('Could not add the reaction. Check the database rules.');
-    }
+    final error = await _messages.reactTo(msg, emoji);
+    if (error != null) snack(error);
   }
 
   // the "+" button: pick any emoji from the full list
@@ -1682,53 +1102,10 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    int done = 0;
-
-    for (final c in picked) {
-      try {
-        final data = <String, dynamic>{
-          'text': msg.text,
-          'type': msg.type,
-          'forwarded': true,
-        };
-        if (msg.url.isNotEmpty) data['url'] = msg.url;
-        if (msg.imageBase64.isNotEmpty) data['imageBase64'] = msg.imageBase64;
-        if (msg.fileName.isNotEmpty) data['fileName'] = msg.fileName;
-        if (msg.type == 'contact') {
-          data['contactUid'] = msg.contactUid;
-          data['contactName'] = msg.contactName;
-          data['contactPhone'] = msg.contactPhone;
-          data['contactCountryCode'] = msg.contactCountryCode;
-        }
-
-        if (msg.type == 'text' || msg.type == 'contact') {
-          // small: saved on the phone first, works offline
-          await MessageSyncService.enqueue(
-            chatId: _chatIdWith(c.id),
-            data: data,
-          );
-        } else {
-          // photos and documents are big: they need the internet right now
-          data['senderId'] = _myUid;
-          data['timeMs'] = ServerValue.timestamp;
-          data['status'] = 0;
-          final forwardRef = FirebaseDatabase.instance
-              .ref('chats/${_chatIdWith(c.id)}/messages')
-              .push();
-          await forwardRef.set(data);
-          unawaited(
-            PushQueue.add(
-              chatId: _chatIdWith(c.id),
-              messageId: forwardRef.key ?? '',
-              data: data,
-            ),
-          );
-        }
-        done++;
-      } catch (e) {
-        debugPrint('Forward to ${c.name} failed: $e');
-      }
-    }
+    final done = await _composer.forwardMessage(
+      msg,
+      picked.map((c) => c.id).toList(),
+    );
 
     snack(
       done == picked.length
@@ -1736,17 +1113,10 @@ class _ChatScreenState extends State<ChatScreen> {
           : 'Forwarded to $done of ${picked.length} contacts',
     );
   }
-  // ---------- CREATE A TASK FROM A MESSAGE ----------
-  // the account id of the person I am chatting with
-  String get _otherUid {
-    final parts = widget.chatKey.split('_');
-    if (parts.length != 2) return '';
-    return parts[0] == _myUid ? parts[1] : parts[0];
-  }
 
   // ---------- CREATE A TASK FROM A MESSAGE ----------
   void createTaskFromMessage(Message msg) {
-    final text = msg.type == 'text' ? msg.text : _previewOf(msg);
+    final text = msg.type == 'text' ? msg.text : ComposerProvider.previewOf(msg);
     final firstLine = text.split('\n').first.trim();
     final title =
     firstLine.length > 80 ? '${firstLine.substring(0, 80)}...' : firstLine;
@@ -1770,110 +1140,12 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
-  // ---------- SPEECH TO TEXT ----------
-  Future<bool> _initSpeech() async {
-    if (_speechReady) return true;
-    _speechReady = await _speech.initialize(
-      onStatus: _onSpeechStatus,
-      onError: _onSpeechError,
-    );
-    return _speechReady;
-  }
 
-  void _onSpeechStatus(String status) {
-    if (!mounted) return;
-    if ((status == 'notListening' || status == 'done') && listening) {
-      setState(() => listening = false);
-    }
-  }
-
-  void _onSpeechError(SpeechRecognitionError e) {
-    if (!mounted) return;
-    debugPrint('Speech error: ${e.errorMsg}');
-    setState(() => listening = false);
-
-    if (e.errorMsg == 'error_speech_timeout' ||
-        e.errorMsg == 'error_no_match') {
-      // only complain if nothing was heard
-      if (!_heardWords) {
-        snack("I didn't hear anything. Tap the mic and speak clearly.");
-      }
-    } else if (e.errorMsg == 'error_permission') {
-      snack('Please allow the microphone permission for this app');
-    } else if (e.errorMsg == 'error_network' ||
-        e.errorMsg == 'error_network_timeout' ||
-        e.errorMsg == 'error_language_unavailable' ||
-        e.errorMsg == 'error_language_not_supported') {
-      snack(
-        'Voice error: ${e.errorMsg}\n'
-            'Download your language in the phone settings '
-            '(Offline speech recognition), or type your message.',
-      );
-    } else {
-      snack('Speech error: ${e.errorMsg}');
-    }
-  }
-
-  void _onSpeechResult(SpeechRecognitionResult result) {
-    final words = result.recognizedWords.trim();
-    if (words.isEmpty) return;
-
-    _heardWords = true;
-    final full = _textBeforeMic.isEmpty ? words : '$_textBeforeMic $words';
-
-    messageController.value = TextEditingValue(
-      text: full,
-      selection: TextSelection.collapsed(offset: full.length),
-    );
-    if (mounted) setState(() => hasText = true);
-  }
-
+  // ---------- SPEECH TO TEXT (the provider does the work) ----------
   // tap the mic: start listening
   Future<void> toggleListening() async {
-    final ok = await _initSpeech();
-    if (!ok) {
-      snack('Microphone permission is needed. Allow it in the app settings.');
-      return;
-    }
-    if (!mounted) return;
-
     closePanels();
-    _textBeforeMic = messageController.text.trim();
-    _heardWords = false;
-    setState(() => listening = true);
-
-    await _speech.listen(
-      onResult: _onSpeechResult,
-      listenOptions: stt.SpeechListenOptions(
-        localeId: _speechLocale,
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 3),
-        partialResults: true,
-        cancelOnError: true,
-        listenMode: stt.ListenMode.dictation,
-      ),
-    );
-  }
-
-  // tap stop: keep the text in the box so you can edit it or send it
-  Future<void> stopListening() async {
-    await _speech.stop();
-    if (mounted) setState(() => listening = false);
-  }
-
-  // cancel: throw away what was heard
-  Future<void> cancelListening() async {
-    await _speech.cancel();
-    messageController.text = _textBeforeMic;
-    messageController.selection = TextSelection.collapsed(
-      offset: _textBeforeMic.length,
-    );
-    if (mounted) {
-      setState(() {
-        listening = false;
-        hasText = _textBeforeMic.isNotEmpty;
-      });
-    }
+    await _voice.start(messageController.text);
   }
 
   // small bar shown while the mic is listening
@@ -1899,7 +1171,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           TextButton(
-            onPressed: cancelListening,
+            onPressed: _voice.cancel,
             child: Text(
               'Cancel',
               style: GoogleFonts.poppins(
@@ -1936,33 +1208,22 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ---------- SEARCH IN CHAT ----------
+  // ---------- SEARCH IN CHAT (the provider keeps the state) ----------
   void startSearch() {
     searchController.clear();
-    setState(() {
-      searching = true;
-      searchQuery = '';
-      currentMatch = 0;
-      showEmoji = false;
-      replyingTo = null;
-    });
+    _search.start();
+    _composer.setShowEmoji(false);
+    _composer.clearReply();
   }
 
   void stopSearch() {
     searchController.clear();
     FocusScope.of(context).unfocus();
-    setState(() {
-      searching = false;
-      searchQuery = '';
-      currentMatch = 0;
-    });
+    _search.stop();
   }
 
   void onSearchChanged(String value) {
-    setState(() {
-      searchQuery = value.trim();
-      currentMatch = 0; // start from the newest match
-    });
+    _search.setQuery(value);
     WidgetsBinding.instance.addPostFrameCallback(
           (_) => _jumpToCurrentMatch(animate: false),
     );
@@ -1970,20 +1231,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // delta = 1 -> older match (up arrow), delta = -1 -> newer match (down arrow)
   void goToMatch(int delta) {
-    final matches = _searchMatches(buildItems().reversed.toList());
-    if (matches.isEmpty) return;
-    setState(() {
-      currentMatch = (currentMatch + delta).clamp(0, matches.length - 1).toInt();
-    });
-    _jumpToCurrentMatch(animate: true);
+    final items = _messages.buildItems().reversed.toList();
+    if (_search.move(delta, items)) _jumpToCurrentMatch(animate: true);
   }
 
   void _jumpToCurrentMatch({required bool animate}) {
     if (!mounted || !itemScrollController.isAttached) return;
-    final matches = _searchMatches(buildItems().reversed.toList());
-    if (matches.isEmpty) return;
+    final items = _messages.buildItems().reversed.toList();
+    final index = _search.currentIndex(items);
+    if (index == null) return;
 
-    final index = matches[currentMatch.clamp(0, matches.length - 1).toInt()];
     if (animate) {
       itemScrollController.scrollTo(
         index: index,
@@ -1996,35 +1253,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  bool _messageMatches(Message m, String query) {
-    final needle = query.toLowerCase();
-    switch (m.type) {
-      case 'text':
-        return m.text.toLowerCase().contains(needle);
-      case 'file':
-        final name = m.fileName.isNotEmpty ? m.fileName : m.text;
-        return name.toLowerCase().contains(needle);
-      case 'contact':
-        return m.contactName.toLowerCase().contains(needle) ||
-            m.contactPhone.contains(needle);
-      default:
-        return false; // photos have no text to search
-    }
-  }
-
-  // the positions (in the shown list) of the messages that match the search
-  List<int> _searchMatches(List<Object> items) {
-    final q = searchQuery.trim();
-    if (q.isEmpty) return <int>[];
-
-    final result = <int>[];
-    for (var i = 0; i < items.length; i++) {
-      final item = items[i];
-      if (item is Message && _messageMatches(item, q)) result.add(i);
-    }
-    return result;
-  }
-
   // text with the searched words highlighted in yellow
   // (the current match is orange)
   Widget _highlightedText(String text, String messageId, {double fontSize = 17}) {
@@ -2034,14 +1262,14 @@ class _ChatScreenState extends State<ChatScreen> {
       height: 1.3,
     );
 
-    final q = searching ? searchQuery.trim() : '';
+    final q = _search.searching ? _search.query.trim() : '';
     if (q.isEmpty) return Text(text, style: style);
 
     final lower = text.toLowerCase();
     final needle = q.toLowerCase();
     if (lower.length != text.length) return Text(text, style: style);
 
-    final color = messageId == _currentMatchId
+    final color = messageId == _search.currentMatchId
         ? const Color(0xFFFFB84D)
         : const Color(0xFFFFE58F);
 
@@ -2068,16 +1296,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void closePanels() {
     FocusScope.of(context).unfocus();
-    if (showEmoji) setState(() => showEmoji = false);
+    if (_composer.showEmoji) _composer.setShowEmoji(false);
   }
 
   void toggleEmoji() {
-    if (showEmoji) {
-      setState(() => showEmoji = false);
+    if (_composer.showEmoji) {
+      _composer.setShowEmoji(false);
       focusNode.requestFocus();
     } else {
       focusNode.unfocus();
-      setState(() => showEmoji = true);
+      _composer.setShowEmoji(true);
     }
   }
 
@@ -2092,7 +1320,7 @@ class _ChatScreenState extends State<ChatScreen> {
       text: newText,
       selection: TextSelection.collapsed(offset: start + emoji.length),
     );
-    setState(() => hasText = newText.trim().isNotEmpty);
+    _composer.setHasText(newText.trim().isNotEmpty);
   }
 
   void snack(String message) {
@@ -2112,18 +1340,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> deleteMessage(Message msg) async {
-    try {
-      // a message still waiting on the phone only needs to leave the outbox
-      if (msg.status < 0) {
-        await MessageSyncService.discard(msg.id);
-        snack('Message deleted');
-        return;
-      }
-      await _messagesRef.child(msg.id).remove();
-      snack('Message deleted');
-    } catch (e) {
-      snack('Could not delete the message');
-    }
+    final error = await _messages.deleteMessage(msg);
+    snack(error ?? 'Message deleted');
   }
 
   Future<void> clearChat() async {
@@ -2141,7 +1359,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         content: Text(
           widget.isGroup
-              ? 'All messages in ${_title} will be deleted for everyone.'
+              ? 'All messages in $_title will be deleted for everyone.'
               : 'All messages with ${widget.name} will be deleted.',
           style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
         ),
@@ -2172,11 +1390,8 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     if (ok == true) {
-      try {
-        await _messagesRef.remove();
-      } catch (e) {
-        snack('Could not clear the chat');
-      }
+      final error = await _messages.clearChat();
+      if (error != null) snack(error);
     }
   }
 
@@ -2268,7 +1483,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 Navigator.pop(sheetContext);
                 forwardMessage(msg);
               },
-
             ),
 
             // the server refused this message: send it again
@@ -2432,21 +1646,6 @@ class _ChatScreenState extends State<ChatScreen> {
     return '${day.day} ${months[day.month - 1]} ${day.year}';
   }
 
-  // messages + date headers in one list (oldest first)
-  List<Object> buildItems() {
-    final items = <Object>[];
-    DateTime? lastDay;
-    for (final m in messages) {
-      final day = DateTime(m.time.year, m.time.month, m.time.day);
-      if (lastDay == null || day != lastDay) {
-        items.add(day);
-        lastDay = day;
-      }
-      items.add(m);
-    }
-    return items;
-  }
-
   // ---------- UI PIECES ----------
   Widget buildDateChip(DateTime day) {
     return Center(
@@ -2472,52 +1671,30 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-
   Widget buildTick(int status) {
     // Waiting for internet
     if (status == -1) {
-      return const Icon(
-        Icons.schedule,
-        size: 16,
-        color: _tickGrey,
-      );
+      return const Icon(Icons.schedule, size: 16, color: _tickGrey);
     }
 
     // Failed to send
     if (status == -2) {
-      return const Icon(
-        Icons.error_outline,
-        size: 17,
-        color: _error,
-      );
+      return const Icon(Icons.error_outline, size: 17, color: _error);
     }
 
     // Sent: one grey tick
     if (status == 0) {
-      return const Icon(
-        Icons.done,
-        size: 17,
-        color: _tickGrey,
-      );
+      return const Icon(Icons.done, size: 17, color: _tickGrey);
     }
 
     // Delivered: two grey ticks
     if (status == 1) {
-      return const Icon(
-        Icons.done_all,
-        size: 17,
-        color: _tickGrey,
-      );
+      return const Icon(Icons.done_all, size: 17, color: _tickGrey);
     }
 
     // Read: two blue ticks
-    return const Icon(
-      Icons.done_all,
-      size: 17,
-      color: _tickRead,
-    );
+    return const Icon(Icons.done_all, size: 17, color: _tickRead);
   }
-
 
   // the quoted message shown at the top of a reply bubble
   Widget buildReplyQuote(Message msg) {
@@ -2903,13 +2080,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget buildMessageList(List<Object> items) {
-    if (loading) {
+    if (_messages.loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.emerald),
       );
     }
 
-    if (loadError) {
+    if (_messages.loadError) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -2922,7 +2099,7 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    if (messages.isEmpty) {
+    if (_messages.messages.isEmpty) {
       return Center(
         child: Text(
           'No messages yet\nSay hi 👋',
@@ -3003,7 +2180,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // the bar above the input while replying
   Widget buildReplyBar() {
-    final r = replyingTo!;
+    final r = _composer.replyingTo!;
     final fromMe = r.isMe;
     final barColor = fromMe ? AppColors.emerald : _quoteOther;
 
@@ -3034,7 +2211,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         ),
                         Text(
-                          _previewOf(r),
+                          ComposerProvider.previewOf(r),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.poppins(
@@ -3048,7 +2225,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, color: AppColors.textSoft),
-                  onPressed: () => setState(() => replyingTo = null),
+                  onPressed: _composer.clearReply,
                 ),
               ],
             ),
@@ -3059,12 +2236,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget buildInputBar() {
+    final draft = _composer.draftImageFile;
+    final listening = _voice.listening;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_draftImageFile != null)
+          if (draft != null)
             Container(
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 8),
@@ -3085,7 +2265,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.file(
-                      _draftImageFile!,
+                      draft,
                       width: 64,
                       height: 64,
                       fit: BoxFit.cover,
@@ -3095,12 +2275,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   const Expanded(child: Text('Photo attached')),
                   IconButton(
                     tooltip: 'Remove photo',
-                    onPressed: () {
-                      setState(() {
-                        _draftImageFile = null;
-                        _draftImageName = '';
-                      });
-                    },
+                    onPressed: _composer.clearDraftImage,
                     icon: const Icon(Icons.close),
                   ),
                 ],
@@ -3128,7 +2303,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       IconButton(
                         onPressed: toggleEmoji,
                         icon: Icon(
-                          showEmoji
+                          _composer.showEmoji
                               ? Icons.keyboard_alt_outlined
                               : Icons.emoji_emotions_outlined,
                           color: AppColors.textSoft,
@@ -3147,7 +2322,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             fontSize: 17,
                           ),
                           onChanged: (value) {
-                            setState(() => hasText = value.trim().isNotEmpty);
+                            _composer.setHasText(value.trim().isNotEmpty);
                           },
                           decoration: InputDecoration(
                             hintText: listening ? 'Listening...' : 'Message',
@@ -3169,7 +2344,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           color: AppColors.textSoft,
                         ),
                       ),
-                      if (!hasText)
+                      if (!_composer.hasText)
                         IconButton(
                           onPressed: pickFromCamera,
                           icon: const Icon(
@@ -3184,13 +2359,15 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(width: 8),
               GestureDetector(
                 // long-press the send button = "Send later"
-                onLongPress: (_hasDraftContent && !listening) ? showScheduleSheet : null,
+                onLongPress: (_hasDraftContent && !listening)
+                    ? showScheduleSheet
+                    : null,
                 child: CircleAvatar(
                   radius: 26,
                   backgroundColor: AppColors.emerald,
                   child: IconButton(
                     onPressed: listening
-                        ? stopListening
+                        ? _voice.stop
                         : (_hasDraftContent ? sendMessage : toggleListening),
                     icon: Icon(
                       listening
@@ -3284,7 +2461,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // the normal top bar of the chat
-  // the normal top bar of the chat
   AppBar buildNormalAppBar() {
     return AppBar(
       backgroundColor: AppColors.emerald,
@@ -3357,9 +2533,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (widget.isGroup && _memberIds.isNotEmpty)
+                  if (widget.isGroup && _group.memberIds.isNotEmpty)
                     Text(
-                      _membersLine,
+                      _group.membersLine,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
@@ -3419,7 +2595,7 @@ class _ChatScreenState extends State<ChatScreen> {
               'Media, links, and docs',
             ),
             // in a group only the admin can clear the chat for everyone
-            if (!widget.isGroup || _isAdmin) ...[
+            if (!widget.isGroup || _group.isAdmin) ...[
               const PopupMenuDivider(),
               _menuItem(
                 'clear',
@@ -3465,12 +2641,14 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
       actions: [
-        if (searchQuery.isNotEmpty)
+        if (_search.query.isNotEmpty)
           Center(
             child: Padding(
               padding: const EdgeInsets.only(right: 4),
               child: Text(
-                total == 0 ? 'No results' : '${currentMatch + 1} of $total',
+                total == 0
+                    ? 'No results'
+                    : '${_search.currentMatch + 1} of $total',
                 style: GoogleFonts.poppins(color: Colors.white, fontSize: 13),
               ),
             ),
@@ -3487,18 +2665,34 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // build() connects the providers to the screen.
+  // Every time one of the five providers changes, the Consumer5 rebuilds
+  // the screen (like setState did before).
   @override
   Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ChatSearchProvider>.value(value: _search),
+        ChangeNotifierProvider<GroupChatProvider>.value(value: _group),
+        ChangeNotifierProvider<VoiceInputProvider>.value(value: _voice),
+        ChangeNotifierProvider<MessagesProvider>.value(value: _messages),
+        ChangeNotifierProvider<ComposerProvider>.value(value: _composer),
+      ],
+      child: Consumer5<ChatSearchProvider, GroupChatProvider,
+          VoiceInputProvider, MessagesProvider, ComposerProvider>(
+        builder: (context, search, group, voice, messages, composer, _) =>
+            _buildScaffold(),
+      ),
+    );
+  }
+
+  Widget _buildScaffold() {
     // the list shown on screen: newest first (the list is reversed)
-    final items = buildItems().reversed.toList();
+    final items = _messages.buildItems().reversed.toList();
 
     // search results: the positions of the messages that match
-    final matches = searching ? _searchMatches(items) : <int>[];
-    if (currentMatch >= matches.length) {
-      currentMatch = matches.isEmpty ? 0 : matches.length - 1;
-    }
-    _currentMatchId =
-    matches.isEmpty ? null : (items[matches[currentMatch]] as Message).id;
+    final searching = _search.searching;
+    final matches = searching ? _search.refresh(items) : <int>[];
 
     return PopScope(
       // the phone's back button closes the search first
@@ -3517,7 +2711,7 @@ class _ChatScreenState extends State<ChatScreen> {
             const ConnectionBanner(),
 
             // disappearing messages notice
-            if (_disappearMs > 0)
+            if (_messages.disappearMs > 0)
               Container(
                 width: double.infinity,
                 color: const Color(0xFFFFF4D6),
@@ -3526,7 +2720,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   horizontal: 12,
                 ),
                 child: Text(
-                  '⏱ Disappearing messages: ${_disappearLabel(_disappearMs)}',
+                  '⏱ Disappearing messages: '
+                      '${_disappearLabel(_messages.disappearMs)}',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
                     color: AppColors.textDark,
@@ -3564,7 +2759,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
 
             // upload progress
-            if (uploading)
+            if (_composer.uploading)
               const LinearProgressIndicator(color: AppColors.emerald),
 
             // BOTTOM BAR (hidden while searching, like WhatsApp)
@@ -3574,10 +2769,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (replyingTo != null) buildReplyBar(),
-                    if (listening) buildListeningBar(),
+                    if (_composer.replyingTo != null) buildReplyBar(),
+                    if (_voice.listening) buildListeningBar(),
                     buildInputBar(),
-                    if (showEmoji) buildEmojiPanel(),
+                    if (_composer.showEmoji) buildEmojiPanel(),
                   ],
                 ),
               ),

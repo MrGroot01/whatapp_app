@@ -46,10 +46,8 @@ Future<void> main() async {
     }
   }
 
-  // Prepare existing reminders and local notifications.
   await NotificationService.init();
 
-  // Pushes that arrive while the app is closed or in the background.
   if (startupError == null) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }

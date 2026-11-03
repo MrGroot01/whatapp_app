@@ -1,17 +1,10 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
+
 import 'app_theme.dart';
-import 'database_helper.dart';
 import 'login_screen.dart';
-import 'fcm_service.dart';
-import 'phone_helper.dart';
 import 'profile_screen.dart';
+import 'providers/account_provider.dart';
 
 // One row in the settings list
 class SettingsItem {
@@ -22,30 +15,37 @@ class SettingsItem {
   const SettingsItem(this.icon, this.title, this.subtitle);
 }
 
-class SettingsScreen extends StatefulWidget {
+// The provider is created here, inside the screen, so it stops when the
+// screen closes and never shows an old account's data after a new login.
+class SettingsScreen extends StatelessWidget {
   final String email;
 
   const SettingsScreen({super.key, required this.email});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => AccountProvider(fallbackEmail: email),
+      child: _SettingsView(email: email),
+    );
+  }
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsView extends StatefulWidget {
+  final String email;
+
+  const _SettingsView({required this.email});
+
+  @override
+  State<_SettingsView> createState() => _SettingsViewState();
+}
+
+class _SettingsViewState extends State<_SettingsView> {
   static const Color _error = Color(0xFFD94B4B);
 
+  // only the search box of this screen lives here (pure UI state)
   final searchController = TextEditingController();
   String searchText = '';
-
-  // the picture, name, phone and email of this user (read live)
-  File? profileImage;
-  String? nickname;
-  String? phone;
-  String? phoneCountryCode;
-  String? profileEmail;
-  bool _uploadingPhoto = false;
-  String? profilePhotoBase64;
-  StreamSubscription<DatabaseEvent>? _profileSubscription;
 
   final List<SettingsItem> items = const [
     SettingsItem(Icons.vpn_key_outlined, 'Account',
@@ -66,210 +66,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    // show the Firebase display name at once; the live data replaces it
-    nickname = FirebaseAuth.instance.currentUser?.displayName;
-    loadSavedImage();
-    listenForProfile();
+    // the provider tells the screen when the picture was saved
+    context.read<AccountProvider>().onPhotoUpdated = () {
+      _showMessage('Profile picture updated. Your contacts can now see it.');
+    };
   }
 
   @override
   void dispose() {
-    _profileSubscription?.cancel();
     searchController.dispose();
     super.dispose();
-  }
-
-  // ---------- READ NAME, PHONE, EMAIL AND PICTURE LIVE ----------
-  // One listener on publicProfiles/{uid}: edits show immediately.
-  void listenForProfile() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    _profileSubscription = FirebaseDatabase.instance
-        .ref('publicProfiles/$uid')
-        .onValue
-        .listen((event) {
-      final value = event.snapshot.value;
-
-      String name = '';
-      String phoneValue = '';
-      String codeValue = '';
-      String emailValue = '';
-      String photo = '';
-
-      if (value is Map) {
-        String read(String key) => (value[key] ?? '').toString().trim();
-        name = read('name');
-        phoneValue = read('phone');
-        codeValue = read('countryCode');
-        emailValue = read('email');
-        photo = read('photoBase64');
-      }
-
-      if (!mounted) return;
-      setState(() {
-        if (name.isNotEmpty) nickname = name;
-        phone = phoneValue.isEmpty ? null : phoneValue;
-        phoneCountryCode = codeValue.isEmpty ? null : codeValue;
-        profileEmail = emailValue.isEmpty ? null : emailValue;
-        profilePhotoBase64 = photo.isEmpty ? null : photo;
-      });
-    }, onError: (Object error) {
-      debugPrint('Could not listen for profile changes: $error');
-    });
-  }
-
-  // ---------- READ THE SAVED PICTURE FROM THE LOCAL CACHE ----------
-  Future<void> loadSavedImage() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    try {
-      final savedPath = await DatabaseHelper.getProfileImageForUid(uid);
-      if (savedPath == null) return;
-
-      final file = File(savedPath);
-      if (!file.existsSync()) return;
-      if (!mounted) return;
-
-      setState(() => profileImage = file);
-    } catch (e) {
-      debugPrint('Could not load local profile picture: $e');
-    }
-  }
-
-  Widget _initialAvatar(String displayName) {
-    return Center(
-      child: Text(
-        displayName.isEmpty ? '?' : displayName[0].toUpperCase(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 48,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileAvatar(String displayName) {
-    final encoded = profilePhotoBase64;
-    if (encoded != null && encoded.isNotEmpty) {
-      try {
-        return ClipOval(
-          child: Image.memory(
-            base64Decode(encoded),
-            width: 112,
-            height: 112,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              if (profileImage != null) {
-                return Image.file(
-                  profileImage!,
-                  width: 112,
-                  height: 112,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _initialAvatar(displayName),
-                );
-              }
-              return _initialAvatar(displayName);
-            },
-          ),
-        );
-      } catch (e) {
-        debugPrint('Invalid shared profile picture data: $e');
-      }
-    }
-
-    if (profileImage != null) {
-      return ClipOval(
-        child: Image.file(
-          profileImage!,
-          width: 112,
-          height: 112,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _initialAvatar(displayName),
-        ),
-      );
-    }
-
-    return _initialAvatar(displayName);
-  }
-
-  // ---------- PICK AND SHARE THE PROFILE PICTURE WITHOUT CLOUD STORAGE ----------
-  Future<void> pickImage() async {
-    if (_uploadingPhoto) return;
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _showMessage('Please log in again before changing your picture.');
-      return;
-    }
-
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 50,
-        maxWidth: 480,
-        maxHeight: 480,
-      );
-
-      // The user cancelled the gallery.
-      if (picked == null) return;
-      if (!mounted) return;
-      setState(() => _uploadingPhoto = true);
-
-      final imageBytes = await picked.readAsBytes();
-      // Keep each photo small: Base64 adds about one-third to the image size.
-      // This cap keeps the profile update under roughly 1 MB.
-      if (imageBytes.length > 650 * 1024) {
-        _showMessage('This picture is too large. Please choose a smaller image.');
-        return;
-      }
-      final encoded = base64Encode(imageBytes);
-
-      // Save a local copy so this phone can show its own DP immediately/offline.
-      final folder = await getApplicationDocumentsDirectory();
-      final fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final savedFile = await File(picked.path).copy('${folder.path}/$fileName');
-
-      // Share the compressed image in Realtime Database (no Storage bucket needed).
-      await FirebaseDatabase.instance
-          .ref('publicProfiles/${user.uid}')
-          .update({
-        'uid': user.uid,
-        'photoBase64': encoded,
-        'photoUpdatedAt': ServerValue.timestamp,
-      });
-
-      // Keep the existing local cache used by Settings and Home.
-      final oldPath = await DatabaseHelper.getProfileImageForUid(user.uid);
-      await DatabaseHelper.saveProfileImageForUid(user.uid, savedFile.path);
-
-      if (oldPath != null && oldPath != savedFile.path) {
-        final oldFile = File(oldPath);
-        if (oldFile.existsSync()) {
-          try {
-            await oldFile.delete();
-          } catch (e) {
-            debugPrint('Could not delete old profile image: $e');
-          }
-        }
-      }
-
-      if (!mounted) return;
-      setState(() {
-        profileImage = savedFile;
-        profilePhotoBase64 = encoded;
-      });
-      _showMessage('Profile picture updated. Your contacts can now see it.');
-    } catch (e, stackTrace) {
-      debugPrint('Profile picture update failed: $e');
-      debugPrintStack(stackTrace: stackTrace);
-      _showMessage('Profile update failed: $e');
-    } finally {
-      if (mounted) setState(() => _uploadingPhoto = false);
-    }
   }
 
   void _showMessage(String message) {
@@ -279,8 +85,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // the camera button: the provider does the work, we only show the result
+  Future<void> _changePhoto() async {
+    final error = await context.read<AccountProvider>().changePhoto();
+    if (error != null) _showMessage(error);
+  }
+
   // open the Profile screen (tap on the header)
-  void openProfile() {
+  void _openProfile() {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -290,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ---------- LOGOUT ----------
-  Future<void> confirmLogout() async {
+  Future<void> _confirmLogout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -330,22 +142,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
-    if (shouldLogout == true && mounted) {
-      // 1. remove this phone's push token from the account (must be before sign out)
-      await FcmService.removeCurrentToken();
+    if (shouldLogout != true || !mounted) return;
 
-      // 2. sign out of Firebase
-      await FirebaseAuth.instance.signOut();
+    // push token removed + signed out (the provider does both, in order)
+    await context.read<AccountProvider>().logout();
+    if (!mounted) return;
 
-      if (!mounted) return;
+    // go to the Login page and remove all old pages
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+    );
+  }
 
-      // 3. go to the Login page and remove all old pages
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (route) => false,
+  // ---------- SMALL UI PIECES ----------
+  Widget _initialAvatar(String displayName) {
+    return Center(
+      child: Text(
+        displayName.isEmpty ? '?' : displayName[0].toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 48,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  // the shared picture, then my phone's copy, then the first letter
+  Widget _buildProfileAvatar(AccountProvider account) {
+    final name = account.displayName;
+
+    Widget localOrInitial() {
+      final file = account.localImage;
+      if (file != null) {
+        return ClipOval(
+          child: Image.file(
+            file,
+            width: 112,
+            height: 112,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _initialAvatar(name),
+          ),
+        );
+      }
+      return _initialAvatar(name);
+    }
+
+    final bytes = account.photoBytes;
+    if (bytes != null) {
+      return ClipOval(
+        child: Image.memory(
+          bytes,
+          width: 112,
+          height: 112,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => localOrInitial(),
+        ),
       );
     }
+    return localOrInitial();
   }
 
   // One white card with rounded corners and a soft shadow
@@ -397,20 +255,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // the name shown: nickname, or the part of the email before the @
-    final emailName = widget.email.split('@')[0];
-    final displayName =
-    (nickname != null && nickname!.trim().isNotEmpty) ? nickname! : emailName;
+    // rebuilds whenever the provider changes (name, picture, uploading...)
+    final account = context.watch<AccountProvider>();
 
-    // phone with country code (old accounts have none, so nothing is shown)
-    final phoneValue = phone;
-    final fullPhone = (phoneValue != null && phoneValue.isNotEmpty)
-        ? PhoneHelper.display(
-      phoneCountryCode ?? PhoneHelper.defaultCode,
-      phoneValue,
-    )
-        : null;
-    final shownEmail = profileEmail ?? widget.email;
+    final displayName = account.displayName;
+    final fullPhone = account.fullPhone;
 
     // keep only the rows that match the search text
     final shownItems = items
@@ -451,7 +300,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Stack(
                     children: [
                       GestureDetector(
-                        onTap: openProfile,
+                        onTap: _openProfile,
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: const BoxDecoration(
@@ -461,7 +310,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           child: CircleAvatar(
                             radius: 56,
                             backgroundColor: AppColors.gold,
-                            child: _buildProfileAvatar(displayName),
+                            child: _buildProfileAvatar(account),
                           ),
                         ),
                       ),
@@ -469,7 +318,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         right: 0,
                         bottom: 0,
                         child: GestureDetector(
-                          onTap: _uploadingPhoto ? null : pickImage,
+                          onTap: account.uploadingPhoto ? null : _changePhoto,
                           child: Container(
                             padding: const EdgeInsets.all(3),
                             decoration: const BoxDecoration(
@@ -479,7 +328,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             child: CircleAvatar(
                               radius: 17,
                               backgroundColor: AppColors.gold,
-                              child: _uploadingPhoto
+                              child: account.uploadingPhoto
                                   ? const Padding(
                                 padding: EdgeInsets.all(8),
                                 child: CircularProgressIndicator(
@@ -503,7 +352,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // NAME, PHONE and EMAIL (tap = open the Profile screen)
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: openProfile,
+                    onTap: _openProfile,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Column(
@@ -529,7 +378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                           const SizedBox(height: 4),
                           Text(
-                            shownEmail,
+                            account.email,
                             style: const TextStyle(
                               color: Color(0xCCFFFFFF),
                               fontSize: 14,
@@ -651,7 +500,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    onTap: confirmLogout,
+                    onTap: _confirmLogout,
                   ),
                 ),
               ],

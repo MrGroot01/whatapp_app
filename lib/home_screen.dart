@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -11,10 +9,16 @@ import 'app_theme.dart';
 import 'add_contact_screen.dart';
 import 'chat_screen.dart';
 import 'connection_banner.dart';
-import 'database_helper.dart';
 import 'group_member_picker.dart';
 import 'group_service.dart';
 import 'message_sync_service.dart';
+import 'models/chat_row.dart';
+import 'models/contact.dart';
+import 'providers/chat_list_provider.dart';
+import 'providers/chat_selection_provider.dart';
+import 'providers/contacts_provider.dart';
+import 'providers/groups_provider.dart';
+import 'providers/profile_provider.dart';
 import 'search_provider.dart';
 import 'session_helper.dart';
 import 'settings_screen.dart';
@@ -24,118 +28,9 @@ import 'push_service.dart';
 import 'status_service.dart'; // StatusContact
 import 'updates_screen.dart'; // the Updates tab
 
-class Contact {
-  final String id;
-  final String name;
-  final String phone;
-  final String countryCode;
-  final String message;
-  final String time;
-  final Color color;
-
-  const Contact({
-    required this.id,
-    required this.name,
-    required this.phone,
-    required this.countryCode,
-    this.message = 'Tap to start chatting',
-    this.time = '',
-    this.color = const Color(0xFF009688),
-  });
-
-  factory Contact.fromMap(String id, Map<dynamic, dynamic> map) {
-    return Contact(
-      id: id,
-      name: (map['name'] ?? 'Contact').toString(),
-      phone: (map['phone'] ?? '').toString(),
-      countryCode: (map['countryCode'] ?? '+91').toString(),
-      message: (map['lastMessage'] ?? 'Tap to start chatting').toString(),
-      time: (map['time'] ?? '').toString(),
-      color: _colorFromId(id),
-    );
-  }
-
-  static Color _colorFromId(String id) {
-    const colors = [
-      Color(0xFFE91E63),
-      Color(0xFF3F51B5),
-      Color(0xFF009688),
-      Color(0xFFFF9800),
-      Color(0xFF9C27B0),
-      Color(0xFF795548),
-      Color(0xFF607D8B),
-      Color(0xFFF44336),
-      Color(0xFF4CAF50),
-      Color(0xFF2196F3),
-    ];
-    return colors[id.hashCode.abs() % colors.length];
-  }
-}
-
-// the newest message of one chat, shown under the name in the chat list
-class _LastMessage {
-  final String preview; // short text for any kind of message
-  final String type;
-  final String senderId;
-  final int timeMs;
-  final int status; // 0 = sent, 1 = delivered, 2 = read
-  final int expireAtMs;
-
-  const _LastMessage({
-    required this.preview,
-    required this.type,
-    required this.senderId,
-    required this.timeMs,
-    required this.status,
-    required this.expireAtMs,
-  });
-
-  factory _LastMessage.fromMap(Map<dynamic, dynamic> d) {
-    final type = (d['type'] ?? 'text').toString();
-
-    String preview;
-    switch (type) {
-      case 'image':
-        final caption = (d['text'] ?? '').toString().trim();
-        preview = caption.isEmpty ? '📷 Photo' : '📷 $caption';
-        break;
-      case 'file':
-        final name = (d['fileName'] ?? d['text'] ?? '').toString();
-        preview = '📄 ${name.isEmpty ? 'Document' : name}';
-        break;
-      case 'contact':
-        preview = '👤 ${(d['contactName'] ?? 'Contact').toString()}';
-        break;
-      default:
-        preview = (d['text'] ?? '').toString().replaceAll('\n', ' ');
-    }
-
-    final ts = d['timeMs'];
-    final st = d['status'];
-    final ex = d['expireAtMs'];
-
-    return _LastMessage(
-      preview: preview,
-      type: type,
-      senderId: (d['senderId'] ?? '').toString(),
-      // a message that is still being saved has no server time yet
-      timeMs: ts is num ? ts.toInt() : DateTime.now().millisecondsSinceEpoch,
-      status: st is num ? st.toInt() : 0,
-      expireAtMs: ex is num ? ex.toInt() : 0,
-    );
-  }
-}
-
-// one row of the chat list: a group or a contact
-class _ChatRow {
-  final GroupItem? group;
-  final Contact? contact;
-  final int timeMs; // time of the newest message (0 = no messages yet)
-
-  const _ChatRow({this.group, this.contact, required this.timeMs});
-
-  String get name => group?.name ?? contact?.name ?? '';
-}
+// Contact moved to models/contact.dart. This line keeps every file that
+// still imports it from home_screen.dart working.
+export 'models/contact.dart';
 
 class HomeScreen extends StatefulWidget {
   final String email;
@@ -153,7 +48,6 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Color _selectedTile = Color(0xFFD9F2E7);
 
   final searchController = TextEditingController();
-  File? profileImage;
 
   // 0 = Chats, 1 = Updates (status)
   int _tab = 0;
@@ -163,70 +57,35 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String? get _currentUid => _auth.currentUser?.uid;
 
-  DatabaseReference get _contactsRef =>
-      _database.ref('users/${_currentUid ?? ''}/contacts');
-
-  StreamSubscription<DatabaseEvent>? _contactsSubscription;
-  DatabaseReference? _syncedRef;
-  List<Contact> _contacts = [];
-  bool _contactsLoading = true;
-  bool _hasRemoteContacts = false;
-
-  // ---------- GROUPS ----------
-  // users/<me>/groups lists the group ids; each group is watched separately
-  StreamSubscription<DatabaseEvent>? _groupIndexSub;
-  final Map<String, StreamSubscription<DatabaseEvent>> _groupSubs = {};
-  final Map<String, GroupItem> _groups = {};
-
-  // ---------- LAST MESSAGES ----------
-  // chat id -> the newest message of that chat (one listener per chat)
-  final Map<String, StreamSubscription<DatabaseEvent>> _lastSubs = {};
-  final Map<String, _LastMessage> _last = {};
-  Timer? _clockTimer;
-
-  // ---------- DELETE CHATS (long-press) ----------
-  // chats selected by long-press; delete mode is on while this is not empty
-  final Set<String> _selected = {};
-  // chat id -> time (ms) when I deleted it; older messages stay hidden
-  final Map<String, int> _clearedAt = {};
-  StreamSubscription<DatabaseEvent>? _clearedSub;
+  final ChatSelectionProvider _selection = ChatSelectionProvider();
+  final ContactsProvider _contactsProvider = ContactsProvider();
+  final GroupsProvider _groupsProvider = GroupsProvider();
+  final ChatListProvider _chatList = ChatListProvider();
+  final ProfileProvider _profile = ProfileProvider();
 
   @override
   void initState() {
     super.initState();
     context.read<SearchProvider>().reset(); // start with search closed
 
-    final uid = _currentUid;
-    if (uid != null) {
-      _syncedRef = _contactsRef;
-      _syncedRef!.keepSynced(true);
-      _loadLocalContacts();
-      _contactsSubscription = _contactsRef.onValue.listen(
-        _handleContactsEvent,
-        onError: (Object error) {
-          debugPrint('[HomeScreen] Firebase contacts error: $error');
-          if (mounted && !_hasRemoteContacts) {
-            setState(() => _contactsLoading = false);
-          }
-        },
-      );
-      _listenGroups(uid);
-      _listenCleared(uid);
-    } else {
-      _contactsLoading = false;
-    }
+    _chatList.start();
+    _profile.start();
+
+    _contactsProvider.addListener(_watchContactChats);
+    _contactsProvider.start();
+
+    _groupsProvider.onGroupAdded = _chatList.watchChat;
+    _groupsProvider.onGroupRemoved = (groupId) {
+      _chatList.forgetChat(groupId);
+      _selection.remove(groupId);
+    };
+    _groupsProvider.start();
+
     SessionHelper.saveSession(widget.email);
     IncomingMessageNotifier.start();
     TaskService.startListening();
     MessageSyncService.start(); // watches the internet + sends waiting messages
-    loadProfileImage();
 
-    // refresh the times ("Today" / "Yesterday") and expired messages
-    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
-    });
-
-    // the app was opened by tapping a message notification: open that chat
     WidgetsBinding.instance.addPostFrameCallback(
           (_) => PushService.openPendingChat(),
     );
@@ -234,89 +93,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _clockTimer?.cancel();
-    _clearedSub?.cancel();
-    _contactsSubscription?.cancel();
-    _groupIndexSub?.cancel();
-    for (final s in _groupSubs.values) {
-      s.cancel();
-    }
-    _groupSubs.clear();
-    for (final s in _lastSubs.values) {
-      s.cancel();
-    }
-    _lastSubs.clear();
-    _syncedRef?.keepSynced(false);
     MessageSyncService.stop();
     IncomingMessageNotifier.stop();
     TaskService.stopListening();
     searchController.dispose();
+    _contactsProvider.removeListener(_watchContactChats);
+    _groupsProvider.dispose(); // also stops every group listener
+    _contactsProvider.dispose(); // also stops the Firebase listener
+    _selection.dispose();
+    _chatList.dispose(); // also stops every last-message listener
+    _profile.dispose(); // also stops the profile photo listener
     super.dispose();
   }
 
-  // ---------- LAST MESSAGE OF EACH CHAT ----------
-  // the chat board between me and a contact
-  String _chatIdWith(String contactId) {
-    final me = _currentUid ?? '';
-    return ([me, contactId]..sort()).join('_');
-  }
-
-  void _watchLastMessage(String chatId) {
-    if (chatId.isEmpty || _lastSubs.containsKey(chatId)) return;
-
-    _lastSubs[chatId] = _database
-        .ref('chats/$chatId/messages')
-        .limitToLast(1)
-        .onValue
-        .listen(
-          (event) {
-        if (!mounted) return;
-
-        _LastMessage? newest;
-        final v = event.snapshot.value;
-        if (v is Map) {
-          for (final entry in v.entries) {
-            final d = entry.value;
-            if (d is Map) {
-              newest = _LastMessage.fromMap(Map<dynamic, dynamic>.from(d));
-            }
-          }
-        }
-
-        setState(() {
-          if (newest == null) {
-            _last.remove(chatId);
-          } else {
-            _last[chatId] = newest;
-          }
-        });
-      },
-      onError: (Object e) {
-        // for example: no permission for this chat
-        debugPrint('[HomeScreen] Last message error ($chatId): $e');
-      },
-    );
-  }
-
-  // the newest message, unless it has already disappeared
-  // or I deleted the chat after it was sent
-  _LastMessage? _visibleLast(String chatId) {
-    final m = _last[chatId];
-    if (m == null) return null;
-    if (m.expireAtMs > 0 && m.expireAtMs <= MessageSyncService.nowMs()) {
-      return null;
+  void _watchContactChats() {
+    for (final c in _contactsProvider.contacts) {
+      _chatList.watchChat(_chatList.chatIdWith(c.id));
     }
-    final clearedAt = _clearedAt[chatId];
-    if (clearedAt != null && m.timeMs <= clearedAt) return null;
-    return m;
   }
 
-  // true = I deleted this chat and nothing new has arrived since
-  bool _isHidden(String chatId) {
-    return _clearedAt.containsKey(chatId) && _visibleLast(chatId) == null;
-  }
-
-  // 4:20 pm  /  Yesterday  /  12/10/2026
   String _formatListTime(int ms) {
     final t = DateTime.fromMillisecondsSinceEpoch(ms);
     final now = DateTime.now();
@@ -333,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${t.day}/${t.month}/${t.year}';
   }
 
-  // the line under the name: ticks + the last message
   Widget _buildLastLine(
       String chatId,
       String fallback, {
@@ -341,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }) {
     const baseStyle = TextStyle(color: AppColors.textSoft, fontSize: 15);
 
-    final last = _visibleLast(chatId);
+    final last = _chatList.visibleLast(chatId);
     if (last == null || (last.preview.isEmpty && last.type != 'call')) {
       return Text(
         fallback,
@@ -354,10 +148,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final mine = last.senderId == _currentUid;
     final isCall = last.type == 'call';
 
-    // my own messages get the tick, like in the chat
     Widget? tick;
     if (mine && !isCall) {
-      // groups have no read ticks: one grey tick only
       final status = isGroup && last.status > 0 ? 0 : last.status;
       tick = Padding(
         padding: const EdgeInsets.only(right: 4),
@@ -403,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget? _buildTimeText(String chatId, {String fallback = ''}) {
-    final last = _visibleLast(chatId);
+    final last = _chatList.visibleLast(chatId);
     final text = last != null ? _formatListTime(last.timeMs) : fallback;
     if (text.isEmpty) return null;
     return Text(
@@ -412,44 +204,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ---------- DELETE CHATS ----------
-  // long-press / tap in delete mode: select or unselect one chat
-  void _toggleSelect(String chatId) {
-    setState(() {
-      if (!_selected.remove(chatId)) _selected.add(chatId);
-    });
-  }
-
-  void _clearSelection() => setState(() => _selected.clear());
-
-  // reads the "I deleted this chat at ..." notes from Firebase
-  void _listenCleared(String uid) {
-    _clearedSub = _database.ref('users/$uid/clearedChats').onValue.listen(
-          (event) {
-        if (!mounted) return;
-        final map = <String, int>{};
-        final v = event.snapshot.value;
-        if (v is Map) {
-          v.forEach((key, t) {
-            if (t is num) map[key.toString()] = t.toInt();
-          });
-        }
-        setState(() {
-          _clearedAt
-            ..clear()
-            ..addAll(map);
-        });
-      },
-      onError: (Object e) => debugPrint('[HomeScreen] Cleared chats error: $e'),
-    );
-  }
-
-  // delete the selected chats for me only (the other people keep theirs)
   Future<void> _deleteSelected() async {
-    final me = _currentUid;
-    if (me == null || _selected.isEmpty) return;
+    final ids = _selection.selectedIds; // a copy of the selected chat ids
+    if (_currentUid == null || ids.isEmpty) return;
 
-    final count = _selected.length;
+    final count = ids.length;
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -494,17 +253,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (ok != true || !mounted) return;
 
     try {
-      // one note per chat: "I deleted this chat at <server time>"
-      final updates = <String, Object?>{
-        for (final id in _selected)
-          'users/$me/clearedChats/$id': ServerValue.timestamp,
-      };
-      await _database.ref().update(updates).timeout(
-        const Duration(seconds: 15),
-      );
+      await _chatList.deleteChatsForMe(ids);
 
       if (!mounted) return;
-      _clearSelection();
+      _selection.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(count == 1 ? 'Chat deleted' : '$count chats deleted'),
@@ -518,158 +270,6 @@ class _HomeScreenState extends State<HomeScreen> {
           content: Text('Could not delete. Check your internet and try again.'),
         ),
       );
-    }
-  }
-
-  // ---------- GROUP LIST ----------
-  void _listenGroups(String uid) {
-    _groupIndexSub = _database.ref('users/$uid/groups').onValue.listen(
-          (event) {
-        if (!mounted) return;
-
-        final ids = <String>{};
-        final value = event.snapshot.value;
-        if (value is Map) {
-          value.forEach((key, v) {
-            if (v == true) ids.add(key.toString());
-          });
-        }
-
-        // stop watching groups I left
-        for (final id in _groupSubs.keys.toList()) {
-          if (!ids.contains(id)) {
-            _groupSubs.remove(id)?.cancel();
-            _groups.remove(id);
-            _lastSubs.remove(id)?.cancel();
-            _last.remove(id);
-            _selected.remove(id);
-          }
-        }
-
-        // start watching new groups
-        for (final id in ids) {
-          if (_groupSubs.containsKey(id)) continue;
-          _watchLastMessage(id); // the group chat id is the group id
-          _groupSubs[id] = _database.ref('groups/$id').onValue.listen(
-                (e) {
-              if (!mounted) return;
-              final gv = e.snapshot.value;
-              setState(() {
-                if (gv is Map) {
-                  _groups[id] = GroupItem.fromMap(
-                    id,
-                    Map<dynamic, dynamic>.from(gv),
-                  );
-                } else {
-                  _groups.remove(id);
-                }
-              });
-            },
-            onError: (Object err) {
-              debugPrint('[HomeScreen] Group $id error: $err');
-              if (mounted) setState(() => _groups.remove(id));
-            },
-          );
-        }
-
-        setState(() {});
-      },
-      onError: (Object e) => debugPrint('[HomeScreen] Group list error: $e'),
-    );
-  }
-
-  Future<void> _loadLocalContacts() async {
-    final uid = _currentUid;
-    if (uid == null) return;
-
-    try {
-      final rows = await DatabaseHelper.getContacts(uid);
-      final localContacts = rows.map((row) {
-        return Contact.fromMap(row['id'].toString(), {
-          'name': row['name'],
-          'phone': row['phone'],
-          'countryCode': row['country_code'],
-          'lastMessage': row['last_message'],
-          'time': row['time'],
-        });
-      }).toList();
-
-      if (!mounted) return;
-      setState(() {
-        // Use local data immediately; Firebase can refresh it afterward.
-        if (!_hasRemoteContacts) _contacts = localContacts;
-        _contactsLoading = false;
-      });
-
-      // show the last messages while the contacts are loaded from the phone
-      for (final c in localContacts) {
-        _watchLastMessage(_chatIdWith(c.id));
-      }
-    } catch (e) {
-      debugPrint('[HomeScreen] Failed to load local contacts: $e');
-      if (mounted) setState(() => _contactsLoading = false);
-    }
-  }
-
-  Future<void> _handleContactsEvent(DatabaseEvent event) async {
-    final uid = _currentUid;
-    if (uid == null) return;
-
-    final remoteContacts = _parseContacts(event.snapshot.value);
-
-    // A null Firebase value can mean the list is empty, but don't wipe a
-    // previously cached list because of a transient empty/offline snapshot.
-    if (event.snapshot.value == null && _contacts.isNotEmpty) {
-      if (mounted) setState(() => _contactsLoading = false);
-      return;
-    }
-
-    try {
-      await DatabaseHelper.saveContacts(
-        uid,
-        remoteContacts
-            .map((contact) => <String, dynamic>{
-          'id': contact.id,
-          'name': contact.name,
-          'phone': contact.phone,
-          'countryCode': contact.countryCode,
-          'lastMessage': contact.message,
-          'time': contact.time,
-        })
-            .toList(),
-      );
-    } catch (e) {
-      debugPrint('[HomeScreen] Failed to cache Firebase contacts: $e');
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _contacts = remoteContacts.isNotEmpty ? remoteContacts : _contacts;
-      _hasRemoteContacts = true;
-      _contactsLoading = false;
-    });
-
-    // one last-message listener for every contact (also for new contacts)
-    for (final c in remoteContacts) {
-      _watchLastMessage(_chatIdWith(c.id));
-    }
-  }
-
-  Future<void> loadProfileImage() async {
-    // Settings saves the current user's local image using their Firebase UID.
-    final uid = _currentUid;
-    if (uid == null) return;
-
-    try {
-      final savedPath = await DatabaseHelper.getProfileImageForUid(uid);
-      File? file;
-      if (savedPath != null && File(savedPath).existsSync()) {
-        file = File(savedPath);
-      }
-      if (!mounted) return;
-      setState(() => profileImage = file);
-    } catch (e) {
-      debugPrint('[HomeScreen] Could not load local profile picture: $e');
     }
   }
 
@@ -776,32 +376,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  List<Contact> _parseContacts(Object? value) {
-    if (value is! Map) return [];
-    final map = Map<dynamic, dynamic>.from(value);
-    final contacts = <Contact>[];
-
-    for (final entry in map.entries) {
-      if (entry.value is Map) {
-        contacts.add(
-          Contact.fromMap(
-            entry.key.toString(),
-            Map<dynamic, dynamic>.from(entry.value as Map),
-          ),
-        );
-      }
-    }
-
-    contacts
-        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return contacts;
-  }
-
   // one group row in the list
   Widget _buildGroupTile(GroupItem group) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      tileColor: _selected.contains(group.id) ? _selectedTile : null,
+      tileColor: _selection.isSelected(group.id) ? _selectedTile : null,
       leading: CircleAvatar(
         radius: 26,
         backgroundColor: GroupService.colorFor(group.id),
@@ -824,20 +403,20 @@ class _HomeScreenState extends State<HomeScreen> {
         isGroup: true,
       ),
       trailing: _buildTimeText(group.id),
-      onLongPress: () => _toggleSelect(group.id),
-      onTap: _selected.isNotEmpty
-          ? () => _toggleSelect(group.id)
+      onLongPress: () => _selection.toggle(group.id),
+      onTap: _selection.isSelecting
+          ? () => _selection.toggle(group.id)
           : () => openGroupChat(group.id, group.name),
     );
   }
 
   // one contact row in the list
   Widget _buildContactTile(Contact contact) {
-    final chatId = _chatIdWith(contact.id);
+    final chatId = _chatList.chatIdWith(contact.id);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      tileColor: _selected.contains(chatId) ? _selectedTile : null,
+      tileColor: _selection.isSelected(chatId) ? _selectedTile : null,
       leading: StreamBuilder<DatabaseEvent>(
         // This listener receives DP changes from the contact's public profile.
         stream:
@@ -887,11 +466,11 @@ class _HomeScreenState extends State<HomeScreen> {
       // the last message (the phone number is no longer shown here)
       subtitle: _buildLastLine(chatId, 'Tap to start chatting'),
       trailing: _buildTimeText(chatId, fallback: contact.time),
-      onLongPress: () => _toggleSelect(chatId),
+      onLongPress: () => _selection.toggle(chatId),
       onTap: () {
         // in delete mode a tap selects / unselects the chat
-        if (_selected.isNotEmpty) {
-          _toggleSelect(chatId);
+        if (_selection.isSelecting) {
+          _selection.toggle(chatId);
           return;
         }
         Navigator.push(
@@ -910,34 +489,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // groups and contacts together, the newest message on top
   Widget _buildChatList(String searchText) {
-    final query = searchText.toLowerCase();
-    final searching = query.isNotEmpty;
-
-    final rows = <_ChatRow>[];
-
-    for (final g in _groups.values) {
-      if (!g.name.toLowerCase().contains(query)) continue;
-      // a deleted chat stays hidden, but search can still find it
-      if (!searching && _isHidden(g.id)) continue;
-      rows.add(_ChatRow(group: g, timeMs: _visibleLast(g.id)?.timeMs ?? 0));
-    }
-
-    for (final c in _contacts) {
-      // search still finds a contact by name or phone number
-      final matches =
-          c.name.toLowerCase().contains(query) || c.phone.contains(query);
-      if (!matches) continue;
-      final chatId = _chatIdWith(c.id);
-      if (!searching && _isHidden(chatId)) continue;
-      rows.add(_ChatRow(contact: c, timeMs: _visibleLast(chatId)?.timeMs ?? 0));
-    }
-
-    rows.sort((a, b) {
-      if (a.timeMs != b.timeMs) return b.timeMs.compareTo(a.timeMs);
-      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-    });
+    // the provider decides which rows to show and in which order
+    final rows = _chatList.buildRows(
+      contacts: _contactsProvider.contacts,
+      groups: _groupsProvider.groups,
+      query: searchText,
+    );
 
     if (rows.isEmpty) {
       return ValueListenableBuilder<ConnState>(
@@ -974,23 +532,100 @@ class _HomeScreenState extends State<HomeScreen> {
         color: Color(0xFFE9E4D8),
       ),
       itemBuilder: (context, index) {
-        final row = rows[index];
+        final ChatRow row = rows[index];
         if (row.group != null) return _buildGroupTile(row.group!);
         return _buildContactTile(row.contact!);
       },
     );
   }
 
+  // the round picture in the top right corner (opens Settings)
+  Widget _buildProfileButton() {
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SettingsScreen(email: widget.email),
+          ),
+        );
+        // Settings may have saved a new picture
+        _profile.reload();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
+        // only this small avatar rebuilds when the picture changes
+        child: Consumer<ProfileProvider>(
+          builder: (_, profile, _) {
+            final initial =
+            widget.email.isNotEmpty ? widget.email[0].toUpperCase() : '?';
+            final image = profile.avatar;
+
+            return CircleAvatar(
+              radius: 17,
+              backgroundColor: AppColors.gold,
+              backgroundImage: image,
+              child: image == null
+                  ? Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+                  : null,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ChatSelectionProvider>.value(value: _selection),
+        ChangeNotifierProvider<ContactsProvider>.value(
+          value: _contactsProvider,
+        ),
+        ChangeNotifierProvider<GroupsProvider>.value(value: _groupsProvider),
+        ChangeNotifierProvider<ChatListProvider>.value(value: _chatList),
+        ChangeNotifierProvider<ProfileProvider>.value(value: _profile),
+      ],
+      child: Consumer4<ChatSelectionProvider, ContactsProvider,
+          GroupsProvider, ChatListProvider>(
+        builder: (
+            context,
+            selection,
+            contactsState,
+            groupsState,
+            chatListState,
+            _,
+            ) =>
+            _buildScaffold(selection, contactsState, groupsState),
+      ),
+    );
+  }
+
+  Widget _buildScaffold(
+      ChatSelectionProvider selection,
+      ContactsProvider contactsState,
+      GroupsProvider groupsState,
+      ) {
     final uid = _currentUid;
-    final selecting = _selected.isNotEmpty;
+    final selecting = selection.isSelecting;
+    final contacts = contactsState.contacts;
 
     return PopScope(
       // the phone's back button leaves delete mode first
       canPop: !selecting,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && selecting) _clearSelection();
+        if (!didPop && selecting) _selection.clear();
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -1002,12 +637,12 @@ class _HomeScreenState extends State<HomeScreen> {
           leading: selecting
               ? IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: _clearSelection,
+            onPressed: _selection.clear,
           )
               : null,
           title: selecting
               ? Text(
-            '${_selected.length}',
+            '${selection.count}',
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w600,
@@ -1031,7 +666,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 8),
           ]
               : [
-            // search icon (only on the Chats tab)
             if (_tab == 0)
               Consumer<SearchProvider>(
                 builder: (_, search, _) => IconButton(
@@ -1056,66 +690,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            GestureDetector(
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SettingsScreen(email: widget.email),
-                  ),
-                );
-                loadProfileImage();
-              },
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                ),
-                child: StreamBuilder<DatabaseEvent>(
-                  // Prefer the shared image; keep the local file as an offline fallback.
-                  stream: uid == null
-                      ? null
-                      : _database
-                      .ref('publicProfiles/$uid/photoBase64')
-                      .onValue,
-                  builder: (context, snapshot) {
-                    final value = snapshot.data?.snapshot.value;
-                    final encoded = value is String ? value : '';
-                    final initial = widget.email.isNotEmpty
-                        ? widget.email[0].toUpperCase()
-                        : '?';
-
-                    ImageProvider? imageProvider;
-                    if (encoded.isNotEmpty) {
-                      try {
-                        imageProvider = MemoryImage(base64Decode(encoded));
-                      } catch (e) {
-                        debugPrint('Invalid own DP data: $e');
-                      }
-                    }
-                    imageProvider ??= profileImage != null
-                        ? FileImage(profileImage!)
-                        : null;
-
-                    return CircleAvatar(
-                      radius: 17,
-                      backgroundColor: AppColors.gold,
-                      backgroundImage: imageProvider,
-                      child: imageProvider == null
-                          ? Text(
-                        initial,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                          : null,
-                    );
-                  },
-                ),
-              ),
-            ),
+            _buildProfileButton(),
             const SizedBox(width: 16),
           ],
         ),
@@ -1137,10 +712,10 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.white,
           indicatorColor: const Color(0xFFE3F1ED),
           selectedIndex: _tab,
-          onDestinationSelected: (i) => setState(() {
-            _tab = i;
-            _selected.clear(); // leaving the tab leaves delete mode
-          }),
+          onDestinationSelected: (i) {
+            _selection.clear(); // leaving the tab leaves delete mode
+            setState(() => _tab = i);
+          },
           destinations: const [
             NavigationDestination(
               icon: Icon(Icons.chat_bubble_outline),
@@ -1158,7 +733,7 @@ class _HomeScreenState extends State<HomeScreen> {
         // Updates tab shows the status screen
         body: _tab == 1
             ? UpdatesScreen(
-          contacts: _contacts
+          contacts: contacts
               .map(
                 (c) => StatusContact(
               id: c.id,
@@ -1170,7 +745,6 @@ class _HomeScreenState extends State<HomeScreen> {
         )
             : Column(
           children: [
-            // search bar shows/hides from SearchProvider
             Consumer<SearchProvider>(
               builder: (_, search, _) {
                 if (!search.isSearching) return const SizedBox.shrink();
@@ -1231,9 +805,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               )
-                  : _contactsLoading &&
-                  _contacts.isEmpty &&
-                  _groups.isEmpty
+                  : contactsState.isLoading &&
+                  contacts.isEmpty &&
+                  groupsState.isEmpty
                   ? const Center(
                 child: CircularProgressIndicator(
                   color: AppColors.emerald,

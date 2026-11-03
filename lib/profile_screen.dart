@@ -1,263 +1,92 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
-import 'database_helper.dart';
-import 'phone_helper.dart';
+import 'providers/account_provider.dart';
 
-class ProfileScreen extends StatefulWidget {
+// The provider is created here, inside the screen, so it stops when the
+// screen closes and never shows an old account's data after a new login.
+class ProfileScreen extends StatelessWidget {
   final String email;
 
   const ProfileScreen({super.key, required this.email});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => AccountProvider(fallbackEmail: email),
+      child: _ProfileView(email: email),
+    );
+  }
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileView extends StatefulWidget {
+  final String email;
+
+  const _ProfileView({required this.email});
+
+  @override
+  State<_ProfileView> createState() => _ProfileViewState();
+}
+
+class _ProfileViewState extends State<_ProfileView> {
   static const Color _error = Color(0xFFD94B4B);
   static const Color _lockedFill = Color(0xFFEFEBE0);
 
+  // only the form lives here (pure UI state)
   final formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
 
-  StreamSubscription<DatabaseEvent>? _profileSubscription;
-
-  String _savedName = '';
-  String? _phone;
-  String? _countryCode;
-  String? _profileEmail;
-  String _photoRaw = '';
-  Uint8List? _photoBytes;
-  File? _localImage;
-
   bool _nameTouched = false; // the user typed in the name box
-  bool _isSaving = false;
-  String? _errorMessage;
+  String? _errorMessage; // the red box under the form
 
   @override
   void initState() {
     super.initState();
-    final user = FirebaseAuth.instance.currentUser;
-    _savedName = (user?.displayName ?? '').trim();
-    nameController.text = _savedName;
-    _loadLocalImage();
-    _listenForProfile();
+    final account = context.read<AccountProvider>();
+
+    // start with the name we already know (the Firebase display name)
+    nameController.text = account.savedName;
+
+    // when the live profile brings a new name, show it unless the user
+    // has already started typing
+    account.onNameChanged = (name) {
+      if (!_nameTouched) nameController.text = name;
+    };
   }
 
   @override
   void dispose() {
-    _profileSubscription?.cancel();
     nameController.dispose();
     super.dispose();
   }
 
-  // ---------- LIVE PROFILE ----------
-  void _listenForProfile() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    _profileSubscription = FirebaseDatabase.instance
-        .ref('publicProfiles/$uid')
-        .onValue
-        .listen((event) {
-      final value = event.snapshot.value;
-
-      String name = '';
-      String phone = '';
-      String code = '';
-      String email = '';
-      String photo = '';
-
-      if (value is Map) {
-        String read(String key) => (value[key] ?? '').toString().trim();
-        name = read('name');
-        phone = read('phone');
-        code = read('countryCode');
-        email = read('email');
-        photo = read('photoBase64');
-      }
-
-      // decode the picture only when it changed
-      Uint8List? bytes = _photoBytes;
-      if (photo != _photoRaw) {
-        bytes = null;
-        if (photo.isNotEmpty) {
-          try {
-            bytes = base64Decode(photo);
-          } catch (e) {
-            debugPrint('Invalid profile picture data: $e');
-          }
-        }
-      }
-
-      if (!mounted) return;
-      setState(() {
-        if (name.isNotEmpty) {
-          _savedName = name;
-          if (!_nameTouched) nameController.text = name;
-        }
-        _phone = phone.isEmpty ? null : phone;
-        _countryCode = code.isEmpty ? null : code;
-        _profileEmail = email.isEmpty ? null : email;
-        _photoRaw = photo;
-        _photoBytes = bytes;
-      });
-    }, onError: (Object error) {
-      debugPrint('Could not listen for profile changes: $error');
-    });
-  }
-
-  Future<void> _loadLocalImage() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    try {
-      final savedPath = await DatabaseHelper.getProfileImageForUid(uid);
-      if (savedPath == null) return;
-
-      final file = File(savedPath);
-      if (!file.existsSync()) return;
-      if (!mounted) return;
-
-      setState(() => _localImage = file);
-    } catch (e) {
-      debugPrint('Could not load local profile picture: $e');
-    }
-  }
-
-  // ---------- VALIDATION (same rules as the nickname) ----------
-  String? _validateName(String? value) {
-    final name = value?.trim() ?? '';
-    if (name.isEmpty) return 'Please enter your name';
-    if (name.length < 3) return 'Use at least 3 characters';
-    if (name.length > 20) return 'Use at most 20 characters';
-    return null;
-  }
-
-  bool get _canSave =>
-      !_isSaving && nameController.text.trim() != _savedName.trim();
-
-  // ---------- ONLINE CHECK ----------
-  // Realtime Database keeps writes in a queue while offline, so we check
-  // first and show a clear message instead of a save that never finishes.
-  Future<bool> _isOnline() async {
-    try {
-      await FirebaseDatabase.instance
-          .ref('.info/connected')
-          .onValue
-          .map((event) => event.snapshot.value == true)
-          .firstWhere((connected) => connected)
-          .timeout(const Duration(seconds: 4));
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
+  bool _canSave(AccountProvider account) =>
+      !account.savingName &&
+          nameController.text.trim() != account.savedName.trim();
 
   // ---------- SAVE THE NAME ----------
   Future<void> _saveName() async {
-    if (_isSaving) return;
+    final account = context.read<AccountProvider>();
+    if (account.savingName) return;
     if (!formKey.currentState!.validate()) return;
+    if (nameController.text.trim() == account.savedName.trim()) return;
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      setState(() {
-        _errorMessage = 'Please log in again before changing your name.';
-      });
+    FocusScope.of(context).unfocus();
+    setState(() => _errorMessage = null);
+
+    // the provider does the work and gives back null or an error text
+    final error = await account.saveName(nameController.text);
+    if (!mounted) return;
+
+    if (error != null) {
+      setState(() => _errorMessage = error);
       return;
     }
 
-    final newName = nameController.text.trim();
-    if (newName == _savedName.trim()) return;
-
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _isSaving = true;
-      _errorMessage = null;
-    });
-
-    try {
-      if (!await _isOnline()) {
-        if (!mounted) return;
-        setState(() {
-          _errorMessage =
-          'You are offline. Connect to the internet and try again.';
-        });
-        return;
-      }
-
-      // 1. the public profile (other people's contact names are NOT changed)
-      await FirebaseDatabase.instance
-          .ref('publicProfiles/${user.uid}/name')
-          .set(newName)
-          .timeout(const Duration(seconds: 12));
-
-      // 2. the Firebase Auth display name
-      try {
-        await user.updateDisplayName(newName);
-      } catch (e) {
-        debugPrint('Display name not updated: $e');
-      }
-
-      // 3. the local SQLite copy
-      await _updateLocalCopy(user, newName);
-
-      if (!mounted) return;
-      setState(() {
-        _savedName = newName;
-        _nameTouched = false;
-      });
-      _showMessage('Name updated');
-    } on TimeoutException {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage =
-        'The server did not answer. Check your internet connection and try again.';
-      });
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.code == 'permission-denied'
-            ? 'Firebase denied access. Check your database rules.'
-            : 'Could not save your name (${e.code}). Please try again.';
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Could not save your name. Please try again.';
-      });
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  // the old local users table keeps a nickname per email
-  Future<void> _updateLocalCopy(User user, String newName) async {
-    try {
-      final email = (user.email ?? widget.email).toLowerCase();
-      final db = await DatabaseHelper.getDatabase();
-      await db.update(
-        'users',
-        {'nickname': newName},
-        where: 'email = ?',
-        whereArgs: [email],
-      );
-    } catch (e) {
-      debugPrint('Local nickname not updated: $e');
-    }
-  }
-
-  void _showMessage(String message) {
-    if (!mounted) return;
+    setState(() => _nameTouched = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      const SnackBar(content: Text('Name updated')),
     );
   }
 
@@ -275,8 +104,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _fallbackAvatar(String displayName) {
-    final file = _localImage;
+  Widget _fallbackAvatar(AccountProvider account, String displayName) {
+    final file = account.localImage;
     if (file != null) {
       return ClipOval(
         child: Image.file(
@@ -291,8 +120,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return _initialAvatar(displayName);
   }
 
-  Widget _buildAvatar(String displayName) {
-    final bytes = _photoBytes;
+  Widget _buildAvatar(AccountProvider account, String displayName) {
+    final bytes = account.photoBytes;
     if (bytes != null) {
       return ClipOval(
         child: Image.memory(
@@ -301,11 +130,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           height: 112,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => _fallbackAvatar(displayName),
+          errorBuilder: (_, __, ___) => _fallbackAvatar(account, displayName),
         ),
       );
     }
-    return _fallbackAvatar(displayName);
+    return _fallbackAvatar(account, displayName);
   }
 
   InputDecoration _decoration({
@@ -370,17 +199,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final emailName = widget.email.split('@')[0];
-    final avatarName = _savedName.trim().isNotEmpty ? _savedName : emailName;
+    // rebuilds whenever the provider changes (name, picture, saving...)
+    final account = context.watch<AccountProvider>();
 
-    final phoneValue = _phone;
-    final hasPhone = phoneValue != null && phoneValue.isNotEmpty;
-    final phoneText = hasPhone
-        ? PhoneHelper.display(
-      _countryCode ?? PhoneHelper.defaultCode,
-      phoneValue,
-    )
-        : 'Not added';
+    final fullPhone = account.fullPhone;
+    final phoneText = fullPhone ?? 'Not added';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -419,7 +242,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: CircleAvatar(
                       radius: 56,
                       backgroundColor: AppColors.gold,
-                      child: _buildAvatar(avatarName),
+                      child: _buildAvatar(account, account.displayName),
                     ),
                   ),
                 ),
@@ -428,7 +251,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 // NAME (editable)
                 TextFormField(
                   controller: nameController,
-                  enabled: !_isSaving,
+                  enabled: !account.savingName,
                   maxLength: 20,
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.done,
@@ -443,13 +266,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _errorMessage = null;
                   }),
                   onFieldSubmitted: (_) {
-                    if (_canSave) _saveName();
+                    if (_canSave(account)) _saveName();
                   },
                   decoration: _decoration(
                     label: 'Name',
                     icon: Icons.person_outline,
                   ).copyWith(counterText: ''),
-                  validator: _validateName,
+                  validator: AccountProvider.validateName,
                 ),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(4, 6, 4, 0),
@@ -465,7 +288,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   label: 'Phone',
                   icon: Icons.phone_outlined,
                   value: phoneText,
-                  muted: !hasPhone,
+                  muted: fullPhone == null,
                 ),
                 const SizedBox(height: 18),
 
@@ -473,7 +296,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _lockedField(
                   label: 'Email',
                   icon: Icons.email_outlined,
-                  value: _profileEmail ?? widget.email,
+                  value: account.email,
                 ),
 
                 if (_errorMessage != null) ...[
@@ -507,10 +330,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SizedBox(
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: _canSave ? _saveName : null,
+                    onPressed: _canSave(account) ? _saveName : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.emerald,
-                      disabledBackgroundColor: _isSaving
+                      disabledBackgroundColor: account.savingName
                           ? AppColors.emerald
                           : const Color(0xFFB8C2C0),
                       foregroundColor: Colors.white,
@@ -520,7 +343,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         borderRadius: BorderRadius.circular(15),
                       ),
                     ),
-                    child: _isSaving
+                    child: account.savingName
                         ? const SizedBox(
                       height: 22,
                       width: 22,

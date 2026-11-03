@@ -1,46 +1,36 @@
-import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
-import 'database_helper.dart';
+import 'models/found_profile.dart';
 import 'phone_helper.dart';
+import 'providers/add_contact_provider.dart';
 
-// the registered user found by the email lookup
-class _FoundProfile {
-  final String uid;
-  final String name;
-  final String email;
-  final String phone; // digits only, empty for accounts made before phones
-  final String countryCode;
-
-  const _FoundProfile({
-    required this.uid,
-    required this.name,
-    required this.email,
-    required this.phone,
-    required this.countryCode,
-  });
-
-  bool get hasPhone => phone.isNotEmpty;
-}
-
-enum _LookupState { idle, loading, found, notFound, self, error }
-
-class AddContactScreen extends StatefulWidget {
+class AddContactScreen extends StatelessWidget {
   const AddContactScreen({super.key});
 
   @override
-  State<AddContactScreen> createState() => _AddContactScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => AddContactProvider(),
+      child: const _AddContactView(),
+    );
+  }
 }
 
-class _AddContactScreenState extends State<AddContactScreen> {
+class _AddContactView extends StatefulWidget {
+  const _AddContactView();
+
+  @override
+  State<_AddContactView> createState() => _AddContactViewState();
+}
+
+class _AddContactViewState extends State<_AddContactView> {
   static const Color _error = Color(0xFFD94B4B);
   static const Color _lockedFill = Color(0xFFEFEBE0);
 
+  // only the form lives here (the text boxes and what we filled in them)
   final formKey = GlobalKey<FormState>();
 
   final nameController = TextEditingController();
@@ -49,31 +39,27 @@ class _AddContactScreenState extends State<AddContactScreen> {
   final FocusNode emailFocus = FocusNode();
 
   String countryCode = PhoneHelper.defaultCode;
-  bool isSaving = false;
-  String? errorMessage;
+  String? errorMessage; // the red box under the form
 
-  // ---------- EMAIL LOOKUP STATE ----------
-  Timer? _debounce;
-  int _lookupId = 0; // lets us ignore old, slower lookups
-  _LookupState _lookupState = _LookupState.idle;
-  _FoundProfile? _found;
-  String _lookupEmail = '';
-  String? _lookupError;
-  bool _phoneAutoFilled = false;
-  String _suggestedName = '';
-
-  final FirebaseAuth auth = FirebaseAuth.instance;
-  final FirebaseDatabase database = FirebaseDatabase.instance;
+  bool _phoneAutoFilled = false; // the phone box was filled by the lookup
+  String _suggestedName = ''; // the name box was filled by the lookup
 
   @override
   void initState() {
     super.initState();
+
+    final provider = context.read<AddContactProvider>();
+    provider.onFound = _applyFound;
+    provider.onCleared = _onLookupCleared;
+    provider.onSaved = () {
+      if (mounted) Navigator.pop(context, true);
+    };
+
     emailFocus.addListener(_onEmailFocusChanged);
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     emailFocus.removeListener(_onEmailFocusChanged);
     emailFocus.dispose();
     nameController.dispose();
@@ -82,183 +68,14 @@ class _AddContactScreenState extends State<AddContactScreen> {
     super.dispose();
   }
 
-  String? validateName(String? value) {
-    final name = value?.trim() ?? '';
-
-    if (name.isEmpty) return 'Enter the contact name';
-    if (name.length < 2) {
-      return 'Name must be at least 2 characters';
-    }
-    if (name.length > 40) {
-      return 'Name must be 40 characters or less';
-    }
-
-    return null;
-  }
-
-  String? validateEmail(String? value) {
-    final email = (value ?? '').trim();
-
-    if (email.isEmpty) {
-      return 'Enter the registered email address';
-    }
-
-    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      return 'Enter a valid email address';
-    }
-
-    return null;
-  }
-
-  // the phone is locked when the found profile already has one
-  bool get _phoneLocked =>
-      _lookupState == _LookupState.found && (_found?.hasPhone ?? false);
-
-  bool _looksLikeEmail(String email) {
-    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
-  }
-
-  // ---------- EMAIL LOOKUP ----------
-  void _onEmailChanged(String value) {
-    _debounce?.cancel();
-    _lookupId++; // ignore any lookup that is still running
-    _clearLookup();
-
-    final email = value.trim().toLowerCase();
-    if (_looksLikeEmail(email)) {
-      // wait until the user stops typing
-      _debounce = Timer(
-        const Duration(milliseconds: 600),
-            () => _lookup(email),
-      );
-    }
-  }
-
   void _onEmailFocusChanged() {
     if (emailFocus.hasFocus) return;
-
-    final email = emailController.text.trim().toLowerCase();
-    if (!_looksLikeEmail(email)) return;
-
-    final alreadyDone = _lookupEmail == email &&
-        (_lookupState == _LookupState.loading ||
-            _lookupState == _LookupState.found ||
-            _lookupState == _LookupState.notFound ||
-            _lookupState == _LookupState.self);
-    if (alreadyDone) return;
-
-    _debounce?.cancel();
-    _lookup(email);
+    context.read<AddContactProvider>().onEmailFocusLost(emailController.text);
   }
 
-  // forget the last lookup and unlock the phone fields
-  void _clearLookup() {
+  void _applyFound(FoundProfile found) {
     if (!mounted) return;
     setState(() {
-      _lookupState = _LookupState.idle;
-      _found = null;
-      _lookupEmail = '';
-      _lookupError = null;
-      errorMessage = null;
-
-      if (_phoneAutoFilled) {
-        phoneController.clear();
-        _phoneAutoFilled = false;
-      }
-      if (_suggestedName.isNotEmpty && nameController.text == _suggestedName) {
-        nameController.clear();
-      }
-      _suggestedName = '';
-    });
-  }
-
-  Future<void> _lookup(String email) async {
-    if (!mounted) return;
-    final user = auth.currentUser;
-    final id = ++_lookupId;
-
-    setState(() {
-      _lookupState = _LookupState.loading;
-      _lookupEmail = email;
-      _lookupError = null;
-      _found = null;
-    });
-
-    try {
-      final snapshot = await database
-          .ref('publicProfiles')
-          .orderByChild('email')
-          .equalTo(email)
-          .get()
-          .timeout(const Duration(seconds: 12));
-
-      if (!mounted || id != _lookupId) return;
-
-      _FoundProfile? found;
-      final value = snapshot.value;
-      if (value is Map) {
-        for (final entry in value.entries) {
-          if (entry.value is! Map) continue;
-          final profile = Map<dynamic, dynamic>.from(entry.value as Map);
-
-          // compare normalized email addresses
-          final profileEmail =
-          (profile['email'] ?? '').toString().trim().toLowerCase();
-          if (profileEmail != email) continue;
-
-          found = _FoundProfile(
-            uid: entry.key.toString(),
-            name: (profile['name'] ?? '').toString().trim(),
-            email: email,
-            phone: PhoneHelper.clean((profile['phone'] ?? '').toString()),
-            countryCode: (profile['countryCode'] ?? '').toString().trim(),
-          );
-          break;
-        }
-      }
-
-      if (found == null) {
-        setState(() => _lookupState = _LookupState.notFound);
-        return;
-      }
-
-      if (user != null && found.uid == user.uid) {
-        setState(() => _lookupState = _LookupState.self);
-        return;
-      }
-
-      _applyFound(found);
-    } on TimeoutException {
-      if (!mounted || id != _lookupId) return;
-      setState(() {
-        _lookupState = _LookupState.error;
-        _lookupError =
-        'Could not look up this email. Check your internet connection.';
-      });
-    } on FirebaseException catch (e) {
-      if (!mounted || id != _lookupId) return;
-      setState(() {
-        _lookupState = _LookupState.error;
-        _lookupError = e.code == 'permission-denied'
-            ? 'Firebase denied access. Check your database rules.'
-            : 'Could not look up this email (${e.code}).';
-      });
-    } catch (e) {
-      if (!mounted || id != _lookupId) return;
-      setState(() {
-        _lookupState = _LookupState.error;
-        _lookupError =
-        'Could not look up this email. Check your internet connection.';
-      });
-    }
-  }
-
-  // fill the phone and suggest the registered name
-  void _applyFound(_FoundProfile found) {
-    setState(() {
-      _found = found;
-      _lookupState = _LookupState.found;
-
       if (found.hasPhone) {
         countryCode = found.countryCode.isNotEmpty
             ? found.countryCode
@@ -277,125 +94,54 @@ class _AddContactScreenState extends State<AddContactScreen> {
     });
   }
 
-  // ---------- SAVE ----------
-  Future<void> saveContact() async {
-    if (isSaving) return;
-
-    final user = auth.currentUser;
-
-    if (user == null) {
-      setState(() {
-        errorMessage = 'Please log in again before saving contacts.';
-      });
-      return;
-    }
-
-    final email = emailController.text.trim().toLowerCase();
-    if (validateEmail(email) != null) {
-      formKey.currentState!.validate();
-      return;
-    }
-
-    _debounce?.cancel();
+  // the old result is gone: empty only what the lookup had filled
+  void _onLookupCleared() {
+    if (!mounted) return;
     setState(() {
-      isSaving = true;
       errorMessage = null;
+
+      if (_phoneAutoFilled) {
+        phoneController.clear();
+        _phoneAutoFilled = false;
+      }
+      if (_suggestedName.isNotEmpty && nameController.text == _suggestedName) {
+        nameController.clear();
+      }
+      _suggestedName = '';
     });
-
-    try {
-      // make sure the lookup is finished for this exact email
-      if (_lookupState != _LookupState.found || _found?.email != email) {
-        await _lookup(email);
-      }
-
-      final found = _found;
-      if (_lookupState != _LookupState.found || found == null) {
-        return; // the message under the email box explains why
-      }
-
-      // validate the rest (the phone is filled by now)
-      if (!formKey.currentState!.validate()) return;
-
-      final otherUid = found.uid;
-      if (otherUid == user.uid) {
-        throw Exception('You cannot add your own account.');
-      }
-
-      final name = nameController.text.trim();
-
-      // phone and country code come from the found profile, so they cannot
-      // be faked. Old accounts without a phone use the typed number.
-      final phone =
-      found.hasPhone ? found.phone : PhoneHelper.clean(phoneController.text);
-      final code = found.hasPhone
-          ? (found.countryCode.isNotEmpty
-          ? found.countryCode
-          : PhoneHelper.defaultCode)
-          : countryCode;
-
-      // Use the actual Firebase UID as the contact key.
-      final contactRef = database.ref(
-        'users/${user.uid}/contacts/$otherUid',
-      );
-
-      final existingContact =
-      await contactRef.get().timeout(const Duration(seconds: 12));
-
-      if (existingContact.exists) {
-        throw Exception(
-          'This user is already in your contacts.',
-        );
-      }
-
-      // Save the contact in Firebase Realtime Database.
-      await contactRef.set({
-        'uid': otherUid,
-        'name': name,
-        'phone': phone,
-        'countryCode': code,
-        'email': email,
-        'addedAt': ServerValue.timestamp,
-        'lastMessage': 'Tap to start chatting',
-        'time': '',
-      }).timeout(const Duration(seconds: 12));
-
-      // Save the contact in the existing local database.
-      await DatabaseHelper.saveContact(
-        owner: user.uid,
-        id: otherUid,
-        name: name,
-        phone: phone,
-        countryCode: code,
-        lastMessage: 'Tap to start chatting',
-        time: '',
-      );
-
-      if (!mounted) return;
-
-      Navigator.pop(context, true);
-    } on FirebaseException catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        errorMessage = e.code == 'permission-denied'
-            ? 'Firebase denied access. Check your database rules.'
-            : 'Firebase error (${e.code}): '
-            '${e.message ?? 'Unknown error'}';
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        errorMessage = e.toString().replaceFirst('Exception: ', '');
-      });
-    } finally {
-      if (mounted) {
-        setState(() => isSaving = false);
-      }
-    }
   }
 
-  // the icon is optional (the Code box has no icon, so the text fits)
+  // ---------- SAVE ----------
+  Future<void> _save() async {
+    final provider = context.read<AddContactProvider>();
+    if (provider.saving) return;
+
+    final email = emailController.text.trim().toLowerCase();
+    if (AddContactProvider.validateEmail(email) != null) {
+      formKey.currentState!.validate(); // shows the red email message
+      return;
+    }
+
+    setState(() => errorMessage = null);
+
+    // The provider does the lookup and the save. It asks for the form only
+    // after the lookup, because the lookup can fill the phone and the name.
+    final error = await provider.save(
+      email: email,
+      readForm: () {
+        if (!formKey.currentState!.validate()) return null;
+        return ContactForm(
+          name: nameController.text,
+          phone: phoneController.text,
+          countryCode: countryCode,
+        );
+      },
+    );
+
+    if (!mounted) return;
+    if (error != null) setState(() => errorMessage = error);
+  }
+
   InputDecoration decoration({
     required String label,
     IconData? icon,
@@ -417,22 +163,15 @@ class _AddContactScreenState extends State<AddContactScreen> {
       fillColor: locked ? _lockedFill : AppColors.card,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: Color(0xFFE3DED2),
-        ),
+        borderSide: const BorderSide(color: Color(0xFFE3DED2)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: Color(0xFFE3DED2),
-        ),
+        borderSide: const BorderSide(color: Color(0xFFE3DED2)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(
-          color: AppColors.emerald,
-          width: 1.5,
-        ),
+        borderSide: const BorderSide(color: AppColors.emerald, width: 1.5),
       ),
     );
   }
@@ -457,13 +196,13 @@ class _AddContactScreenState extends State<AddContactScreen> {
     );
   }
 
-  Widget _lookupStatus() {
-    switch (_lookupState) {
-      case _LookupState.idle:
-      case _LookupState.loading:
+  Widget _lookupStatus(AddContactProvider add) {
+    switch (add.state) {
+      case LookupState.idle:
+      case LookupState.loading:
         return const SizedBox.shrink();
-      case _LookupState.found:
-        final found = _found;
+      case LookupState.found:
+        final found = add.found;
         if (found == null) return const SizedBox.shrink();
         if (!found.hasPhone) {
           return _statusRow(
@@ -480,32 +219,34 @@ class _AddContactScreenState extends State<AddContactScreen> {
               ? 'Registered user found'
               : 'Registered user found: ${found.name}',
         );
-      case _LookupState.notFound:
+      case LookupState.notFound:
         return _statusRow(
           Icons.error_outline,
           _error,
           'No registered user found with this email',
         );
-      case _LookupState.self:
+      case LookupState.self:
         return _statusRow(
           Icons.error_outline,
           _error,
           'You cannot add your own account.',
         );
-      case _LookupState.error:
+      case LookupState.error:
         return _statusRow(
           Icons.error_outline,
           _error,
-          _lookupError ?? 'Could not look up this email.',
+          add.lookupError ?? 'Could not look up this email.',
         );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final blocked = _lookupState == _LookupState.loading ||
-        _lookupState == _LookupState.notFound ||
-        _lookupState == _LookupState.self;
+    // rebuilds whenever the provider changes (lookup state, saving...)
+    final add = context.watch<AddContactProvider>();
+    final isSaving = add.saving;
+    final blocked = add.blocked;
+    final phoneLocked = add.phoneLocked;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -514,9 +255,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
         foregroundColor: Colors.white,
         title: const Text(
           'New contact',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w700),
         ),
         elevation: 0,
       ),
@@ -571,7 +310,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                   controller: nameController,
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
-                  validator: validateName,
+                  validator: AddContactProvider.validateName,
                   enabled: !isSaving,
                   decoration: decoration(
                     label: 'Contact name',
@@ -587,13 +326,13 @@ class _AddContactScreenState extends State<AddContactScreen> {
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
-                  validator: validateEmail,
+                  validator: AddContactProvider.validateEmail,
                   enabled: !isSaving,
-                  onChanged: _onEmailChanged,
+                  onChanged: context.read<AddContactProvider>().onEmailChanged,
                   decoration: decoration(
                     label: 'Registered email address',
                     icon: Icons.email_outlined,
-                    suffix: _lookupState == _LookupState.loading
+                    suffix: add.state == LookupState.loading
                         ? const Padding(
                       padding: EdgeInsets.all(14),
                       child: SizedBox(
@@ -608,7 +347,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                         : null,
                   ),
                 ),
-                _lookupStatus(),
+                _lookupStatus(add),
                 const SizedBox(height: 18),
 
                 // Country code and phone number
@@ -620,7 +359,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                       child: CountryCodeDropdown(
                         value: countryCode,
                         decoration: decoration(label: 'Code'),
-                        onChanged: (isSaving || _phoneLocked)
+                        onChanged: (isSaving || phoneLocked)
                             ? null
                             : (value) => setState(() => countryCode = value),
                       ),
@@ -631,7 +370,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                         controller: phoneController,
                         keyboardType: TextInputType.phone,
                         textInputAction: TextInputAction.done,
-                        readOnly: _phoneLocked,
+                        readOnly: phoneLocked,
                         enabled: !isSaving,
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
@@ -639,14 +378,14 @@ class _AddContactScreenState extends State<AddContactScreen> {
                           ),
                         ],
                         validator: (value) =>
-                        _phoneLocked ? null : PhoneHelper.validate(value),
+                        phoneLocked ? null : PhoneHelper.validate(value),
                         onFieldSubmitted: (_) {
-                          if (!isSaving && !blocked) saveContact();
+                          if (!isSaving && !blocked) _save();
                         },
                         decoration: decoration(
                           label: 'Phone number',
                           icon: Icons.phone_outlined,
-                          locked: _phoneLocked,
+                          locked: phoneLocked,
                         ),
                       ),
                     ),
@@ -663,9 +402,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                     ),
                     child: Text(
                       errorMessage!,
-                      style: const TextStyle(
-                        color: Color(0xFFD94B4B),
-                      ),
+                      style: const TextStyle(color: Color(0xFFD94B4B)),
                     ),
                   ),
                 ],
@@ -675,7 +412,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
                 SizedBox(
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: (isSaving || blocked) ? null : saveContact,
+                    onPressed: (isSaving || blocked) ? null : _save,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.emerald,
                       disabledBackgroundColor: isSaving
