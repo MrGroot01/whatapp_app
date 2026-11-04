@@ -26,8 +26,6 @@ import 'providers/group_chat_provider.dart';
 import 'providers/messages_provider.dart';
 import 'providers/voice_input_provider.dart';
 
-// Message moved to models/message.dart. This line keeps every file that
-// still imports it from chat_screen.dart working.
 export 'models/message.dart';
 
 // One saved contact, used by the "share contact" and "forward" pickers
