@@ -1,18 +1,18 @@
-import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
-import 'chat_media.dart';
 import 'chat_media_screen.dart';
 import 'group_member_picker.dart';
 import 'group_service.dart';
+import 'providers/group_info_provider.dart';
 
 // WhatsApp-style "Group info": name, members, admin tools, exit group.
-class GroupInfoScreen extends StatefulWidget {
+//
+// The provider is created here, inside the screen, so it stops when the
+// screen closes and never shows an old account's data.
+class GroupInfoScreen extends StatelessWidget {
   final String groupId;
   final String groupName;
 
@@ -23,104 +23,43 @@ class GroupInfoScreen extends StatefulWidget {
   });
 
   @override
-  State<GroupInfoScreen> createState() => _GroupInfoScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => GroupInfoProvider(groupId: groupId),
+      child: _GroupInfoView(groupId: groupId, groupName: groupName),
+    );
+  }
 }
 
-class _GroupInfoScreenState extends State<GroupInfoScreen> {
-  late final DatabaseReference _groupRef = FirebaseDatabase.instance.ref(
-    'groups/${widget.groupId}',
-  );
-  late final DatabaseReference _disappearRef = FirebaseDatabase.instance.ref(
-    'chats/${widget.groupId}/settings/disappearAfterMs',
-  );
-  late final Stream<DatabaseEvent> _disappearStream = _disappearRef.onValue;
-  late final Stream<List<MediaEntry>> _mediaStream = mediaStream(
-    widget.groupId,
-  );
+class _GroupInfoView extends StatefulWidget {
+  final String groupId;
+  final String groupName;
 
-  static const List<List<Object>> _disappearOptions = [
-    ['Off', 0],
-    ['5 minutes', 300000],
-    ['1 day', 86400000],
-    ['7 days', 604800000],
-  ];
+  const _GroupInfoView({required this.groupId, required this.groupName});
 
-  StreamSubscription<DatabaseEvent>? _sub;
-  GroupItem? _group;
-  final Map<String, MemberInfo> _infos = {};
-  final Set<String> _resolving = {};
-  bool _leaving = false;
-  bool _busy = false;
+  @override
+  State<_GroupInfoView> createState() => _GroupInfoViewState();
+}
 
-  String get _me => FirebaseAuth.instance.currentUser?.uid ?? '';
-  bool get _isAdmin => _group?.admins.contains(_me) ?? false;
-
+class _GroupInfoViewState extends State<_GroupInfoView> {
   @override
   void initState() {
     super.initState();
-    _sub = _groupRef.onValue.listen(
-          (event) {
-        final v = event.snapshot.value;
-        if (v is! Map) {
-          _closeIfNeeded();
-          return;
-        }
-        final g = GroupItem.fromMap(
-          widget.groupId,
-          Map<dynamic, dynamic>.from(v),
-        );
-        if (!mounted) return;
-        setState(() => _group = g);
-        _resolve(g.members);
-      },
-      onError: (Object e) {
-        debugPrint('Group info listener error: $e');
-        _closeIfNeeded();
-      },
-    );
-  }
 
-  @override
-  void dispose() {
-    _sub?.cancel();
-    super.dispose();
+    // the provider tells the screen when it must close
+    final provider = context.read<GroupInfoProvider>();
+    provider.onGroupGone = _closeIfNeeded;
+    provider.onExited = () {
+      if (mounted) Navigator.pop(context);
+    };
   }
 
   // the group was deleted, or I was removed from it
   void _closeIfNeeded() {
-    if (_leaving || !mounted) return;
+    if (!mounted) return;
     if (ModalRoute.of(context)?.isCurrent == true) {
       Navigator.pop(context);
     }
-  }
-
-  Future<void> _resolve(Iterable<String> ids) async {
-    final todo = ids
-        .where(
-          (id) =>
-      id != _me && !_infos.containsKey(id) && !_resolving.contains(id),
-    )
-        .toList();
-    if (todo.isEmpty) return;
-
-    _resolving.addAll(todo);
-    final found = await GroupService.resolveMembers(todo);
-    _resolving.removeAll(todo);
-
-    if (!mounted) return;
-    setState(() => _infos.addAll(found));
-  }
-
-  String _nameOf(String uid) =>
-      uid == _me ? 'You' : (_infos[uid]?.name ?? 'Member');
-
-  // me first, then the others A-Z
-  List<String> _orderedMembers(GroupItem g) {
-    final others = g.members.where((m) => m != _me).toList()
-      ..sort(
-            (a, b) => _nameOf(a).toLowerCase().compareTo(_nameOf(b).toLowerCase()),
-      );
-    return [if (g.members.contains(_me)) _me, ...others];
   }
 
   void _snack(String message) {
@@ -128,24 +67,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  // runs one action and shows a message if it fails
-  Future<void> _run(
-      Future<void> Function() action,
-      String failMessage,
-      ) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      await action();
-    } catch (e) {
-      debugPrint('Group action failed: $e');
-      final text = e.toString().replaceFirst('Exception: ', '');
-      _snack(text.startsWith('You are offline') ? text : failMessage);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
   }
 
   Future<bool?> _confirm(String title, String message, String action) {
@@ -189,8 +110,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 
   // ---------- ADMIN ACTIONS ----------
+  // each action: ask the user (dialog / picker), then the provider does it
   Future<void> _rename() async {
-    final g = _group;
+    final provider = context.read<GroupInfoProvider>();
+    final g = provider.group;
     if (g == null) return;
 
     final controller = TextEditingController(text: g.name);
@@ -237,14 +160,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     );
 
     if (newName == null || newName.isEmpty || newName == g.name) return;
-    await _run(
-          () => GroupService.renameGroup(widget.groupId, newName),
-      'Could not rename the group',
-    );
+
+    final error = await provider.rename(newName);
+    if (error != null) _snack(error);
   }
 
   Future<void> _addMembers() async {
-    final g = _group;
+    final provider = context.read<GroupInfoProvider>();
+    final g = provider.group;
     if (g == null) return;
 
     final result = await Navigator.push<Object>(
@@ -260,29 +183,27 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     if (!mounted || result is! List<PickedContact> || result.isEmpty) return;
     final ids = result.map((c) => c.id).toList();
 
-    await _run(
-          () => GroupService.addMembers(widget.groupId, ids),
-      'Could not add the members',
-    );
+    final error = await provider.addMembers(ids);
+    if (error != null) _snack(error);
   }
 
   Future<void> _removeMember(String uid) async {
+    final provider = context.read<GroupInfoProvider>();
+
     final ok = await _confirm(
-      'Remove ${_nameOf(uid)}?',
+      'Remove ${provider.nameOf(uid)}?',
       'They will not receive new messages from this group.',
       'Remove',
     );
     if (ok != true) return;
 
-    await _run(
-          () => GroupService.removeMember(widget.groupId, uid),
-      'Could not remove this member',
-    );
+    final error = await provider.removeMember(uid);
+    if (error != null) _snack(error);
   }
 
   Future<void> _exitGroup() async {
-    final g = _group;
-    if (g == null) return;
+    final provider = context.read<GroupInfoProvider>();
+    if (provider.group == null) return;
 
     final ok = await _confirm(
       'Exit group?',
@@ -291,42 +212,15 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     );
     if (ok != true) return;
 
-    _leaving = true;
-    if (mounted) setState(() => _busy = true);
-
-    try {
-      await GroupService.leaveGroup(g);
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      _leaving = false;
-      debugPrint('Exit group failed: $e');
-      final text = e.toString().replaceFirst('Exception: ', '');
-      _snack(
-        text.startsWith('You are offline') ? text : 'Could not exit the group',
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    // on success the provider calls onExited and the screen closes
+    final error = await provider.exitGroup();
+    if (error != null) _snack(error);
   }
 
   // ---------- DISAPPEARING MESSAGES ----------
-  String _disappearLabel(int ms) {
-    for (final o in _disappearOptions) {
-      if (o[1] == ms) return o[0] as String;
-    }
-    return 'Off';
-  }
-
   Future<void> _setDisappear(int ms) async {
-    try {
-      if (ms == 0) {
-        await _disappearRef.remove();
-      } else {
-        await _disappearRef.set(ms);
-      }
-    } catch (e) {
-      _snack('Could not change the setting. Check your internet.');
-    }
+    final error = await context.read<GroupInfoProvider>().setDisappear(ms);
+    if (error != null) _snack(error);
   }
 
   void _showDisappearSheet(int current) {
@@ -362,16 +256,16 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 ),
               ),
             ),
-            for (final o in _disappearOptions)
+            for (final o in disappearOptions)
               ListTile(
                 title: Text(
-                  o[0] as String,
+                  o.label,
                   style: GoogleFonts.poppins(
                     color: AppColors.textDark,
                     fontSize: 16,
                   ),
                 ),
-                trailing: current == o[1]
+                trailing: current == o.ms
                     ? const Icon(Icons.check_circle, color: AppColors.emerald)
                     : const Icon(
                   Icons.circle_outlined,
@@ -379,7 +273,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  _setDisappear(o[1] as int);
+                  _setDisappear(o.ms);
                 },
               ),
             const SizedBox(height: 8),
@@ -425,10 +319,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     );
   }
 
-  Widget _memberTile(GroupItem g, String uid) {
-    final isMe = uid == _me;
-    final info = _infos[uid];
-    final name = _nameOf(uid);
+  Widget _memberTile(GroupInfoProvider info, GroupItem g, String uid) {
+    final isMe = uid == info.me;
+    final memberInfo = info.infoOf(uid);
+    final name = info.nameOf(uid);
 
     return Material(
       color: Colors.white,
@@ -453,10 +347,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: isMe || info == null || info.phone.isEmpty
+        subtitle: isMe || memberInfo == null || memberInfo.phone.isEmpty
             ? null
             : Text(
-          info.phone,
+          memberInfo.phone,
           style: GoogleFonts.poppins(
             color: AppColors.textSoft,
             fontSize: 12,
@@ -483,14 +377,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   ),
                 ),
               ),
-            if (_isAdmin && !isMe)
+            if (info.isAdmin && !isMe)
               IconButton(
                 tooltip: 'Remove from group',
                 icon: const Icon(
                   Icons.person_remove_outlined,
                   color: Color(0xFFD94B4B),
                 ),
-                onPressed: _busy ? null : () => _removeMember(uid),
+                onPressed: info.busy ? null : () => _removeMember(uid),
               ),
           ],
         ),
@@ -500,9 +394,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final g = _group;
+    // rebuilds whenever the provider changes (group, names, busy...)
+    final info = context.watch<GroupInfoProvider>();
+
+    final g = info.group;
     final name = g?.name ?? widget.groupName;
-    final members = g == null ? <String>[] : _orderedMembers(g);
+    final members = info.orderedMembers;
+    final busy = info.busy;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -550,7 +448,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                             ),
                           ),
                         ),
-                        if (_isAdmin)
+                        if (info.isAdmin)
                           IconButton(
                             tooltip: 'Change group name',
                             icon: const Icon(
@@ -558,7 +456,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                               color: AppColors.emerald,
                               size: 20,
                             ),
-                            onPressed: _busy ? null : _rename,
+                            onPressed: busy ? null : _rename,
                           ),
                       ],
                     ),
@@ -574,54 +472,41 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              StreamBuilder<List<MediaEntry>>(
-                stream: _mediaStream,
-                builder: (context, snapshot) {
-                  final count = snapshot.data?.length ?? 0;
-                  return _tile(
-                    icon: Icons.photo_library_outlined,
-                    title: 'Media, links, and docs',
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (count > 0)
-                          Text(
-                            '$count',
-                            style: GoogleFonts.poppins(
-                              color: AppColors.textSoft,
-                              fontSize: 14,
-                            ),
-                          ),
-                        const Icon(
-                          Icons.chevron_right,
+              _tile(
+                icon: Icons.photo_library_outlined,
+                title: 'Media, links, and docs',
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (info.mediaCount > 0)
+                      Text(
+                        '${info.mediaCount}',
+                        style: GoogleFonts.poppins(
                           color: AppColors.textSoft,
-                        ),
-                      ],
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatMediaScreen(
-                          chatId: widget.groupId,
-                          name: name,
+                          fontSize: 14,
                         ),
                       ),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.textSoft,
                     ),
-                  );
-                },
+                  ],
+                ),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatMediaScreen(
+                      chatId: widget.groupId,
+                      name: name,
+                    ),
+                  ),
+                ),
               ),
-              StreamBuilder<DatabaseEvent>(
-                stream: _disappearStream,
-                builder: (context, snap) {
-                  final v = snap.data?.snapshot.value;
-                  final ms = v is num ? v.toInt() : 0;
-                  return _tile(
-                    icon: Icons.timer_outlined,
-                    title: 'Disappearing messages',
-                    subtitle: _disappearLabel(ms),
-                    onTap: () => _showDisappearSheet(ms),
-                  );
-                },
+              _tile(
+                icon: Icons.timer_outlined,
+                title: 'Disappearing messages',
+                subtitle: disappearLabel(info.disappearMs),
+                onTap: () => _showDisappearSheet(info.disappearMs),
               ),
               const SizedBox(height: 8),
               Container(
@@ -636,7 +521,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   ),
                 ),
               ),
-              if (_isAdmin)
+              if (info.isAdmin)
                 Material(
                   color: Colors.white,
                   child: ListTile(
@@ -652,22 +537,22 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    onTap: _busy ? null : _addMembers,
+                    onTap: busy ? null : _addMembers,
                   ),
                 ),
               if (g != null)
-                for (final uid in members) _memberTile(g, uid),
+                for (final uid in members) _memberTile(info, g, uid),
               const SizedBox(height: 8),
               _tile(
                 icon: Icons.exit_to_app,
                 title: 'Exit group',
                 color: const Color(0xFFD94B4B),
-                onTap: _busy ? () {} : _exitGroup,
+                onTap: busy ? () {} : _exitGroup,
               ),
               const SizedBox(height: 24),
             ],
           ),
-          if (_busy)
+          if (busy)
             const Positioned(
               left: 0,
               right: 0,

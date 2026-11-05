@@ -1,30 +1,24 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
 import 'create_status_screen.dart';
+import 'models/status_entry.dart';
+import 'providers/updates_provider.dart';
 import 'status_service.dart';
 import 'status_viewer_screen.dart';
 import 'status_widgets.dart';
 
-class _Entry {
-  final StatusContact contact;
-  final List<StatusItem> items;
-
-  _Entry(this.contact, this.items);
-
-  int get unseen =>
-      items.where((i) => !i.seenBy(StatusService.myUid)).length;
-
-  int get latest => items.last.createdAt;
-}
-
 // The "Updates" tab: My status + recent updates from my contacts.
 // It is only a body (no Scaffold), so home_screen.dart can show it under
-// its own app bar and bottom bar.
+// its own app bar and bottom bar. The constructor is the same as before,
+// so home_screen.dart does not change.
+//
+// The provider is created here, inside the screen, so it stops when the
+// tab is closed and never shows an old account's statuses.
 class UpdatesScreen extends StatefulWidget {
   final List<StatusContact> contacts;
 
@@ -35,73 +29,45 @@ class UpdatesScreen extends StatefulWidget {
 }
 
 class _UpdatesScreenState extends State<UpdatesScreen> {
-  final Map<String, StreamSubscription<List<StatusItem>>> _subs = {};
-  final Map<String, List<StatusItem>> _items = {};
-  StreamSubscription<List<StatusItem>>? _mineSub;
-  List<StatusItem> _mine = [];
-  Timer? _tick;
-  final ImagePicker _picker = ImagePicker();
+  late final UpdatesProvider _provider;
 
   @override
   void initState() {
     super.initState();
-
-    final me = StatusService.myUid;
-    if (me.isNotEmpty) {
-      _mineSub = StatusService.watch(me).listen((list) {
-        if (mounted) setState(() => _mine = list);
-      }, onError: (Object e) => debugPrint('My status error: $e'));
-    }
-
-    _syncSubscriptions();
-    StatusService.cleanupMine();
-
-    // every 20 seconds: hide expired statuses and clean up my old ones
-    _tick = Timer.periodic(const Duration(seconds: 20), (_) {
-      if (!mounted) return;
-      setState(() {});
-      StatusService.cleanupMine();
-    });
+    _provider = UpdatesProvider(contacts: widget.contacts);
   }
 
+  // Home gives a new contact list: the provider decides if anything changed
   @override
   void didUpdateWidget(covariant UpdatesScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _syncSubscriptions();
+    _provider.setContacts(widget.contacts);
   }
 
   @override
   void dispose() {
-    _tick?.cancel();
-    _mineSub?.cancel();
-    for (final s in _subs.values) {
-      s.cancel();
-    }
-    _subs.clear();
+    _provider.dispose();
     super.dispose();
   }
 
-  // watch the statuses of every contact in my list
-  void _syncSubscriptions() {
-    final ids = widget.contacts.map((c) => c.id).toSet();
-
-    for (final id in _subs.keys.toList()) {
-      if (!ids.contains(id)) {
-        _subs.remove(id)?.cancel();
-        _items.remove(id);
-      }
-    }
-
-    for (final id in ids) {
-      if (_subs.containsKey(id)) continue;
-      _subs[id] = StatusService.watch(id).listen(
-            (list) {
-          if (mounted) setState(() => _items[id] = list);
-        },
-        onError: (Object e) => debugPrint('Status of $id: $e'),
-      );
-    }
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider.value(
+      value: _provider,
+      child: const _UpdatesView(),
+    );
   }
+}
+
+class _UpdatesView extends StatefulWidget {
+  const _UpdatesView();
+
+  @override
+  State<_UpdatesView> createState() => _UpdatesViewState();
+}
+
+class _UpdatesViewState extends State<_UpdatesView> {
+  final ImagePicker _picker = ImagePicker();
 
   // ---------- ADD A STATUS ----------
   Future<void> _addText() async {
@@ -203,12 +169,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     required List<StatusItem> items,
     required bool mine,
   }) async {
-    var start = 0;
-    if (!mine) {
-      final firstUnseen =
-      items.indexWhere((i) => !i.seenBy(StatusService.myUid));
-      start = firstUnseen < 0 ? 0 : firstUnseen;
-    }
+    final updates = context.read<UpdatesProvider>();
+
+    // my own statuses start at the first one, others at the first unseen
+    final start = mine ? 0 : updates.firstUnseenIndex(items);
 
     await Navigator.push(
       context,
@@ -224,7 +188,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       ),
     );
 
-    if (mounted) setState(() {});
+    // the "seen" marks may have changed
+    if (mounted) updates.refresh();
   }
 
   // ---------- UI ----------
@@ -315,7 +280,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     );
   }
 
-  Widget _entryTile(_Entry e) {
+  Widget _entryTile(StatusEntry e) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: StatusAvatar(
@@ -351,18 +316,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mine = StatusService.active(_mine);
+    // rebuilds whenever the provider changes (new status, tick, contacts...)
+    final updates = context.watch<UpdatesProvider>();
 
-    final recent = <_Entry>[];
-    final viewed = <_Entry>[];
-    for (final c in widget.contacts) {
-      final list = StatusService.active(_items[c.id] ?? const []);
-      if (list.isEmpty) continue;
-      final entry = _Entry(c, list);
-      (entry.unseen > 0 ? recent : viewed).add(entry);
-    }
-    recent.sort((a, b) => b.latest.compareTo(a.latest));
-    viewed.sort((a, b) => b.latest.compareTo(a.latest));
+    final mine = updates.mine;
+    final recent = updates.recent;
+    final viewed = updates.viewed;
 
     return Stack(
       children: [

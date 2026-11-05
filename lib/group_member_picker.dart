@@ -1,11 +1,11 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
-import 'database_helper.dart';
 import 'group_service.dart';
 import 'new_group_screen.dart';
+import 'providers/member_picker_provider.dart';
 
 // "Add group members": search + tick your saved contacts.
 //
@@ -13,7 +13,10 @@ import 'new_group_screen.dart';
 //                              this screen gives back a GroupRef.
 // addMode = true  (add people to an existing group): the green tick gives back
 //                 a List<PickedContact>.
-class GroupMemberPickerScreen extends StatefulWidget {
+//
+// The provider is created here, inside the screen, so it stops when the
+// screen closes and never shows an old account's contacts.
+class GroupMemberPickerScreen extends StatelessWidget {
   final bool addMode;
   final Set<String> excludeIds; // people who are already in the group
 
@@ -24,22 +27,26 @@ class GroupMemberPickerScreen extends StatefulWidget {
   });
 
   @override
-  State<GroupMemberPickerScreen> createState() =>
-      _GroupMemberPickerScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => MemberPickerProvider(excludeIds: excludeIds),
+      child: _PickerView(addMode: addMode),
+    );
+  }
 }
 
-class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
-  final searchController = TextEditingController();
-  List<PickedContact> _all = [];
-  final Map<String, PickedContact> _selected = {};
-  bool _loading = true;
-  String _query = '';
+class _PickerView extends StatefulWidget {
+  final bool addMode;
+
+  const _PickerView({required this.addMode});
 
   @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  State<_PickerView> createState() => _PickerViewState();
+}
+
+class _PickerViewState extends State<_PickerView> {
+  // only the search box lives here (pure UI state)
+  final searchController = TextEditingController();
 
   @override
   void dispose() {
@@ -47,53 +54,9 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
     super.dispose();
   }
 
-  // the saved contacts are kept on the phone too, so this also works offline
-  Future<void> _load() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final list = <PickedContact>[];
-
-    if (uid.isNotEmpty) {
-      try {
-        final rows = await DatabaseHelper.getContacts(uid);
-        for (final r in rows) {
-          final id = r['id'].toString();
-          if (id == uid || widget.excludeIds.contains(id)) continue;
-          list.add(
-            PickedContact(
-              id: id,
-              name: (r['name'] ?? 'Contact').toString(),
-              phone: (r['phone'] ?? '').toString(),
-              countryCode: (r['country_code'] ?? '+91').toString(),
-            ),
-          );
-        }
-      } catch (e) {
-        debugPrint('Could not load contacts for the group: $e');
-      }
-    }
-
-    list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-    if (!mounted) return;
-    setState(() {
-      _all = list;
-      _loading = false;
-    });
-  }
-
-  void _toggle(PickedContact c) {
-    setState(() {
-      if (_selected.containsKey(c.id)) {
-        _selected.remove(c.id);
-      } else {
-        _selected[c.id] = c;
-      }
-    });
-  }
-
   Future<void> _next() async {
-    if (_selected.isEmpty) return;
-    final picked = _selected.values.toList();
+    final picked = context.read<MemberPickerProvider>().selected;
+    if (picked.isEmpty) return;
 
     if (widget.addMode) {
       Navigator.pop(context, picked);
@@ -123,18 +86,20 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
   }
 
   // the people you ticked, shown above the list
-  Widget _selectedRow() {
+  Widget _selectedRow(MemberPickerProvider picker) {
+    final selected = picker.selected;
+
     return SizedBox(
       height: 84,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        itemCount: _selected.length,
+        itemCount: selected.length,
         separatorBuilder: (context, index) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
-          final c = _selected.values.elementAt(index);
+          final c = selected[index];
           return GestureDetector(
-            onTap: () => _toggle(c),
+            onTap: () => picker.toggle(c),
             child: SizedBox(
               width: 56,
               child: Column(
@@ -180,26 +145,21 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
     );
   }
 
-  Widget _buildList() {
-    if (_loading) {
+  Widget _buildList(MemberPickerProvider picker) {
+    if (picker.loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.emerald),
       );
     }
 
-    final q = _query.trim().toLowerCase();
-    final shown = _all.where((c) {
-      if (q.isEmpty) return true;
-      return c.name.toLowerCase().contains(q) ||
-          '${c.countryCode}${c.phone}'.contains(q);
-    }).toList();
+    final items = picker.items;
 
-    if (shown.isEmpty) {
+    if (items.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            _all.isEmpty
+            picker.allCount == 0
                 ? 'No contacts to add. Save a contact first.'
                 : 'No contact found',
             textAlign: TextAlign.center,
@@ -212,24 +172,13 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
       );
     }
 
-    // contacts with a letter header (A, B, C ...) like WhatsApp
-    final items = <Object>[];
-    var lastLetter = '';
-    for (final c in shown) {
-      final letter = c.name.isNotEmpty ? c.name[0].toUpperCase() : '#';
-      if (letter != lastLetter) {
-        items.add(letter);
-        lastLetter = letter;
-      }
-      items.add(c);
-    }
-
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 100),
       itemCount: items.length,
       itemBuilder: (context, index) {
         final item = items[index];
 
+        // a letter header
         if (item is String) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
@@ -245,7 +194,7 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
         }
 
         final c = item as PickedContact;
-        final isOn = _selected.containsKey(c.id);
+        final isOn = picker.isSelected(c.id);
 
         return ListTile(
           leading: _avatar(c),
@@ -268,7 +217,7 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
             isOn ? Icons.check_circle : Icons.radio_button_unchecked,
             color: isOn ? AppColors.emerald : AppColors.textSoft,
           ),
-          onTap: () => _toggle(c),
+          onTap: () => picker.toggle(c),
         );
       },
     );
@@ -276,6 +225,10 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // rebuilds whenever the provider changes (loaded, ticked, search...)
+    final picker = context.watch<MemberPickerProvider>();
+    final selectedCount = picker.selectedCount;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -293,7 +246,7 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
               ),
             ),
             Text(
-              '${_selected.length} of ${_all.length} selected',
+              '$selectedCount of ${picker.allCount} selected',
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 color: const Color(0xCCFFFFFF),
@@ -302,7 +255,7 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
           ],
         ),
       ),
-      floatingActionButton: _selected.isEmpty
+      floatingActionButton: selectedCount == 0
           ? null
           : FloatingActionButton(
         onPressed: _next,
@@ -312,13 +265,13 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
       ),
       body: Column(
         children: [
-          if (_selected.isNotEmpty) _selectedRow(),
+          if (selectedCount > 0) _selectedRow(picker),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: TextField(
               controller: searchController,
               cursorColor: AppColors.emerald,
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: picker.setQuery,
               style: GoogleFonts.poppins(
                 color: AppColors.textDark,
                 fontSize: 16,
@@ -343,7 +296,7 @@ class _GroupMemberPickerScreenState extends State<GroupMemberPickerScreen> {
               ),
             ),
           ),
-          Expanded(child: _buildList()),
+          Expanded(child: _buildList(picker)),
         ],
       ),
     );

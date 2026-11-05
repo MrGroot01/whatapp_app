@@ -3,16 +3,54 @@ import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
+// One language the mic can listen to.
+class VoiceLanguage {
+  final String id;
+  final String name; // shown in English
+  final String nativeName; // shown in its own script
+  final String short; // two letters for the small chip
+
+  const VoiceLanguage({
+    required this.id,
+    required this.name,
+    required this.nativeName,
+    required this.short,
+  });
+}
+
 class VoiceInputProvider extends ChangeNotifier {
-  // language the mic understands. null = phone default.
-  // Examples: 'en_IN' (Indian English), 'hi_IN' (Hindi), 'kn_IN' (Kannada)
-  static const String? speechLocale = 'en_IN';
+  // the languages the user can choose from
+  static const List<VoiceLanguage> languages = [
+    VoiceLanguage(
+      id: 'en_IN',
+      name: 'English',
+      nativeName: 'English (India)',
+      short: 'EN',
+    ),
+    VoiceLanguage(
+      id: 'kn_IN',
+      name: 'Kannada',
+      nativeName: 'ಕನ್ನಡ',
+      short: 'KN',
+    ),
+    VoiceLanguage(
+      id: 'hi_IN',
+      name: 'Hindi',
+      nativeName: 'हिन्दी',
+      short: 'HI',
+    ),
+  ];
+
+  // the last chosen language is remembered while the app is open,
+  // so opening another chat keeps it
+  static String _lastLocale = 'en_IN';
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _ready = false;
   bool _listening = false;
   bool _heardWords = false;
   bool _disposed = false;
+  String _localeId = _lastLocale;
   String _textBeforeMic = ''; // what was typed before pressing the mic
 
   // the screen sets these two
@@ -20,6 +58,34 @@ class VoiceInputProvider extends ChangeNotifier {
   void Function(String message)? onMessage; // show this message (snack bar)
 
   bool get listening => _listening;
+  String get localeId => _localeId;
+
+  VoiceLanguage get language => languages.firstWhere(
+        (l) => l.id == _localeId,
+    orElse: () => languages.first,
+  );
+
+  // ---------- CHOOSE THE LANGUAGE ----------
+  // currentText = what is in the message box now.
+  // If the mic is listening, it restarts in the new language.
+  Future<void> changeLanguage(String id, String currentText) async {
+    if (id == _localeId) return;
+
+    final wasListening = _listening;
+    if (wasListening) {
+      await _speech.stop();
+      if (_disposed) return;
+      _listening = false;
+    }
+
+    _localeId = id;
+    _lastLocale = id;
+    notifyListeners();
+
+    if (wasListening) {
+      await start(currentText);
+    }
+  }
 
   Future<bool> _init() async {
     if (_ready) return true;
@@ -49,19 +115,26 @@ class VoiceInputProvider extends ChangeNotifier {
       // only complain if nothing was heard
       if (!_heardWords) {
         onMessage?.call(
-          "I didn't hear anything. Tap the mic and speak clearly.",
+          "I didn't hear anything in ${language.name}. "
+              'Tap the mic and speak clearly, or change the language '
+              '(long-press the mic).',
         );
       }
     } else if (e.errorMsg == 'error_permission') {
       onMessage?.call('Please allow the microphone permission for this app');
-    } else if (e.errorMsg == 'error_network' ||
-        e.errorMsg == 'error_network_timeout' ||
-        e.errorMsg == 'error_language_unavailable' ||
+    } else if (e.errorMsg == 'error_language_unavailable' ||
         e.errorMsg == 'error_language_not_supported') {
       onMessage?.call(
+        '${language.name} voice typing is not ready on this phone.\n'
+            'Connect to the internet, or download ${language.name} '
+            'in the phone\'s Google voice typing settings.',
+      );
+    } else if (e.errorMsg == 'error_network' ||
+        e.errorMsg == 'error_network_timeout') {
+      onMessage?.call(
         'Voice error: ${e.errorMsg}\n'
-            'Download your language in the phone settings '
-            '(Offline speech recognition), or type your message.',
+            'Check your internet, or download ${language.name} for '
+            'offline use in the phone settings, or type your message.',
       );
     } else {
       onMessage?.call('Speech error: ${e.errorMsg}');
@@ -99,7 +172,7 @@ class VoiceInputProvider extends ChangeNotifier {
     await _speech.listen(
       onResult: _onResult,
       listenOptions: stt.SpeechListenOptions(
-        localeId: speechLocale,
+        localeId: _localeId,
         listenFor: const Duration(seconds: 30),
         pauseFor: const Duration(seconds: 3),
         partialResults: true,

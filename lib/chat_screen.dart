@@ -26,6 +26,8 @@ import 'providers/group_chat_provider.dart';
 import 'providers/messages_provider.dart';
 import 'providers/voice_input_provider.dart';
 
+// Message moved to models/message.dart. This line keeps every file that
+// still imports it from chat_screen.dart working.
 export 'models/message.dart';
 
 // One saved contact, used by the "share contact" and "forward" pickers
@@ -1140,10 +1142,84 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ---------- SPEECH TO TEXT (the provider does the work) ----------
-  // tap the mic: start listening
+  // tap the mic: start listening (in the chosen language)
   Future<void> toggleListening() async {
     closePanels();
     await _voice.start(messageController.text);
+  }
+
+  // choose the language the mic understands: English, Kannada or Hindi
+  // (long-press the mic, or tap the language chip while listening)
+  void showVoiceLanguageSheet() {
+    closePanels();
+    final current = _voice.localeId;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+              child: Text(
+                'Voice typing language',
+                style: GoogleFonts.poppins(
+                  color: AppColors.textDark,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'The mic listens to one language at a time. '
+                    'Choose the language you will speak.',
+                style: GoogleFonts.poppins(
+                  color: AppColors.textSoft,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            for (final lang in VoiceInputProvider.languages)
+              ListTile(
+                title: Text(
+                  lang.name,
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textDark,
+                    fontSize: 16,
+                  ),
+                ),
+                subtitle: Text(
+                  lang.nativeName,
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textSoft,
+                    fontSize: 13,
+                  ),
+                ),
+                trailing: current == lang.id
+                    ? const Icon(Icons.check_circle, color: AppColors.emerald)
+                    : const Icon(
+                  Icons.circle_outlined,
+                  color: AppColors.textSoft,
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _voice.changeLanguage(lang.id, messageController.text);
+                  snack('Voice typing language: ${lang.name}');
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   // small bar shown while the mic is listening
@@ -1161,10 +1237,43 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Listening... speak now',
+              'Listening in ${_voice.language.name}...',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
                 color: AppColors.textDark,
                 fontSize: 15,
+              ),
+            ),
+          ),
+          // tap to change the language (the mic restarts in the new one)
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: showVoiceLanguageSheet,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F1ED),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.language,
+                    size: 16,
+                    color: AppColors.emerald,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    _voice.language.short,
+                    style: GoogleFonts.poppins(
+                      color: AppColors.emerald,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -2356,10 +2465,13 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                // long-press the send button = "Send later"
-                onLongPress: (_hasDraftContent && !listening)
+                // long-press when there is something to send = "Send later"
+                // long-press on the mic = choose the voice language
+                onLongPress: listening
+                    ? null
+                    : (_hasDraftContent
                     ? showScheduleSheet
-                    : null,
+                    : showVoiceLanguageSheet),
                 child: CircleAvatar(
                   radius: 26,
                   backgroundColor: AppColors.emerald,

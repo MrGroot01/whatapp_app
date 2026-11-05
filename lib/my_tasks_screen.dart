@@ -1,25 +1,34 @@
-import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
 import 'create_task_screen.dart';
+import 'providers/tasks_provider.dart';
 import 'task_service.dart';
 
-class MyTasksScreen extends StatefulWidget {
+// The provider is created here, inside the screen, so it stops when the
+// screen closes and never shows an old account's tasks after a new login.
+class MyTasksScreen extends StatelessWidget {
   const MyTasksScreen({super.key});
 
   @override
-  State<MyTasksScreen> createState() => _MyTasksScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => TasksProvider(),
+      child: const _MyTasksView(),
+    );
+  }
 }
 
-class _MyTasksScreenState extends State<MyTasksScreen> {
+class _MyTasksView extends StatefulWidget {
+  const _MyTasksView();
+
+  @override
+  State<_MyTasksView> createState() => _MyTasksViewState();
+}
+
+class _MyTasksViewState extends State<_MyTasksView> {
   static const Color _error = Color(0xFFD94B4B);
-
-  // created once, so the list does not re-subscribe on every rebuild
-  late final Stream<DatabaseEvent>? _stream = TaskService.watch();
-
-  // 0 = All, 1 = Upcoming, 2 = Completed, 3 = Assigned to me, 4 = Assigned by me
-  int _filter = 0;
 
   void _snack(String message) {
     if (!mounted) return;
@@ -33,6 +42,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
       );
   }
 
+  // the list updates by itself when a task is saved (live from Firebase)
   Future<void> _newTask() async {
     await Navigator.push<bool>(
       context,
@@ -48,12 +58,8 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   }
 
   Future<void> _toggle(TaskItem task, bool done) async {
-    try {
-      await TaskService.setDone(task, done);
-    } catch (e) {
-      debugPrint('Update task failed: $e');
-      _snack('Could not update the task. Check your internet connection.');
-    }
+    final error = await context.read<TasksProvider>().setDone(task, done);
+    if (error != null) _snack(error);
   }
 
   Future<void> _confirmDelete(TaskItem task, {required bool assigned}) async {
@@ -98,20 +104,15 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
       ),
     );
 
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
 
-    try {
-      await TaskService.delete(task);
-      _snack('Task deleted');
-    } catch (e) {
-      debugPrint('Delete task failed: $e');
-      _snack('Could not delete the task. Check your internet connection.');
-    }
+    final error = await context.read<TasksProvider>().delete(task);
+    _snack(error ?? 'Task deleted');
   }
 
   // ---------- UI PIECES ----------
-  Widget _chip(String label, int index) {
-    final selected = _filter == index;
+  Widget _chip(String label, TaskFilter value, TasksProvider tasks) {
+    final selected = tasks.filter == value;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
@@ -125,35 +126,40 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
           color: selected ? Colors.white : AppColors.emerald,
           fontWeight: FontWeight.w600,
         ),
-        onSelected: (_) => setState(() => _filter = index),
+        onSelected: (_) => tasks.setFilter(value),
       ),
     );
   }
 
-  Widget _buildFilters(
-      int all,
-      int upcoming,
-      int completed,
-      int toMe,
-      int byMe,
-      ) {
+  Widget _buildFilters(TasksProvider tasks) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
       child: Row(
         children: [
-          _chip('All ($all)', 0),
-          _chip('Upcoming ($upcoming)', 1),
-          _chip('Completed ($completed)', 2),
-          _chip('Assigned to me ($toMe)', 3),
-          _chip('Assigned by me ($byMe)', 4),
+          _chip('All (${tasks.allCount})', TaskFilter.all, tasks),
+          _chip('Upcoming (${tasks.upcomingCount})', TaskFilter.upcoming, tasks),
+          _chip(
+            'Completed (${tasks.completedCount})',
+            TaskFilter.completed,
+            tasks,
+          ),
+          _chip(
+            'Assigned to me (${tasks.toMeCount})',
+            TaskFilter.assignedToMe,
+            tasks,
+          ),
+          _chip(
+            'Assigned by me (${tasks.byMeCount})',
+            TaskFilter.assignedByMe,
+            tasks,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCard(TaskItem t) {
-    final me = TaskService.myUid ?? '';
+  Widget _buildCard(TaskItem t, String me) {
     final toMe = t.isAssignedToMe(me); // somebody gave it to me
     final byMe = t.isAssignedByMe(me); // I gave it to somebody
 
@@ -359,19 +365,60 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
     );
   }
 
-  String _emptyText(int total) {
-    if (_filter == 3) return 'Nothing is assigned to you yet.';
-    if (_filter == 4) {
+  String _emptyText(TasksProvider tasks) {
+    if (tasks.filter == TaskFilter.assignedToMe) {
+      return 'Nothing is assigned to you yet.';
+    }
+    if (tasks.filter == TaskFilter.assignedByMe) {
       return 'You have not assigned any task yet.\nLong-press a chat message and tap Create Task.';
     }
-    if (total == 0) {
+    if (tasks.allCount == 0) {
       return 'No tasks yet.\nLong-press a chat message and tap Create Task.';
     }
     return 'No tasks in this list.';
   }
 
+  Widget _buildBody(TasksProvider tasks) {
+    if (!tasks.loggedIn) {
+      return _centerText('Please log in to see your tasks.');
+    }
+
+    if (tasks.loadError) {
+      return _centerText(
+        'Unable to load tasks. Check your internet and the database rules.',
+      );
+    }
+
+    if (tasks.loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.emerald),
+      );
+    }
+
+    final shown = tasks.shown;
+    final me = tasks.me;
+
+    return Column(
+      children: [
+        _buildFilters(tasks),
+        Expanded(
+          child: shown.isEmpty
+              ? _centerText(_emptyText(tasks))
+              : ListView.builder(
+            padding: const EdgeInsets.only(bottom: 24),
+            itemCount: shown.length,
+            itemBuilder: (context, index) => _buildCard(shown[index], me),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // rebuilds whenever the provider changes (new data, filter...)
+    final tasks = context.watch<TasksProvider>();
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -391,83 +438,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
           ),
         ],
       ),
-      body: _stream == null
-          ? _centerText('Please log in to see your tasks.')
-          : StreamBuilder<DatabaseEvent>(
-        stream: _stream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return _centerText(
-              'Unable to load tasks. Check your internet and the database rules.',
-            );
-          }
-
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(
-                color: AppColors.emerald,
-              ),
-            );
-          }
-
-          final me = TaskService.myUid ?? '';
-          final all = TaskService.parse(snapshot.data?.snapshot.value);
-          final upcoming = all.where((t) => !t.done).toList();
-          final completed = all.where((t) => t.done).toList();
-          final toMe = all.where((t) => t.isAssignedToMe(me)).toList();
-          final byMe = all.where((t) => t.isAssignedByMe(me)).toList();
-
-          final List<TaskItem> base;
-          switch (_filter) {
-            case 1:
-              base = upcoming;
-              break;
-            case 2:
-              base = completed;
-              break;
-            case 3:
-              base = toMe;
-              break;
-            case 4:
-              base = byMe;
-              break;
-            default:
-              base = all;
-          }
-
-          final shown = List<TaskItem>.of(base)
-            ..sort((a, b) {
-              // open tasks first (soonest due first), completed last
-              if (a.done != b.done) return a.done ? 1 : -1;
-              return a.done
-                  ? b.due.compareTo(a.due)
-                  : a.due.compareTo(b.due);
-            });
-
-          return Column(
-            children: [
-              _buildFilters(
-                all.length,
-                upcoming.length,
-                completed.length,
-                toMe.length,
-                byMe.length,
-              ),
-              Expanded(
-                child: shown.isEmpty
-                    ? _centerText(_emptyText(all.length))
-                    : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 24),
-                  itemCount: shown.length,
-                  itemBuilder: (context, index) =>
-                      _buildCard(shown[index]),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+      body: _buildBody(tasks),
     );
   }
 }

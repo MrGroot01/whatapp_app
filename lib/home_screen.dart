@@ -28,8 +28,6 @@ import 'push_service.dart';
 import 'status_service.dart'; // StatusContact
 import 'updates_screen.dart'; // the Updates tab
 
-// Contact moved to models/contact.dart. This line keeps every file that
-// still imports it from home_screen.dart working.
 export 'models/contact.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -74,23 +72,32 @@ class _HomeScreenState extends State<HomeScreen> {
     _contactsProvider.addListener(_watchContactChats);
     _contactsProvider.start();
 
-    _groupsProvider.onGroupAdded = _chatList.watchChat;
+    _groupsProvider.onGroupAdded = _chatList.watchChat; // when a group is add , start watching the group chat
+
+    //when the group is removed: - Stop tracking its chat
     _groupsProvider.onGroupRemoved = (groupId) {
       _chatList.forgetChat(groupId);
       _selection.remove(groupId);
     };
-    _groupsProvider.start();
 
+
+    _groupsProvider.start(); // Start group listening
+
+
+    // Session and background service.
     SessionHelper.saveSession(widget.email);
     IncomingMessageNotifier.start();
     TaskService.startListening();
     MessageSyncService.start(); // watches the internet + sends waiting messages
 
+
+    //this is schedules pending-chat navigation after the first frame has neem rendered
     WidgetsBinding.instance.addPostFrameCallback(
           (_) => PushService.openPendingChat(),
     );
   }
 
+  //dispose all the content means we can remove the data  permanently widget tree
   @override
   void dispose() {
     MessageSyncService.stop();
@@ -106,18 +113,21 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+
   void _watchContactChats() {
     for (final c in _contactsProvider.contacts) {
       _chatList.watchChat(_chatList.chatIdWith(c.id));
     }
   }
 
+
+  // Displays a readable timestamp beside each chat
   String _formatListTime(int ms) {
-    final t = DateTime.fromMillisecondsSinceEpoch(ms);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(t.year, t.month, t.day);
-    final diff = today.difference(day).inDays;
+    final t = DateTime.fromMillisecondsSinceEpoch(ms); // converts the timestamp into a DataTime
+    final now = DateTime.now(); // gets the current data and time
+    final today = DateTime(now.year, now.month, now.day); //creates today's data with time set to midnight
+    final day = DateTime(t.year, t.month, t.day); // create the message date with time set to midnight
+    final diff = today.difference(day).inDays; // calculate the difference in calendar days
 
     if (diff <= 0) {
       final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
