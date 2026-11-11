@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import 'app_theme.dart';
 import 'chat_media_screen.dart';
 import 'group_member_picker.dart';
-import 'group_service.dart';
-import 'providers/group_info_provider.dart';
+import '../group_service.dart';
+import '../providers/group_info_provider.dart';
 
 // WhatsApp-style "Group info": name, members, admin tools, exit group.
 //

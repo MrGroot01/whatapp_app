@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
-import 'status_service.dart';
+import '../status_service.dart';
 
 // image == null  -> a text status on a coloured background
 // image != null  -> a photo status with an optional caption

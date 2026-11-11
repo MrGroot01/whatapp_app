@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'app_theme.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
-import 'providers/account_provider.dart';
+import '../providers/account_provider.dart';
 
 // One row in the settings list
 class SettingsItem {
@@ -183,7 +183,7 @@ class _SettingsViewState extends State<_SettingsView> {
             width: 112,
             height: 112,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _initialAvatar(name),
+            errorBuilder: (_, _, _) => _initialAvatar(name),
           ),
         );
       }
@@ -199,7 +199,7 @@ class _SettingsViewState extends State<_SettingsView> {
           height: 112,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => localOrInitial(),
+          errorBuilder: (_, _, _) => localOrInitial(),
         ),
       );
     }

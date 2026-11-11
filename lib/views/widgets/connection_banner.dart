@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'app_theme.dart';
-import 'message_sync_service.dart';
+import '../app_theme.dart';
+import '../../message_sync_service.dart';
 
 // The slim message at the top of Home and Chat.
 // It takes no space when there is nothing to say.

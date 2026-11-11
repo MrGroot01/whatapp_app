@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+
+import '../models/media_entry.dart';
 import 'app_theme.dart';
-import 'chat_media.dart';
+import '../chat_media.dart';
+import 'media_viewer_screen.dart';
+import 'widgets/media_widgets.dart';
 
 class ChatMediaScreen extends StatefulWidget {
   final String chatId;

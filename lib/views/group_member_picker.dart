@@ -3,9 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
-import 'group_service.dart';
+import '../group_service.dart';
 import 'new_group_screen.dart';
-import 'providers/member_picker_provider.dart';
+import '../providers/member_picker_provider.dart';
 
 // "Add group members": search + tick your saved contacts.
 //

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
-import 'providers/account_provider.dart';
+import '../providers/account_provider.dart';
 
 // The provider is created here, inside the screen, so it stops when the
 // screen closes and never shows an old account's data after a new login.
@@ -113,7 +113,7 @@ class _ProfileViewState extends State<_ProfileView> {
           width: 112,
           height: 112,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _initialAvatar(displayName),
+          errorBuilder: (_, _, _) => _initialAvatar(displayName),
         ),
       );
     }
@@ -130,7 +130,7 @@ class _ProfileViewState extends State<_ProfileView> {
           height: 112,
           fit: BoxFit.cover,
           gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => _fallbackAvatar(account, displayName),
+          errorBuilder: (_, _, _) => _fallbackAvatar(account, displayName),
         ),
       );
     }

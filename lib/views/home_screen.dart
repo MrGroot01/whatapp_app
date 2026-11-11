@@ -4,31 +4,31 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'task_service.dart';
+import '../task_service.dart';
 import 'app_theme.dart';
 import 'add_contact_screen.dart';
 import 'chat_screen.dart';
-import 'connection_banner.dart';
+import 'widgets/connection_banner.dart';
 import 'group_member_picker.dart';
-import 'group_service.dart';
-import 'message_sync_service.dart';
-import 'models/chat_row.dart';
-import 'models/contact.dart';
-import 'providers/chat_list_provider.dart';
-import 'providers/chat_selection_provider.dart';
-import 'providers/contacts_provider.dart';
-import 'providers/groups_provider.dart';
-import 'providers/profile_provider.dart';
-import 'search_provider.dart';
-import 'session_helper.dart';
+import '../group_service.dart';
+import '../message_sync_service.dart';
+import '../models/chat_row.dart';
+import '../models/contact.dart';
+import '../providers/chat_list_provider.dart';
+import '../providers/chat_selection_provider.dart';
+import '../providers/contacts_provider.dart';
+import '../providers/groups_provider.dart';
+import '../providers/profile_provider.dart';
+import '../search_provider.dart';
+import '../session_helper.dart';
 import 'settings_screen.dart';
 import 'my_tasks_screen.dart';
-import 'incoming_message_notifier.dart';
-import 'push_service.dart';
-import 'status_service.dart'; // StatusContact
+import '../incoming_message_notifier.dart';
+import '../push_service.dart';
+import '../status_service.dart'; // StatusContact
 import 'updates_screen.dart'; // the Updates tab
 
-export 'models/contact.dart';
+export '../models/contact.dart';
 
 class HomeScreen extends StatefulWidget {
   final String email;
@@ -189,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: mine ? AppColors.textSoft : _missedRed,
             ),
           ),
-        if (tick != null) tick,
+        ? tick,
         Expanded(
           child: Text(
             text,

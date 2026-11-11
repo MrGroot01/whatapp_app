@@ -15,20 +15,20 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'incoming_message_notifier.dart';
+import '../incoming_message_notifier.dart';
 import 'app_theme.dart';
-import 'connection_banner.dart';
-import 'message_sync_service.dart';
-import 'models/message.dart';
-import 'providers/chat_search_provider.dart';
-import 'providers/composer_provider.dart';
-import 'providers/group_chat_provider.dart';
-import 'providers/messages_provider.dart';
-import 'providers/voice_input_provider.dart';
+import 'widgets/connection_banner.dart';
+import '../message_sync_service.dart';
+import '../models/message.dart';
+import '../providers/chat_search_provider.dart';
+import '../providers/composer_provider.dart';
+import '../providers/group_chat_provider.dart';
+import '../providers/messages_provider.dart';
+import '../providers/voice_input_provider.dart';
 
 // Message moved to models/message.dart. This line keeps every file that
 // still imports it from chat_screen.dart working.
-export 'models/message.dart';
+export '../models/message.dart';
 
 // One saved contact, used by the "share contact" and "forward" pickers
 class _SavedContact {

@@ -1,7 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'app_theme.dart';
-import 'forgot_password_sheet.dart'; // NEW
+
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
+import 'forgot_password_sheet.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
 
@@ -13,8 +16,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  static const Color _error = Color(0xFFD94B4B);
-
   // true  = the user must click the link in the verification email
   // false = anyone with a correct password can log in
   static const bool requireVerifiedEmail = false;
@@ -36,38 +37,37 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? validateEmail(String? value) {
     final email = value?.trim() ?? '';
-    if (email.isEmpty) return 'Please enter your email';
+    if (email.isEmpty) return AppStrings.enterEmail;
     final regex =
     RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
     if (!regex.hasMatch(email)) {
-      return 'Enter a valid email (example: name@gmail.com)';
+      return AppStrings.invalidEmail;
     }
     return null;
   }
 
   String? validatePassword(String? value) {
-    if (value == null || value.isEmpty) return 'Please enter your password';
+    if (value == null || value.isEmpty) return AppStrings.enterPassword;
     return null;
   }
 
   String firebaseErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'invalid-email':
-        return 'Please enter a valid email address.';
+        return AppStrings.invalidEmailAddress;
       case 'user-not-found':
       case 'invalid-credential':
       case 'wrong-password':
       // Firebase uses one answer for "no account" and "wrong password"
-        return 'Email or password is incorrect. '
-            'If you are new here, tap Sign up below.';
+        return AppStrings.loginCredentials;
       case 'user-disabled':
-        return 'This account has been disabled.';
+        return AppStrings.accountDisabled;
       case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
+        return AppStrings.tooManyAttempts;
       case 'network-request-failed':
-        return 'Network error. Check your internet connection.';
+        return AppStrings.networkError;
       default:
-        return e.message ?? 'Unable to log in. Please try again.';
+        return e.message ?? AppStrings.loginFailed;
     }
   }
 
@@ -98,9 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() {
           isLoading = false;
           needsVerification = true;
-          errorMessage =
-          'Please verify your email first. Open the link we sent to your '
-              'inbox (check Spam too), then log in again.';
+          errorMessage = AppStrings.verifyEmailFirst;
         });
         return;
       }
@@ -128,7 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = 'Something went wrong. Please try again.';
+        errorMessage = AppStrings.somethingWentWrong;
       });
     }
   }
@@ -153,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Verification email sent. Check your inbox.'),
+          content: Text(AppStrings.verificationSent),
         ),
       );
     } on FirebaseAuthException catch (e) {
@@ -165,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // NEW: opens the "Forgot password?" bottom sheet.
+  // opens the "Forgot password?" bottom sheet.
   // The email typed on this screen is copied into the sheet.
   Future<void> openForgotPassword() async {
     await showForgotPasswordSheet(
@@ -188,7 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Account verified. Please log in.'),
+          content: Text(AppStrings.accountVerified),
         ),
       );
     }
@@ -215,12 +213,12 @@ class _LoginScreenState extends State<LoginScreen> {
       suffixIcon: suffix,
       filled: true,
       fillColor: AppColors.card,
-      errorStyle: const TextStyle(color: _error, fontSize: 14),
+      errorStyle: const TextStyle(color: AppColors.error, fontSize: 14),
       errorMaxLines: 2,
-      enabledBorder: boxBorder(const Color(0xFFE3DED2)),
+      enabledBorder: boxBorder(AppColors.border),
       focusedBorder: boxBorder(AppColors.emerald),
-      errorBorder: boxBorder(_error),
-      focusedErrorBorder: boxBorder(_error),
+      errorBorder: boxBorder(AppColors.error),
+      focusedErrorBorder: boxBorder(AppColors.error),
     );
   }
 
@@ -248,11 +246,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(18),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFE3F1ED),
+                        color: AppColors.softGreen,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
-                        Icons.lock_rounded,
+                        AppIcons.loginHeader,
                         size: 44,
                         color: AppColors.emerald,
                       ),
@@ -260,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Welcome back',
+                    AppStrings.welcomeBack,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: AppColors.textDark,
@@ -270,7 +268,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Log in with your email and password.',
+                    AppStrings.loginSubtitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.textSoft, fontSize: 16),
                   ),
@@ -291,8 +289,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                     },
                     decoration: fieldDecoration(
-                      label: 'Email',
-                      icon: Icons.email_outlined,
+                      label: AppStrings.email,
+                      icon: AppIcons.email,
                     ),
                     validator: validateEmail,
                   ),
@@ -315,13 +313,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                     },
                     decoration: fieldDecoration(
-                      label: 'Password',
-                      icon: Icons.lock_outline,
+                      label: AppStrings.password,
+                      icon: AppIcons.password,
                       suffix: IconButton(
                         icon: Icon(
                           hidePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
+                              ? AppIcons.hidePassword
+                              : AppIcons.showPassword,
                           color: AppColors.textSoft,
                         ),
                         onPressed: () =>
@@ -331,13 +329,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: validatePassword,
                   ),
 
-                  // NEW: "Forgot password?" link
+                  // "Forgot password?" link
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: isLoading ? null : openForgotPassword,
                       child: const Text(
-                        'Forgot password?',
+                        AppStrings.forgotPassword,
                         style: TextStyle(
                           color: AppColors.emerald,
                           fontWeight: FontWeight.w600,
@@ -351,14 +349,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFCEAEA),
+                        color: AppColors.errorBackground,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
                           const Icon(
-                            Icons.error_outline,
-                            color: _error,
+                            AppIcons.error,
+                            color: AppColors.error,
                             size: 20,
                           ),
                           const SizedBox(width: 10),
@@ -366,7 +364,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text(
                               errorMessage!,
                               style: const TextStyle(
-                                color: _error,
+                                color: AppColors.error,
                                 fontSize: 14.5,
                               ),
                             ),
@@ -380,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: TextButton(
                           onPressed: isLoading ? null : resendVerification,
                           child: const Text(
-                            'Resend verification email',
+                            AppStrings.resendVerification,
                             style: TextStyle(
                               color: AppColors.emerald,
                               fontWeight: FontWeight.bold,
@@ -412,7 +410,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       )
                           : const Text(
-                        'Login',
+                        AppStrings.login,
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -425,14 +423,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: isLoading ? null : openSignup,
                     child: const Text.rich(
                       TextSpan(
-                        text: "Don't have an account? ",
+                        text: AppStrings.noAccount,
                         style: TextStyle(
                           color: AppColors.textSoft,
                           fontSize: 15,
                         ),
                         children: [
                           TextSpan(
-                            text: 'Sign up',
+                            text: AppStrings.signUp,
                             style: TextStyle(
                               color: AppColors.emerald,
                               fontWeight: FontWeight.bold,

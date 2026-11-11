@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import 'app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 
 // Opens the "Forgot password?" bottom sheet.
 // initialEmail = the email the user already typed on the login screen.
@@ -32,7 +34,6 @@ class ForgotPasswordSheet extends StatefulWidget {
 }
 
 class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
-  static const Color _error = Color(0xFFD94B4B);
   static const int _cooldownSeconds = 60;
 
   final formKey = GlobalKey<FormState>();
@@ -59,10 +60,10 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
 
   String? validateEmail(String? value) {
     final email = value?.trim() ?? '';
-    if (email.isEmpty) return 'Please enter your email';
+    if (email.isEmpty) return AppStrings.enterEmail;
     final regex = RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
     if (!regex.hasMatch(email)) {
-      return 'Enter a valid email (example: name@gmail.com)';
+      return AppStrings.invalidEmail;
     }
     return null;
   }
@@ -70,15 +71,15 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
   String firebaseErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'invalid-email':
-        return 'Please enter a valid email address.';
+        return AppStrings.invalidEmailAddress;
       case 'user-not-found':
-        return 'No account found with this email. Please sign up.';
+        return AppStrings.noAccountFound;
       case 'network-request-failed':
-        return 'Network error. Check your internet connection.';
+        return AppStrings.networkError;
       case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
+        return AppStrings.tooManyAttempts;
       default:
-        return e.message ?? 'Could not send the email. Please try again.';
+        return e.message ?? AppStrings.couldNotSendEmail;
     }
   }
 
@@ -133,7 +134,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = 'Something went wrong. Please try again.';
+        errorMessage = AppStrings.somethingWentWrong;
       });
     }
   }
@@ -163,7 +164,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
-          color: Color(0xFFE3F1ED),
+          color: AppColors.softGreen,
           shape: BoxShape.circle,
         ),
         child: Icon(icon, size: 40, color: AppColors.emerald),
@@ -181,10 +182,10 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         children: [
           _handle(),
           const SizedBox(height: 20),
-          _iconCircle(Icons.lock_reset),
+          _iconCircle(AppIcons.forgotHeader),
           const SizedBox(height: 16),
           const Text(
-            'Forgot password?',
+            AppStrings.forgotPassword,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textDark,
@@ -194,8 +195,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Enter your registered email and we will send you a link to '
-                'choose a new password.',
+            AppStrings.forgotSubtitle,
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textSoft, fontSize: 15.5),
           ),
@@ -214,21 +214,21 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
             onFieldSubmitted: (_) => sendLink(),
             validator: validateEmail,
             decoration: InputDecoration(
-              labelText: 'Email',
+              labelText: AppStrings.email,
               labelStyle:
               const TextStyle(color: AppColors.textSoft, fontSize: 16),
               floatingLabelStyle:
               const TextStyle(color: AppColors.emerald, fontSize: 16),
-              prefixIcon:
-              const Icon(Icons.email_outlined, color: AppColors.emerald),
+              prefixIcon: const Icon(AppIcons.email, color: AppColors.emerald),
               filled: true,
               fillColor: AppColors.card,
-              errorStyle: const TextStyle(color: _error, fontSize: 14),
+              errorStyle:
+              const TextStyle(color: AppColors.error, fontSize: 14),
               errorMaxLines: 2,
-              enabledBorder: boxBorder(const Color(0xFFE3DED2)),
+              enabledBorder: boxBorder(AppColors.border),
               focusedBorder: boxBorder(AppColors.emerald),
-              errorBorder: boxBorder(_error),
-              focusedErrorBorder: boxBorder(_error),
+              errorBorder: boxBorder(AppColors.error),
+              focusedErrorBorder: boxBorder(AppColors.error),
             ),
           ),
           if (errorMessage != null) ...[
@@ -236,17 +236,20 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFCEAEA),
+                color: AppColors.errorBackground,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: _error, size: 20),
+                  const Icon(AppIcons.error, color: AppColors.error, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       errorMessage!,
-                      style: const TextStyle(color: _error, fontSize: 14.5),
+                      style: const TextStyle(
+                        color: AppColors.error,
+                        fontSize: 14.5,
+                      ),
                     ),
                   ),
                 ],
@@ -278,7 +281,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
                 ),
               )
                   : const Text(
-                'Send reset link',
+                AppStrings.sendResetLink,
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
               ),
             ),
@@ -287,7 +290,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
           TextButton(
             onPressed: isLoading ? null : () => Navigator.pop(context),
             child: const Text(
-              'Back to login',
+              AppStrings.backToLogin,
               style: TextStyle(
                 color: AppColors.emerald,
                 fontWeight: FontWeight.w600,
@@ -309,10 +312,10 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
       children: [
         _handle(),
         const SizedBox(height: 20),
-        _iconCircle(Icons.mark_email_read_outlined),
+        _iconCircle(AppIcons.inboxHeader),
         const SizedBox(height: 16),
         const Text(
-          'Check your inbox',
+          AppStrings.checkInbox,
           textAlign: TextAlign.center,
           style: TextStyle(
             color: AppColors.textDark,
@@ -322,9 +325,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         ),
         const SizedBox(height: 8),
         Text(
-          'We sent a reset link to $email. '
-              'Open it, choose a new password, then log in with it.\n\n'
-              'Cannot see it? Check your Spam folder too.',
+          AppStrings.resetLinkSent(email),
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: AppColors.textSoft,
@@ -346,7 +347,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
               ),
             ),
             child: const Text(
-              'Back to login',
+              AppStrings.backToLogin,
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
             ),
           ),
@@ -358,7 +359,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
             child: Text(
               errorMessage!,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _error, fontSize: 14.5),
+              style: const TextStyle(color: AppColors.error, fontSize: 14.5),
             ),
           ),
         Row(
@@ -367,7 +368,9 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
             TextButton(
               onPressed: (cooldown > 0 || isLoading) ? null : sendLink,
               child: Text(
-                cooldown > 0 ? 'Resend in ${cooldown}s' : 'Resend link',
+                cooldown > 0
+                    ? AppStrings.resendIn(cooldown)
+                    : AppStrings.resendLink,
                 style: TextStyle(
                   color: cooldown > 0 ? AppColors.textSoft : AppColors.emerald,
                   fontWeight: FontWeight.w600,
@@ -382,7 +385,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
                 errorMessage = null;
               }),
               child: const Text(
-                'Change email',
+                AppStrings.changeEmail,
                 style: TextStyle(
                   color: AppColors.emerald,
                   fontWeight: FontWeight.w600,

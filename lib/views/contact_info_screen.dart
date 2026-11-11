@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_theme.dart';
-import 'chat_media.dart';
+import '../chat_media.dart';
 import 'chat_media_screen.dart';
 
+import 'widgets/media_widgets.dart';
+import '../models/media_entry.dart';
 class ContactInfoScreen extends StatefulWidget {
   final String name;
   final Color color;

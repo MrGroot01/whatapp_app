@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
 import 'create_task_screen.dart';
-import 'providers/tasks_provider.dart';
-import 'task_service.dart';
+import '../providers/tasks_provider.dart';
+import '../task_service.dart';
 
 // The provider is created here, inside the screen, so it stops when the
 // screen closes and never shows an old account's tasks after a new login.

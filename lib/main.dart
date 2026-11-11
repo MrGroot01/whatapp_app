@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'notification_service.dart';
 import 'firebase_options.dart';
-import 'splash_screen.dart';
+import 'views/splash_screen.dart';
 import 'fcm_service.dart';
 import 'push_service.dart';
 import 'package:provider/provider.dart';

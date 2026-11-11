@@ -5,8 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
-import 'status_service.dart';
-import 'status_widgets.dart';
+import '../status_service.dart';
+import 'widgets/status_widgets.dart';
 
 // Full-screen status viewer (like WhatsApp):
 //  - progress bars at the top, one per status

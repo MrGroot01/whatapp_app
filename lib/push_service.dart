@@ -5,7 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
-import 'chat_screen.dart';
+import 'views/chat_screen.dart';
 import 'group_service.dart';
 import 'incoming_message_notifier.dart';
 import 'notification_service.dart';

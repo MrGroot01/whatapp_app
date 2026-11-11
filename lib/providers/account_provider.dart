@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -11,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../database_helper.dart';
 import '../fcm_service.dart';
-import '../phone_helper.dart';
+import '../services/phone_helper.dart';
 
 class AccountProvider extends ChangeNotifier {
   AccountProvider({required this.fallbackEmail}) {

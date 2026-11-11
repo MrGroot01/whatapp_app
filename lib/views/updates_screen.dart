@@ -6,11 +6,11 @@ import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
 import 'create_status_screen.dart';
-import 'models/status_entry.dart';
-import 'providers/updates_provider.dart';
-import 'status_service.dart';
+import '../models/status_entry.dart';
+import '../providers/updates_provider.dart';
+import '../status_service.dart';
 import 'status_viewer_screen.dart';
-import 'status_widgets.dart';
+import 'widgets/status_widgets.dart';
 
 // The "Updates" tab: My status + recent updates from my contacts.
 // It is only a body (no Scaffold), so home_screen.dart can show it under

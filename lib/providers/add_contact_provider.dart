@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../database_helper.dart';
 import '../models/found_profile.dart';
-import '../phone_helper.dart';
+import '../services/phone_helper.dart';
 
 enum LookupState { idle, loading, found, notFound, self, error }
 

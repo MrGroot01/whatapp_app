@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_theme.dart';
-import 'group_service.dart';
+import '../group_service.dart';
 
 // Step 2 of "New group": type the group name and create it.
 // Gives back a GroupRef when the group was created.

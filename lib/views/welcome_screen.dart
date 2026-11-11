@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
-
-  // darker than AppColors.textSoft, so the small text is easy to read
-  static const Color _bodyText = Color(0xFF4F5E5C);
 
   void _openLogin(BuildContext context) {
     Navigator.push(
@@ -33,9 +32,7 @@ class WelcomeScreen extends StatelessWidget {
     );
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(
-          'Account created. Check your email for the verification link, then log in.',
-        ),
+        content: Text(AppStrings.accountCreated),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -89,7 +86,7 @@ class WelcomeScreen extends StatelessWidget {
                           ],
                         ),
                         child: const Icon(
-                          Icons.chat_bubble_rounded,
+                          AppIcons.logo,
                           size: 60,
                           color: AppColors.emerald,
                         ),
@@ -98,7 +95,7 @@ class WelcomeScreen extends StatelessWidget {
 
                       // BRAND NAME
                       Text(
-                        AppBrand.name.toUpperCase(),
+                        AppStrings.appName.toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 38,
@@ -108,9 +105,9 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       const Text(
-                        'PREMIUM MESSAGING',
+                        AppStrings.premiumMessaging,
                         style: TextStyle(
-                          color: Color(0xFFF2D98B),
+                          color: AppColors.goldLight,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 2.5,
@@ -133,7 +130,7 @@ class WelcomeScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Text(
-                        AppBrand.tagline,
+                        AppStrings.tagline,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppColors.textDark,
@@ -143,10 +140,10 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       const Text(
-                        'Private chats, fast delivery and groups for the people who matter.',
+                        AppStrings.welcomeBody,
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: _bodyText,
+                          color: AppColors.bodyText,
                           fontSize: 16,
                           height: 1.45,
                         ),
@@ -155,9 +152,18 @@ class WelcomeScreen extends StatelessWidget {
                       const Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _Perk(icon: Icons.lock_rounded, label: 'Private'),
-                          _Perk(icon: Icons.bolt_rounded, label: 'Fast'),
-                          _Perk(icon: Icons.groups_rounded, label: 'Groups'),
+                          _Perk(
+                            icon: AppIcons.perkPrivate,
+                            label: AppStrings.perkPrivate,
+                          ),
+                          _Perk(
+                            icon: AppIcons.perkFast,
+                            label: AppStrings.perkFast,
+                          ),
+                          _Perk(
+                            icon: AppIcons.perkGroups,
+                            label: AppStrings.perkGroups,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 28),
@@ -177,7 +183,7 @@ class WelcomeScreen extends StatelessWidget {
                             ),
                           ),
                           child: const Text(
-                            'Get Started',
+                            AppStrings.getStarted,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
@@ -192,11 +198,14 @@ class WelcomeScreen extends StatelessWidget {
                         onPressed: () => _openSignup(context),
                         child: const Text.rich(
                           TextSpan(
-                            text: 'New here? ',
-                            style: TextStyle(color: _bodyText, fontSize: 15),
+                            text: AppStrings.newHere,
+                            style: TextStyle(
+                              color: AppColors.bodyText,
+                              fontSize: 15,
+                            ),
                             children: [
                               TextSpan(
-                                text: 'Create an account',
+                                text: AppStrings.createAnAccount,
                                 style: TextStyle(
                                   color: AppColors.emerald,
                                   fontWeight: FontWeight.bold,
@@ -233,7 +242,7 @@ class _Perk extends StatelessWidget {
           width: 56,
           height: 56,
           decoration: const BoxDecoration(
-            color: Color(0xFFE3F1ED),
+            color: AppColors.softGreen,
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: AppColors.emerald, size: 26),

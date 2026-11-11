@@ -1,6 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'app_theme.dart';
+
+import '../core/app_icons.dart';
+import '../core/app_images.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import 'home_screen.dart';
 import 'welcome_screen.dart';
 
@@ -91,12 +95,12 @@ class _SplashScreenState extends State<SplashScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(28),
                   child: Image.asset(
-                    'assets/icon/app_icon.png',
+                    AppImages.appIcon,
                     width: 120,
                     height: 120,
                     // if the image is missing, show an icon instead of crashing
                     errorBuilder: (context, error, stackTrace) => const Icon(
-                      Icons.chat_bubble_rounded,
+                      AppIcons.logo,
                       size: 90,
                       color: Colors.white,
                     ),
@@ -107,7 +111,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
               // BRAND NAME
               Text(
-                AppBrand.name.toUpperCase(),
+                AppStrings.appName.toUpperCase(),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 38,
@@ -123,7 +127,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 height: 26,
                 child: CircularProgressIndicator(
                   strokeWidth: 3,
-                  color: Color(0xFFF2D98B),
+                  color: AppColors.goldLight,
                 ),
               ),
 
@@ -131,7 +135,7 @@ class _SplashScreenState extends State<SplashScreen> {
               const Padding(
                 padding: EdgeInsets.only(bottom: 24),
                 child: Text(
-                  AppBrand.tagline,
+                  AppStrings.tagline,
                   style: TextStyle(color: Color(0xCCFFFFFF), fontSize: 14),
                 ),
               ),
