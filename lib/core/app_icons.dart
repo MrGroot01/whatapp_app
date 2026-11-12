@@ -51,4 +51,57 @@ class AppIcons {
   static const IconData tickDelivered = Icons.done_all;
   static const IconData videoCall = Icons.videocam;
   static const IconData missedCall = Icons.videocam_off;
+
+  // ---------- SETTINGS ----------
+  static const IconData camera = Icons.camera_alt;
+  static const IconData logout = Icons.logout_rounded;
+  static const IconData settingsAccount = Icons.vpn_key_outlined;
+  static const IconData settingsPrivacy = Icons.lock_outline;
+  static const IconData settingsChats = Icons.chat_outlined;
+  static const IconData settingsNotifications = Icons.notifications_none;
+  static const IconData settingsStorage = Icons.storage_outlined;
+  static const IconData settingsLanguage = Icons.language;
+  static const IconData settingsHelp = Icons.help_outline;
+
+  // ---------- CHAT ----------
+  // top bar
+  static const IconData call = Icons.call;
+  static const IconData more = Icons.more_vert;
+  static const IconData groupInfo = Icons.group_outlined;
+  static const IconData media = Icons.photo_library_outlined;
+  static const IconData clearChat = Icons.delete_sweep;
+  static const IconData arrowUp = Icons.keyboard_arrow_up;
+  static const IconData arrowDown = Icons.keyboard_arrow_down;
+
+  // input bar
+  static const IconData emoji = Icons.emoji_emotions_outlined;
+  static const IconData keyboard = Icons.keyboard_alt_outlined;
+  static const IconData attach = Icons.attach_file;
+  static const IconData mic = Icons.mic;
+  static const IconData stop = Icons.stop;
+  static const IconData send = Icons.send_rounded;
+  static const IconData addEmoji = Icons.add;
+
+  // attach menu
+  static const IconData attachDocument = Icons.insert_drive_file;
+  static const IconData attachGallery = Icons.photo;
+  static const IconData attachContact = Icons.person;
+  static const IconData attachLocation = Icons.location_on;
+
+  // message options and bubbles
+  static const IconData chatMessage = Icons.chat;
+  static const IconData reply = Icons.reply;
+  static const IconData forward = Icons.forward;
+  static const IconData retry = Icons.refresh;
+  static const IconData copy = Icons.copy_rounded;
+  static const IconData deleteMessage = Icons.delete_outline;
+  static const IconData file = Icons.insert_drive_file;
+  static const IconData brokenImage = Icons.broken_image;
+  static const IconData pending = Icons.schedule;
+  static const IconData disappearing = Icons.timer_outlined;
+
+  // language list
+  static const IconData language = Icons.language;
+  static const IconData selected = Icons.check_circle;
+  static const IconData notSelected = Icons.circle_outlined;
 }

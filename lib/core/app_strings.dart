@@ -207,4 +207,180 @@ class AppStrings {
   static String deleteChatsTitle(int count) => 'Delete $count chats?';
 
   static String chatsDeleted(int count) => '$count chats deleted';
+
+  // ---------- SETTINGS ----------
+  static const String searchSettings = 'Search settings';
+  static const String noSettingsFound = 'No settings found';
+  static const String addNewContact = 'Add new contact';
+  static const String addNewContactSub = 'Save a contact to start chatting';
+
+  static const String settingsAccount = 'Account';
+  static const String settingsAccountSub =
+      'Security notifications, account info';
+  static const String settingsPrivacy = 'Privacy';
+  static const String settingsPrivacySub =
+      'Blocked contacts, disappearing messages';
+  static const String settingsChatsSub = 'Theme, wallpaper, chat history';
+  static const String settingsNotifications = 'Notifications';
+  static const String settingsNotificationsSub =
+      'Message, group and call tones';
+  static const String settingsStorage = 'Storage and data';
+  static const String settingsStorageSub = 'Network usage, auto-download';
+  static const String settingsLanguage = 'App language';
+  static const String settingsLanguageSub = 'English';
+  static const String settingsHelp = 'Help and feedback';
+  static const String settingsHelpSub =
+      'Help centre, contact us, privacy policy';
+
+  static const String logOutTitle = 'Log out?';
+  static const String logOutBody =
+      'Are you sure you want to log out of your account?';
+  static const String profilePhotoUpdated =
+      'Profile picture updated. Your contacts can now see it.';
+
+  // ---------- CHAT ----------
+  // names and labels
+  static const String you = 'You';
+  static const String member = 'Member';
+  static const String today = 'Today';
+  static const String forwarded = 'Forwarded';
+  static const String pleaseLogInAgain = 'Please log in again';
+  static const String noLongerInGroup = 'You are no longer in this group';
+
+  static const List<String> monthsShort = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  // disappearing messages
+  static const String disappearOff = 'Off';
+  static const String disappear5Min = '5 minutes';
+  static const String disappear1Day = '1 day';
+  static const String disappear7Days = '7 days';
+
+  static String disappearingNotice(String label) =>
+      '⏱ Disappearing messages: $label';
+
+  // send later (schedule)
+  static const String scheduleTitle = 'Schedule sending';
+  static const String scheduleTypeFirst =
+      'Type a message or select an image first';
+  static const String scheduleInvalid = 'Pick a time in the future';
+
+  static String tomorrowDay(String day) => 'Tomorrow, $day';
+
+  static String scheduleToday(String time) => 'today at $time';
+
+  static String scheduleTomorrow(String time) => 'tomorrow at $time';
+
+  static String scheduleOn(String day, String time) => 'on $day at $time';
+
+  static String sendAt(String label) => 'Send $label';
+
+  static String scheduledFor(String label) =>
+      'Message scheduled for $label';
+
+  // calls
+  static const String callsNotInGroups =
+      'Calls are not available in groups yet';
+  static const String couldNotIdentifyContact =
+      'Could not identify the contact account';
+  static const String couldNotOpenDialer = 'Could not open the phone dialer';
+
+  static String noPhoneSaved(String name) =>
+      'No phone number saved for $name';
+
+  // camera, gallery, documents
+  static const String couldNotOpenCamera =
+      'Could not open the camera. Check camera permission.';
+  static const String couldNotOpenGallery = 'Could not open the gallery';
+  static const String couldNotPickDocument = 'Could not pick the document';
+  static const String couldNotOpenFile = 'Could not open the file';
+
+  // attach menu
+  static const String attachDocument = 'Document';
+  static const String attachCamera = 'Camera';
+  static const String attachGallery = 'Gallery';
+  static const String attachContact = 'Contact';
+  static const String attachLocation = 'Location';
+  static const String locationComingSoon =
+      'Location sharing is coming soon';
+
+  // contact pickers (share contact, forward)
+  static const String shareContactTitle = 'Share contact';
+  static const String forwardToTitle = 'Forward to...';
+  static const String noSavedContacts = 'No saved contacts yet';
+  static const String searchNameOrNumber = 'Search name or number';
+  static const String noContactFound = 'No contact found';
+  static const String selectContacts = 'Select contacts';
+
+  static String sendToCount(int count) => 'Send to $count';
+
+  // shared contact card
+  static const String cardMessage = 'Message';
+  static const String saveContact = 'Save contact';
+  static const String alreadyInContacts = 'Already in your contacts';
+  static const String ownNumber = 'This is your own number';
+  static const String contactSavedShort = 'Contact saved';
+  static const String couldNotSaveContact =
+      'Could not save the contact. Check the database rules.';
+
+  // forward
+  static const String waitUntilSent = 'Wait until the message is sent';
+  static const String messageForwarded = 'Message forwarded';
+
+  static String forwardedToCount(int done, int total) =>
+      'Forwarded to $done of $total contacts';
+
+  // voice typing
+  static const String voiceLanguageTitle = 'Voice typing language';
+  static const String voiceLanguageHelp =
+      'The mic listens to one language at a time. '
+      'Choose the language you will speak.';
+  static const String listening = 'Listening...';
+
+  static String voiceLanguageChosen(String name) =>
+      'Voice typing language: $name';
+
+  static String listeningIn(String name) => 'Listening in $name...';
+
+  // message options (long-press on a message)
+  static const String reply = 'Reply';
+  static const String forward = 'Forward';
+  static const String tryAgain = 'Try again';
+  static const String copy = 'Copy';
+  static const String copied = 'Copied';
+  static const String messageDeleted = 'Message deleted';
+
+  // clear chat
+  static const String clearChatTitle = 'Clear chat?';
+  static const String clear = 'Clear';
+
+  static String clearGroupBody(String title) =>
+      'All messages in $title will be deleted for everyone.';
+
+  static String clearChatBody(String name) =>
+      'All messages with $name will be deleted.';
+
+  // message list
+  static const String couldNotLoadMessages =
+      'Unable to load messages. Check your Firebase Realtime Database rules.';
+  static const String noMessagesYet = 'No messages yet\nSay hi 👋';
+
+  // input bar
+  static const String messageHint = 'Message';
+  static const String photoAttached = 'Photo attached';
+  static const String removePhoto = 'Remove photo';
+
+  // top bar and menu
+  static const String groupInfo = 'Group info';
+  static const String viewProfile = 'View Profile';
+  static const String mediaLinksDocs = 'Media, links, and docs';
+  static const String clearChat = 'Clear chat';
+
+  // search inside a chat
+  static const String searchHint = 'Search...';
+  static const String noResults = 'No results';
+
+  static String matchOf(int current, int total) => '$current of $total';
 }

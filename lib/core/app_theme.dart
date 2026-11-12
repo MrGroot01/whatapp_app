@@ -34,10 +34,37 @@ class AppColors {
   // ---------- LINES ----------
   static const Color border = Color(0xFFE3DED2); // text box border
   static const Color divider = Color(0xFFE9E4D8); // list separators
+  static const Color softDivider = Color(0xFFEFEBE0); // lines inside cards
+
+  // ---------- SHADOW ----------
+  static const Color shadow = Color(0x14000000); // soft card shadow
+
+  // ---------- TEXT ON THE GREEN HEADER ----------
+  static const Color onEmeraldStrong = Color(0xE6FFFFFF); // phone number
+  static const Color onEmeraldSoft = Color(0xCCFFFFFF); // email
+  static const Color onEmeraldHint = Color(0xB3FFFFFF); // search hint
 
   // ---------- STATUS ----------
   static const Color error = Color(0xFFD94B4B);
   static const Color errorBackground = Color(0xFFFCEAEA);
   static const Color tickRead = Color(0xFF34A7E0);
   static const Color tickGrey = Color(0xFF8A9A98);
+
+  // ---------- CHAT ----------
+  static const Color bubbleTheirs = Color(0xFFFFFFFF); // their message bubble
+  static const Color quoteOther = Color(0xFFAC44CF); // reply bar of others
+  static const Color quoteBackground = Color(0x0F000000); // quote inside bubble
+  static const Color sheetHandle = Color(0xFFD5D5D5); // small bar on a sheet
+  static const Color buttonDisabled = Color(0xFFBFD8D2); // disabled green button
+  static const Color searchFill = Color(0xFFF3F0E8); // search box in a sheet
+  static const Color noticeYellow = Color(0xFFFFF4D6); // disappearing notice
+  static const Color highlight = Color(0xFFFFE58F); // search match
+  static const Color highlightCurrent = Color(0xFFFFB84D); // current match
+
+  // attach menu circles
+  static const Color attachDocument = Color(0xFF5F66CD);
+  static const Color attachCamera = Color(0xFFD3396D);
+  static const Color attachGallery = Color(0xFFAC44CF);
+  static const Color attachContact = Color(0xFF0795DC);
+  static const Color attachLocation = Color(0xFF1FA855);
 }

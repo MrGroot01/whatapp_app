@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
+import '../providers/account_provider.dart';
 import 'add_contact_action.dart';
-import 'app_theme.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
-import '../providers/account_provider.dart';
 
 // One row in the settings list
 class SettingsItem {
@@ -42,26 +44,46 @@ class _SettingsView extends StatefulWidget {
 }
 
 class _SettingsViewState extends State<_SettingsView> {
-  static const Color _error = Color(0xFFD94B4B);
-
   // only the search box of this screen lives here (pure UI state)
   final searchController = TextEditingController();
   String searchText = '';
 
   final List<SettingsItem> items = const [
-    SettingsItem(Icons.vpn_key_outlined, 'Account',
-        'Security notifications, account info'),
-    SettingsItem(Icons.lock_outline, 'Privacy',
-        'Blocked contacts, disappearing messages'),
     SettingsItem(
-        Icons.chat_outlined, 'Chats', 'Theme, wallpaper, chat history'),
-    SettingsItem(Icons.notifications_none, 'Notifications',
-        'Message, group and call tones'),
-    SettingsItem(Icons.storage_outlined, 'Storage and data',
-        'Network usage, auto-download'),
-    SettingsItem(Icons.language, 'App language', 'English'),
-    SettingsItem(Icons.help_outline, 'Help and feedback',
-        'Help centre, contact us, privacy policy'),
+      AppIcons.settingsAccount,
+      AppStrings.settingsAccount,
+      AppStrings.settingsAccountSub,
+    ),
+    SettingsItem(
+      AppIcons.settingsPrivacy,
+      AppStrings.settingsPrivacy,
+      AppStrings.settingsPrivacySub,
+    ),
+    SettingsItem(
+      AppIcons.settingsChats,
+      AppStrings.chats,
+      AppStrings.settingsChatsSub,
+    ),
+    SettingsItem(
+      AppIcons.settingsNotifications,
+      AppStrings.settingsNotifications,
+      AppStrings.settingsNotificationsSub,
+    ),
+    SettingsItem(
+      AppIcons.settingsStorage,
+      AppStrings.settingsStorage,
+      AppStrings.settingsStorageSub,
+    ),
+    SettingsItem(
+      AppIcons.settingsLanguage,
+      AppStrings.settingsLanguage,
+      AppStrings.settingsLanguageSub,
+    ),
+    SettingsItem(
+      AppIcons.settingsHelp,
+      AppStrings.settingsHelp,
+      AppStrings.settingsHelpSub,
+    ),
   ];
 
   @override
@@ -69,7 +91,7 @@ class _SettingsViewState extends State<_SettingsView> {
     super.initState();
     // the provider tells the screen when the picture was saved
     context.read<AccountProvider>().onPhotoUpdated = () {
-      _showMessage('Profile picture updated. Your contacts can now see it.');
+      _showMessage(AppStrings.profilePhotoUpdated);
     };
   }
 
@@ -110,30 +132,30 @@ class _SettingsViewState extends State<_SettingsView> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
-          'Log out?',
+          AppStrings.logOutTitle,
           style: TextStyle(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: const Text(
-          'Are you sure you want to log out of your account?',
+          AppStrings.logOutBody,
           style: TextStyle(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text(
-              'Cancel',
+              AppStrings.cancel,
               style: TextStyle(color: AppColors.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text(
-              'Log out',
+              AppStrings.logOut,
               style: TextStyle(
-                color: _error,
+                color: AppColors.error,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -215,7 +237,7 @@ class _SettingsViewState extends State<_SettingsView> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x14000000),
+            color: AppColors.shadow,
             blurRadius: 12,
             offset: Offset(0, 4),
           ),
@@ -234,7 +256,7 @@ class _SettingsViewState extends State<_SettingsView> {
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: const Color(0xFFE3F1ED),
+          color: AppColors.softGreen,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(item.icon, color: AppColors.emerald, size: 24),
@@ -293,7 +315,7 @@ class _SettingsViewState extends State<_SettingsView> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      icon: const Icon(AppIcons.back, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
@@ -339,7 +361,7 @@ class _SettingsViewState extends State<_SettingsView> {
                                 ),
                               )
                                   : const Icon(
-                                Icons.camera_alt,
+                                AppIcons.camera,
                                 size: 18,
                                 color: Colors.white,
                               ),
@@ -373,7 +395,7 @@ class _SettingsViewState extends State<_SettingsView> {
                             Text(
                               fullPhone,
                               style: const TextStyle(
-                                color: Color(0xE6FFFFFF),
+                                color: AppColors.onEmeraldStrong,
                                 fontSize: 15,
                               ),
                             ),
@@ -382,7 +404,7 @@ class _SettingsViewState extends State<_SettingsView> {
                           Text(
                             account.email,
                             style: const TextStyle(
-                              color: Color(0xCCFFFFFF),
+                              color: AppColors.onEmeraldSoft,
                               fontSize: 14,
                             ),
                           ),
@@ -416,23 +438,23 @@ class _SettingsViewState extends State<_SettingsView> {
                     });
                   },
                   decoration: InputDecoration(
-                    hintText: 'Search settings',
+                    hintText: AppStrings.searchSettings,
                     hintStyle: const TextStyle(
                       color: AppColors.textSoft,
                       fontSize: 16,
                     ),
                     prefixIcon:
-                    const Icon(Icons.search, color: AppColors.textSoft),
+                    const Icon(AppIcons.search, color: AppColors.textSoft),
                     filled: true,
                     fillColor: AppColors.card,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
-                      borderSide: const BorderSide(color: Color(0xFFE3DED2)),
+                      borderSide: const BorderSide(color: AppColors.border),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
-                      borderSide: const BorderSide(color: Color(0xFFE3DED2)),
+                      borderSide: const BorderSide(color: AppColors.border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
@@ -446,9 +468,9 @@ class _SettingsViewState extends State<_SettingsView> {
                 whiteCard(
                   child: settingsRow(
                     const SettingsItem(
-                      Icons.person_add_alt_1,
-                      'Add new contact',
-                      'Save a contact to start chatting',
+                      AppIcons.addContact,
+                      AppStrings.addNewContact,
+                      AppStrings.addNewContactSub,
                     ),
                     onTap: () => openAddContact(context),
                   ),
@@ -460,7 +482,7 @@ class _SettingsViewState extends State<_SettingsView> {
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
                     child: Text(
-                      'No settings found',
+                      AppStrings.noSettingsFound,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.textSoft,
@@ -479,7 +501,7 @@ class _SettingsViewState extends State<_SettingsView> {
                               height: 1,
                               indent: 76,
                               endIndent: 16,
-                              color: Color(0xFFEFEBE0),
+                              color: AppColors.softDivider,
                             ),
                         ],
                       ],
@@ -498,19 +520,19 @@ class _SettingsViewState extends State<_SettingsView> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFCEAEA),
+                        color: AppColors.errorBackground,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
-                        Icons.logout_rounded,
-                        color: _error,
+                        AppIcons.logout,
+                        color: AppColors.error,
                         size: 24,
                       ),
                     ),
                     title: const Text(
-                      'Log out',
+                      AppStrings.logOut,
                       style: TextStyle(
-                        color: _error,
+                        color: AppColors.error,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),

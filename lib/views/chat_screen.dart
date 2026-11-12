@@ -16,7 +16,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../incoming_message_notifier.dart';
-import 'app_theme.dart';
+import '../core/app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
 import 'widgets/connection_banner.dart';
 import '../message_sync_service.dart';
 import '../models/message.dart';
@@ -69,13 +71,6 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  static const Color _wallpaper = Color(0xFFEFEAE0);
-  static const Color _mine = Color(0xFFD9F2E7);
-  static const Color _theirs = Colors.white;
-  static const Color _tickRead = Color(0xFF34A7E0);
-  static const Color _tickGrey = Color(0xFF8A9A98);
-  static const Color _error = Color(0xFFD94B4B);
-  static const Color _quoteOther = Color(0xFFAC44CF);
 
   // the quick reactions shown when you long-press a message
   static const List<String> _quickReactions = [
@@ -159,9 +154,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // who wrote a message ("You", the contact, or a group member)
   String _senderLabel(String senderId) {
-    if (senderId == _myUid) return 'You';
+    if (senderId == _myUid) return AppStrings.you;
     if (!widget.isGroup) return widget.name;
-    return _group.nameOf(senderId) ?? 'Member';
+    return _group.nameOf(senderId) ?? AppStrings.member;
   }
 
   bool get _hasDraftContent =>
@@ -169,10 +164,10 @@ class _ChatScreenState extends State<ChatScreen> {
           _composer.draftImageFile != null;
 
   String _disappearLabel(int ms) {
-    if (ms == 300000) return '5 minutes';
-    if (ms == 86400000) return '1 day';
-    if (ms == 604800000) return '7 days';
-    return 'Off';
+    if (ms == 300000) return AppStrings.disappear5Min;
+    if (ms == 86400000) return AppStrings.disappear1Day;
+    if (ms == 604800000) return AppStrings.disappear7Days;
+    return AppStrings.disappearOff;
   }
 
   @override
@@ -223,7 +218,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // I left the group, was removed, or the group was deleted
   void _leaveScreen() {
     if (!mounted) return;
-    snack('You are no longer in this group');
+    snack(AppStrings.noLongerInGroup);
     final route = ModalRoute.of(context);
     if (route != null && route.isActive) {
       Navigator.of(context).removeRoute(route);
@@ -273,20 +268,20 @@ class _ChatScreenState extends State<ChatScreen> {
   String _scheduleLabel(DateTime when) {
     final diff = _daysFromToday(when);
     final time = formatTime(when);
-    if (diff == 0) return 'today at $time';
-    if (diff == 1) return 'tomorrow at $time';
-    return 'on ${dayLabel(when)} at $time';
+    if (diff == 0) return AppStrings.scheduleToday(time);
+    if (diff == 1) return AppStrings.scheduleTomorrow(time);
+    return AppStrings.scheduleOn(dayLabel(when), time);
   }
 
   Future<void> showScheduleSheet() async {
     final text = messageController.text.trim();
 
     if (text.isEmpty && _composer.draftImageFile == null) {
-      snack('Type a message or select an image first');
+      snack(AppStrings.scheduleTypeFirst);
       return;
     }
     if (_myUid.isEmpty) {
-      snack('Please log in again');
+      snack(AppStrings.pleaseLogInAgain);
       return;
     }
     closePanels();
@@ -308,7 +303,7 @@ class _ChatScreenState extends State<ChatScreen> {
               DateTime.now().add(const Duration(minutes: 1)),
             );
             final dateText = _daysFromToday(when) == 1
-                ? 'Tomorrow, ${dayLabel(when)}'
+                ? AppStrings.tomorrowDay(dayLabel(when))
                 : dayLabel(when);
 
             return SafeArea(
@@ -323,14 +318,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         width: 44,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD5D5D5),
+                          color: AppColors.sheetHandle,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      'Schedule sending',
+                      AppStrings.scheduleTitle,
                       style: GoogleFonts.poppins(
                         color: AppColors.textDark,
                         fontSize: 20,
@@ -414,7 +409,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.emerald,
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor: const Color(0xFFBFD8D2),
+                          disabledBackgroundColor: AppColors.buttonDisabled,
                           disabledForegroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -422,8 +417,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         child: Text(
                           valid
-                              ? 'Send ${_scheduleLabel(when)}'
-                              : 'Pick a time in the future',
+                              ? AppStrings.sendAt(_scheduleLabel(when))
+                              : AppStrings.scheduleInvalid,
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -435,7 +430,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: TextButton(
                         onPressed: () => Navigator.pop(sheetContext),
                         child: Text(
-                          'Cancel',
+                          AppStrings.cancel,
                           style: GoogleFonts.poppins(
                             color: AppColors.emerald,
                             fontSize: 16,
@@ -462,7 +457,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     messageController.clear();
-    snack('Message scheduled for ${_scheduleLabel(picked)}');
+    snack(AppStrings.scheduledFor(_scheduleLabel(picked)));
   }
 
   // ---------- CALL ----------
@@ -472,7 +467,7 @@ class _ChatScreenState extends State<ChatScreen> {
     closePanels();
 
     if (widget.isGroup) {
-      snack('Calls are not available in groups yet');
+      snack(AppStrings.callsNotInGroups);
       return;
     }
 
@@ -484,7 +479,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final otherUid = _otherUid;
 
     if (_myUid.isEmpty || otherUid.isEmpty) {
-      snack('Could not identify the contact account');
+      snack(AppStrings.couldNotIdentifyContact);
       return;
     }
 
@@ -509,7 +504,7 @@ class _ChatScreenState extends State<ChatScreen> {
     var number = widget.phone.replaceAll(RegExp(r'[\s\-()]'), '');
 
     if (number.isEmpty) {
-      snack('No phone number saved for ${widget.name}');
+      snack(AppStrings.noPhoneSaved(widget.name));
       return;
     }
 
@@ -521,10 +516,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final opened = await launchUrl(Uri(scheme: 'tel', path: number));
-      if (!opened) snack('Could not open the phone dialer');
+      if (!opened) snack(AppStrings.couldNotOpenDialer);
     } catch (e) {
       debugPrint('Dialer failed: $e');
-      snack('Could not open the phone dialer');
+      snack(AppStrings.couldNotOpenDialer);
     }
   }
 
@@ -540,7 +535,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (x == null || !mounted) return;
       _composer.setDraftImage(File(x.path), x.name);
     } catch (e) {
-      snack('Could not open the camera. Check camera permission.');
+      snack(AppStrings.couldNotOpenCamera);
     }
   }
 
@@ -555,7 +550,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (x == null || !mounted) return;
       _composer.setDraftImage(File(x.path), x.name);
     } catch (e) {
-      snack('Could not open the gallery');
+      snack(AppStrings.couldNotOpenGallery);
     }
   }
 
@@ -569,7 +564,7 @@ class _ChatScreenState extends State<ChatScreen> {
       path = picked.path;
       name = picked.name;
     } catch (e) {
-      snack('Could not pick the document');
+      snack(AppStrings.couldNotPickDocument);
       return;
     }
     if (path == null) return;
@@ -588,7 +583,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (e) {
-      snack('Could not open the file');
+      snack(AppStrings.couldNotOpenFile);
     }
   }
 
@@ -624,7 +619,7 @@ class _ChatScreenState extends State<ChatScreen> {
             list.add(
               _SavedContact(
                 id: key.toString(),
-                name: (data['name'] ?? 'Contact').toString(),
+                name: (data['name'] ?? AppStrings.attachContact).toString(),
                 phone: (data['phone'] ?? '').toString(),
                 countryCode: (data['countryCode'] ?? '+91').toString(),
               ),
@@ -653,7 +648,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return null;
 
     if (all.isEmpty) {
-      snack('No saved contacts yet');
+      snack(AppStrings.noSavedContacts);
       return null;
     }
 
@@ -700,7 +695,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close),
+                            icon: const Icon(AppIcons.close),
                             onPressed: () => Navigator.pop(sheetContext),
                           ),
                         ],
@@ -716,17 +711,17 @@ class _ChatScreenState extends State<ChatScreen> {
                           fontSize: 16,
                         ),
                         decoration: InputDecoration(
-                          hintText: 'Search name or number',
+                          hintText: AppStrings.searchNameOrNumber,
                           hintStyle: GoogleFonts.poppins(
                             color: AppColors.textSoft,
                             fontSize: 15,
                           ),
                           prefixIcon: const Icon(
-                            Icons.search,
+                            AppIcons.search,
                             color: AppColors.textSoft,
                           ),
                           filled: true,
-                          fillColor: const Color(0xFFF3F0E8),
+                          fillColor: AppColors.searchFill,
                           contentPadding: const EdgeInsets.symmetric(
                             vertical: 12,
                           ),
@@ -741,7 +736,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: shown.isEmpty
                           ? Center(
                         child: Text(
-                          'No contact found',
+                          AppStrings.noContactFound,
                           style: GoogleFonts.poppins(
                             color: AppColors.textSoft,
                             fontSize: 16,
@@ -836,8 +831,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             child: Text(
                               selected.isEmpty
-                                  ? 'Select contacts'
-                                  : 'Send to ${selected.length}',
+                                  ? AppStrings.selectContacts
+                                  : AppStrings.sendToCount(selected.length),
                               style: GoogleFonts.poppins(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -858,7 +853,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ---------- SHARE A CONTACT ----------
   Future<void> shareContact() async {
-    final picked = await _pickContacts(title: 'Share contact', multi: false);
+    final picked = await _pickContacts(title: AppStrings.shareContactTitle, multi: false);
     if (picked == null || picked.isEmpty) return;
 
     final c = picked.first;
@@ -946,9 +941,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       Navigator.pop(sheetContext);
                       openChatWith(msg);
                     },
-                    icon: const Icon(Icons.chat),
+                    icon: const Icon(AppIcons.chatMessage),
                     label: Text(
-                      'Message',
+                      AppStrings.cardMessage,
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -973,9 +968,9 @@ class _ChatScreenState extends State<ChatScreen> {
                       Navigator.pop(sheetContext);
                       saveSharedContact(msg);
                     },
-                    icon: const Icon(Icons.person_add_alt_1),
+                    icon: const Icon(AppIcons.addContact),
                     label: Text(
-                      'Save contact',
+                      AppStrings.saveContact,
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -993,7 +988,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
               if (canUse && alreadySaved)
                 Text(
-                  'Already in your contacts',
+                  AppStrings.alreadyInContacts,
                   style: GoogleFonts.poppins(
                     color: AppColors.textSoft,
                     fontSize: 14,
@@ -1001,7 +996,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               if (!canUse)
                 Text(
-                  uid == _myUid ? 'This is your own number' : '',
+                  uid == _myUid ? AppStrings.ownNumber : '',
                   style: GoogleFonts.poppins(
                     color: AppColors.textSoft,
                     fontSize: 14,
@@ -1040,13 +1035,13 @@ class _ChatScreenState extends State<ChatScreen> {
         'phone': msg.contactPhone,
         'countryCode': msg.contactCountryCode,
         'addedAt': ServerValue.timestamp,
-        'lastMessage': 'Tap to start chatting',
+        'lastMessage': AppStrings.tapToStartChatting,
         'time': '',
       });
-      snack('Contact saved');
+      snack(AppStrings.contactSavedShort);
     } catch (e) {
       debugPrint('Save contact failed: $e');
-      snack('Could not save the contact. Check the database rules.');
+      snack(AppStrings.couldNotSaveContact);
     }
   }
 
@@ -1091,14 +1086,14 @@ class _ChatScreenState extends State<ChatScreen> {
   // ---------- FORWARD ----------
   Future<void> forwardMessage(Message msg) async {
     if (msg.status < 0) {
-      snack('Wait until the message is sent');
+      snack(AppStrings.waitUntilSent);
       return;
     }
 
-    final picked = await _pickContacts(title: 'Forward to...', multi: true);
+    final picked = await _pickContacts(title: AppStrings.forwardToTitle, multi: true);
     if (picked == null || picked.isEmpty) return;
     if (_myUid.isEmpty) {
-      snack('Please log in again');
+      snack(AppStrings.pleaseLogInAgain);
       return;
     }
 
@@ -1109,8 +1104,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     snack(
       done == picked.length
-          ? 'Message forwarded'
-          : 'Forwarded to $done of ${picked.length} contacts',
+          ? AppStrings.messageForwarded
+          : AppStrings.forwardedToCount(done, picked.length),
     );
   }
 
@@ -1127,7 +1122,7 @@ class _ChatScreenState extends State<ChatScreen> {
         builder: (_) => CreateTaskScreen(
           initialTitle: title,
           sourceText: text,
-          fromName: msg.isMe ? 'You' : widget.name,
+          fromName: msg.isMe ? AppStrings.you : widget.name,
           sourceTime: msg.time,
           chatId: _chatId,
           messageId: msg.id,
@@ -1168,7 +1163,7 @@ class _ChatScreenState extends State<ChatScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
               child: Text(
-                'Voice typing language',
+                AppStrings.voiceLanguageTitle,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 18,
@@ -1179,8 +1174,7 @@ class _ChatScreenState extends State<ChatScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                'The mic listens to one language at a time. '
-                    'Choose the language you will speak.',
+                AppStrings.voiceLanguageHelp,
                 style: GoogleFonts.poppins(
                   color: AppColors.textSoft,
                   fontSize: 13,
@@ -1204,15 +1198,15 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 trailing: current == lang.id
-                    ? const Icon(Icons.check_circle, color: AppColors.emerald)
+                    ? const Icon(AppIcons.selected, color: AppColors.emerald)
                     : const Icon(
-                  Icons.circle_outlined,
+                  AppIcons.notSelected,
                   color: AppColors.textSoft,
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _voice.changeLanguage(lang.id, messageController.text);
-                  snack('Voice typing language: ${lang.name}');
+                  snack(AppStrings.voiceLanguageChosen(lang.name));
                 },
               ),
             const SizedBox(height: 8),
@@ -1233,11 +1227,11 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.mic, color: _error),
+          const Icon(AppIcons.mic, color: AppColors.error),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Listening in ${_voice.language.name}...',
+              AppStrings.listeningIn(_voice.language.name),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
@@ -1253,14 +1247,14 @@ class _ChatScreenState extends State<ChatScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFFE3F1ED),
+                color: AppColors.softGreen,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
-                    Icons.language,
+                    AppIcons.language,
                     size: 16,
                     color: AppColors.emerald,
                   ),
@@ -1280,9 +1274,9 @@ class _ChatScreenState extends State<ChatScreen> {
           TextButton(
             onPressed: _voice.cancel,
             child: Text(
-              'Cancel',
+              AppStrings.cancel,
               style: GoogleFonts.poppins(
-                color: _error,
+                color: AppColors.error,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1377,8 +1371,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (lower.length != text.length) return Text(text, style: style);
 
     final color = messageId == _search.currentMatchId
-        ? const Color(0xFFFFB84D)
-        : const Color(0xFFFFE58F);
+        ? AppColors.highlightCurrent
+        : AppColors.highlight;
 
     final spans = <TextSpan>[];
     var start = 0;
@@ -1448,7 +1442,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> deleteMessage(Message msg) async {
     final error = await _messages.deleteMessage(msg);
-    snack(error ?? 'Message deleted');
+    snack(error ?? AppStrings.messageDeleted);
   }
 
   Future<void> clearChat() async {
@@ -1458,7 +1452,7 @@ class _ChatScreenState extends State<ChatScreen> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          'Clear chat?',
+          AppStrings.clearChatTitle,
           style: GoogleFonts.poppins(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
@@ -1466,15 +1460,15 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         content: Text(
           widget.isGroup
-              ? 'All messages in $_title will be deleted for everyone.'
-              : 'All messages with ${widget.name} will be deleted.',
+              ? AppStrings.clearGroupBody(_title)
+              : AppStrings.clearChatBody(widget.name),
           style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
-              'Cancel',
+              AppStrings.cancel,
               style: GoogleFonts.poppins(
                 color: AppColors.textSoft,
                 fontSize: 16,
@@ -1484,9 +1478,9 @@ class _ChatScreenState extends State<ChatScreen> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(
-              'Clear',
+              AppStrings.clear,
               style: GoogleFonts.poppins(
-                color: _error,
+                color: AppColors.error,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -1534,7 +1528,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: mine == e ? _mine : Colors.transparent,
+                          color: mine == e ? AppColors.bubbleMine : Colors.transparent,
                           shape: BoxShape.circle,
                         ),
                         child: Text(e, style: const TextStyle(fontSize: 28)),
@@ -1548,11 +1542,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: const BoxDecoration(
-                        color: _wallpaper,
+                        color: AppColors.wallpaper,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
-                        Icons.add,
+                        AppIcons.addEmoji,
                         color: AppColors.textSoft,
                         size: 28,
                       ),
@@ -1564,9 +1558,9 @@ class _ChatScreenState extends State<ChatScreen> {
             const Divider(height: 24),
 
             ListTile(
-              leading: const Icon(Icons.reply, color: AppColors.emerald),
+              leading: const Icon(AppIcons.reply, color: AppColors.emerald),
               title: Text(
-                'Reply',
+                AppStrings.reply,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 17,
@@ -1578,9 +1572,9 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.forward, color: AppColors.emerald),
+              leading: const Icon(AppIcons.forward, color: AppColors.emerald),
               title: Text(
-                'Forward',
+                AppStrings.forward,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 17,
@@ -1595,9 +1589,9 @@ class _ChatScreenState extends State<ChatScreen> {
             // the server refused this message: send it again
             if (msg.status == -2)
               ListTile(
-                leading: const Icon(Icons.refresh, color: AppColors.emerald),
+                leading: const Icon(AppIcons.retry, color: AppColors.emerald),
                 title: Text(
-                  'Try again',
+                  AppStrings.tryAgain,
                   style: GoogleFonts.poppins(
                     color: AppColors.textDark,
                     fontSize: 17,
@@ -1613,11 +1607,11 @@ class _ChatScreenState extends State<ChatScreen> {
             if (msg.type == 'text')
               ListTile(
                 leading: const Icon(
-                  Icons.copy_rounded,
+                  AppIcons.copy,
                   color: AppColors.emerald,
                 ),
                 title: Text(
-                  'Copy',
+                  AppStrings.copy,
                   style: GoogleFonts.poppins(
                     color: AppColors.textDark,
                     fontSize: 17,
@@ -1626,16 +1620,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: msg.text));
                   Navigator.pop(sheetContext);
-                  snack('Copied');
+                  snack(AppStrings.copied);
                 },
               ),
             // only your own messages can be deleted
             if (msg.isMe)
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: _error),
+                leading: const Icon(AppIcons.deleteMessage, color: AppColors.error),
                 title: Text(
-                  'Delete',
-                  style: GoogleFonts.poppins(color: _error, fontSize: 17),
+                  AppStrings.delete,
+                  style: GoogleFonts.poppins(color: AppColors.error, fontSize: 17),
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1694,34 +1688,34 @@ class _ChatScreenState extends State<ChatScreen> {
             runSpacing: 22,
             children: [
               item(
-                Icons.insert_drive_file,
-                'Document',
-                const Color(0xFF5F66CD),
+                AppIcons.file,
+                AppStrings.attachDocument,
+                AppColors.attachDocument,
                 pickDocument,
               ),
               item(
-                Icons.camera_alt,
-                'Camera',
-                const Color(0xFFD3396D),
+                AppIcons.camera,
+                AppStrings.attachCamera,
+                AppColors.attachCamera,
                 pickFromCamera,
               ),
               item(
-                Icons.photo,
-                'Gallery',
-                const Color(0xFFAC44CF),
+                AppIcons.attachGallery,
+                AppStrings.attachGallery,
+                AppColors.attachGallery,
                 pickFromGallery,
               ),
               item(
-                Icons.person,
-                'Contact',
-                const Color(0xFF0795DC),
+                AppIcons.attachContact,
+                AppStrings.attachContact,
+                AppColors.attachContact,
                 shareContact,
               ),
               item(
-                Icons.location_on,
-                'Location',
-                const Color(0xFF1FA855),
-                    () => snack('Location sharing is coming soon'),
+                AppIcons.attachLocation,
+                AppStrings.attachLocation,
+                AppColors.attachLocation,
+                    () => snack(AppStrings.locationComingSoon),
               ),
             ],
           ),
@@ -1743,14 +1737,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final that = DateTime.utc(day.year, day.month, day.day);
     final diff = today.difference(that).inDays;
 
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Yesterday';
+    if (diff == 0) return AppStrings.today;
+    if (diff == 1) return AppStrings.yesterday;
 
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${day.day} ${months[day.month - 1]} ${day.year}';
+    return '${day.day} ${AppStrings.monthsShort[day.month - 1]} ${day.year}';
   }
 
   // ---------- UI PIECES ----------
@@ -1764,7 +1754,7 @@ class _ChatScreenState extends State<ChatScreen> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x14000000),
+              color: AppColors.shadow,
               blurRadius: 3,
               offset: Offset(0, 1),
             ),
@@ -1781,39 +1771,39 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget buildTick(int status) {
     // Waiting for internet
     if (status == -1) {
-      return const Icon(Icons.schedule, size: 16, color: _tickGrey);
+      return const Icon(AppIcons.pending, size: 16, color: AppColors.tickGrey);
     }
 
     // Failed to send
     if (status == -2) {
-      return const Icon(Icons.error_outline, size: 17, color: _error);
+      return const Icon(AppIcons.error, size: 17, color: AppColors.error);
     }
 
     // Sent: one grey tick
     if (status == 0) {
-      return const Icon(Icons.done, size: 17, color: _tickGrey);
+      return const Icon(AppIcons.tickSent, size: 17, color: AppColors.tickGrey);
     }
 
     // Delivered: two grey ticks
     if (status == 1) {
-      return const Icon(Icons.done_all, size: 17, color: _tickGrey);
+      return const Icon(AppIcons.tickDelivered, size: 17, color: AppColors.tickGrey);
     }
 
     // Read: two blue ticks
-    return const Icon(Icons.done_all, size: 17, color: _tickRead);
+    return const Icon(AppIcons.tickDelivered, size: 17, color: AppColors.tickRead);
   }
 
   // the quoted message shown at the top of a reply bubble
   Widget buildReplyQuote(Message msg) {
     final fromMe = msg.replySenderId == _myUid;
-    final barColor = fromMe ? AppColors.emerald : _quoteOther;
+    final barColor = fromMe ? AppColors.emerald : AppColors.quoteOther;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          color: const Color(0x0F000000),
+          color: AppColors.quoteBackground,
           child: IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1868,7 +1858,7 @@ class _ChatScreenState extends State<ChatScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x14000000),
+            color: AppColors.shadow,
             blurRadius: 3,
             offset: Offset(0, 1),
           ),
@@ -1970,7 +1960,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Image.memory(
                           base64Decode(msg.imageBase64),
                           errorBuilder: (_, _, _) => const Icon(
-                            Icons.broken_image,
+                            AppIcons.brokenImage,
                             color: Colors.white,
                             size: 48,
                           ),
@@ -1991,7 +1981,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 errorBuilder: (context, error, stack) => const SizedBox(
                   width: 220,
                   height: 120,
-                  child: Icon(Icons.broken_image, size: 48),
+                  child: Icon(AppIcons.brokenImage, size: 48),
                 ),
               ),
             ),
@@ -2032,7 +2022,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 errorBuilder: (context, error, stack) => const SizedBox(
                   width: 220,
                   height: 120,
-                  child: Icon(Icons.broken_image, size: 48),
+                  child: Icon(AppIcons.brokenImage, size: 48),
                 ),
               ),
             ),
@@ -2053,7 +2043,7 @@ class _ChatScreenState extends State<ChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
-              Icons.insert_drive_file,
+              AppIcons.file,
               color: AppColors.emerald,
               size: 32,
             ),
@@ -2083,7 +2073,7 @@ class _ChatScreenState extends State<ChatScreen> {
         margin: const EdgeInsets.symmetric(vertical: 3),
         padding: const EdgeInsets.fromLTRB(12, 8, 10, 5),
         decoration: BoxDecoration(
-          color: msg.isMe ? _mine : _theirs,
+          color: msg.isMe ? AppColors.bubbleMine : AppColors.bubbleTheirs,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -2092,7 +2082,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x14000000),
+              color: AppColors.shadow,
               blurRadius: 2,
               offset: Offset(0, 1),
             ),
@@ -2125,13 +2115,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
-                        Icons.forward,
+                        AppIcons.forward,
                         size: 14,
                         color: AppColors.textSoft,
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        'Forwarded',
+                        AppStrings.forwarded,
                         style: GoogleFonts.poppins(
                           color: AppColors.textSoft,
                           fontSize: 12,
@@ -2152,7 +2142,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     // small timer icon: this message will disappear
                     if (msg.expireAtMs > 0) ...[
                       const Icon(
-                        Icons.timer_outlined,
+                        AppIcons.disappearing,
                         size: 12,
                         color: AppColors.textSoft,
                       ),
@@ -2198,7 +2188,7 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            'Unable to load messages. Check your Firebase Realtime Database rules.',
+            AppStrings.couldNotLoadMessages,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
           ),
@@ -2209,7 +2199,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_messages.messages.isEmpty) {
       return Center(
         child: Text(
-          'No messages yet\nSay hi 👋',
+          AppStrings.noMessagesYet,
           textAlign: TextAlign.center,
           style: GoogleFonts.poppins(
             color: AppColors.textSoft,
@@ -2247,7 +2237,7 @@ class _ChatScreenState extends State<ChatScreen> {
             alignment: Alignment.centerLeft,
             child: Padding(
               padding: EdgeInsets.only(left: 16),
-              child: Icon(Icons.reply, color: AppColors.textSoft),
+              child: Icon(AppIcons.reply, color: AppColors.textSoft),
             ),
           ),
           child: SizedBox(
@@ -2289,7 +2279,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget buildReplyBar() {
     final r = _composer.replyingTo!;
     final fromMe = r.isMe;
-    final barColor = fromMe ? AppColors.emerald : _quoteOther;
+    final barColor = fromMe ? AppColors.emerald : AppColors.quoteOther;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
@@ -2331,7 +2321,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.textSoft),
+                  icon: const Icon(AppIcons.close, color: AppColors.textSoft),
                   onPressed: _composer.clearReply,
                 ),
               ],
@@ -2361,7 +2351,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x14000000),
+                    color: AppColors.shadow,
                     blurRadius: 4,
                     offset: Offset(0, 1),
                   ),
@@ -2379,11 +2369,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(child: Text('Photo attached')),
+                  const Expanded(child: Text(AppStrings.photoAttached)),
                   IconButton(
-                    tooltip: 'Remove photo',
+                    tooltip: AppStrings.removePhoto,
                     onPressed: _composer.clearDraftImage,
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(AppIcons.close),
                   ),
                 ],
               ),
@@ -2398,7 +2388,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0x14000000),
+                        color: AppColors.shadow,
                         blurRadius: 4,
                         offset: Offset(0, 1),
                       ),
@@ -2411,8 +2401,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         onPressed: toggleEmoji,
                         icon: Icon(
                           _composer.showEmoji
-                              ? Icons.keyboard_alt_outlined
-                              : Icons.emoji_emotions_outlined,
+                              ? AppIcons.keyboard
+                              : AppIcons.emoji,
                           color: AppColors.textSoft,
                         ),
                       ),
@@ -2432,7 +2422,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             _composer.setHasText(value.trim().isNotEmpty);
                           },
                           decoration: InputDecoration(
-                            hintText: listening ? 'Listening...' : 'Message',
+                            hintText: listening ? AppStrings.listening : AppStrings.messageHint,
                             hintStyle: GoogleFonts.poppins(
                               color: AppColors.textSoft,
                               fontSize: 17,
@@ -2447,7 +2437,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       IconButton(
                         onPressed: showAttachMenu,
                         icon: const Icon(
-                          Icons.attach_file,
+                          AppIcons.attach,
                           color: AppColors.textSoft,
                         ),
                       ),
@@ -2455,7 +2445,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         IconButton(
                           onPressed: pickFromCamera,
                           icon: const Icon(
-                            Icons.camera_alt,
+                            AppIcons.camera,
                             color: AppColors.textSoft,
                           ),
                         ),
@@ -2481,8 +2471,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         : (_hasDraftContent ? sendMessage : toggleListening),
                     icon: Icon(
                       listening
-                          ? Icons.stop
-                          : (_hasDraftContent ? Icons.send_rounded : Icons.mic),
+                          ? AppIcons.stop
+                          : (_hasDraftContent ? AppIcons.send : AppIcons.mic),
                       color: Colors.white,
                     ),
                   ),
@@ -2556,12 +2546,12 @@ class _ChatScreenState extends State<ChatScreen> {
       value: value,
       child: Row(
         children: [
-          Icon(icon, color: danger ? _error : AppColors.textSoft),
+          Icon(icon, color: danger ? AppColors.error : AppColors.textSoft),
           const SizedBox(width: 12),
           Text(
             label,
             style: GoogleFonts.poppins(
-              color: danger ? _error : AppColors.textDark,
+              color: danger ? AppColors.error : AppColors.textDark,
               fontSize: 16,
             ),
           ),
@@ -2611,7 +2601,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ? null
                       : widget.isGroup
                       ? const Icon(
-                    Icons.group,
+                    AppIcons.group,
                     color: Colors.white,
                     size: 22,
                   )
@@ -2662,17 +2652,17 @@ class _ChatScreenState extends State<ChatScreen> {
       actions: [
         if (!widget.isGroup) ...[
           IconButton(
-            icon: const Icon(Icons.videocam),
+            icon: const Icon(AppIcons.videoCall),
             onPressed: () => openCallScreen(video: true),
           ),
           IconButton(
-            icon: const Icon(Icons.call),
+            icon: const Icon(AppIcons.call),
             onPressed: () => openCallScreen(video: false),
           ),
         ],
         PopupMenuButton<String>(
           color: Colors.white,
-          icon: const Icon(Icons.more_vert),
+          icon: const Icon(AppIcons.more),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
@@ -2695,22 +2685,22 @@ class _ChatScreenState extends State<ChatScreen> {
           itemBuilder: (context) => [
             _menuItem(
               'info',
-              widget.isGroup ? Icons.group_outlined : Icons.person_outline,
-              widget.isGroup ? 'Group info' : 'View Profile',
+              widget.isGroup ? AppIcons.groupInfo : AppIcons.person,
+              widget.isGroup ? AppStrings.groupInfo : AppStrings.viewProfile,
             ),
-            _menuItem('search', Icons.search, 'Search'),
+            _menuItem('search', AppIcons.search, AppStrings.search),
             _menuItem(
               'media',
-              Icons.photo_library_outlined,
-              'Media, links, and docs',
+              AppIcons.media,
+              AppStrings.mediaLinksDocs,
             ),
             // in a group only the admin can clear the chat for everyone
             if (!widget.isGroup || _group.isAdmin) ...[
               const PopupMenuDivider(),
               _menuItem(
                 'clear',
-                Icons.delete_sweep,
-                'Clear chat',
+                AppIcons.clearChat,
+                AppStrings.clearChat,
                 danger: true,
               ),
             ],
@@ -2729,7 +2719,7 @@ class _ChatScreenState extends State<ChatScreen> {
       scrolledUnderElevation: 0,
       titleSpacing: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: const Icon(AppIcons.back),
         onPressed: stopSearch,
       ),
       title: TextField(
@@ -2742,7 +2732,7 @@ class _ChatScreenState extends State<ChatScreen> {
         onChanged: onSearchChanged,
         onSubmitted: (_) => goToMatch(1),
         decoration: InputDecoration(
-          hintText: 'Search...',
+          hintText: AppStrings.searchHint,
           hintStyle: GoogleFonts.poppins(
             color: const Color(0xB3FFFFFF),
             fontSize: 17,
@@ -2757,18 +2747,18 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.only(right: 4),
               child: Text(
                 total == 0
-                    ? 'No results'
-                    : '${_search.currentMatch + 1} of $total',
+                    ? AppStrings.noResults
+                    : AppStrings.matchOf(_search.currentMatch + 1, total),
                 style: GoogleFonts.poppins(color: Colors.white, fontSize: 13),
               ),
             ),
           ),
         IconButton(
-          icon: const Icon(Icons.keyboard_arrow_up),
+          icon: const Icon(AppIcons.arrowUp),
           onPressed: total == 0 ? null : () => goToMatch(1),
         ),
         IconButton(
-          icon: const Icon(Icons.keyboard_arrow_down),
+          icon: const Icon(AppIcons.arrowDown),
           onPressed: total == 0 ? null : () => goToMatch(-1),
         ),
       ],
@@ -2811,7 +2801,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (!didPop && searching) stopSearch();
       },
       child: Scaffold(
-        backgroundColor: _wallpaper,
+        backgroundColor: AppColors.wallpaper,
         appBar: searching
             ? buildSearchAppBar(matches.length)
             : buildNormalAppBar(),
@@ -2824,7 +2814,7 @@ class _ChatScreenState extends State<ChatScreen> {
             if (_messages.disappearMs > 0)
               Container(
                 width: double.infinity,
-                color: const Color(0xFFFFF4D6),
+                color: AppColors.noticeYellow,
                 padding: const EdgeInsets.symmetric(
                   vertical: 6,
                   horizontal: 12,
@@ -2858,7 +2848,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         backgroundColor: Colors.white,
                         onPressed: scrollToBottom,
                         child: const Icon(
-                          Icons.keyboard_arrow_down,
+                          AppIcons.arrowDown,
                           color: AppColors.emerald,
                           size: 30,
                         ),

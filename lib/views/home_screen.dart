@@ -23,7 +23,7 @@ import '../search_provider.dart';
 import '../session_helper.dart';
 import '../status_service.dart'; // StatusContact
 import '../task_service.dart';
-import 'add_contact_screen.dart';
+import 'add_contact_action.dart'; // shared "New contact" code (also used by Settings)
 import 'chat_screen.dart';
 import 'group_member_picker.dart';
 import 'my_tasks_screen.dart';
@@ -280,19 +280,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> openAddContact() async {
-    final saved = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => const AddContactScreen()),
-    );
-
-    if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.contactSaved)),
-      );
-    }
-  }
-
   // New group: pick members -> type the name -> open the new group chat
   Future<void> openNewGroup() async {
     final result = await Navigator.push<Object>(
@@ -384,7 +371,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (choice == 'group') {
       openNewGroup();
     } else {
-      openAddContact();
+      openAddContact(context); // shared code in add_contact_action.dart
     }
   }
 
