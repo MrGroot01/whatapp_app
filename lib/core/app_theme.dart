@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'app_strings.dart';
 
-// The app name. It comes from AppStrings, so it lives in ONE place.
 class AppBrand {
   static const String name = AppStrings.appName;
   static const String tagline = AppStrings.tagline;

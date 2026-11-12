@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'add_contact_action.dart';
 import 'app_theme.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
@@ -225,7 +226,8 @@ class _SettingsViewState extends State<_SettingsView> {
   }
 
   // One settings row: soft green icon box, title, subtitle
-  Widget settingsRow(SettingsItem item) {
+  // (onTap is optional: rows without an action do nothing, as before)
+  Widget settingsRow(SettingsItem item, {VoidCallback? onTap}) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: Container(
@@ -249,7 +251,7 @@ class _SettingsViewState extends State<_SettingsView> {
         item.subtitle,
         style: const TextStyle(color: AppColors.textSoft, fontSize: 13.5),
       ),
-      onTap: () {},
+      onTap: onTap ?? () {},
     );
   }
 
@@ -436,6 +438,19 @@ class _SettingsViewState extends State<_SettingsView> {
                       borderRadius: BorderRadius.circular(30),
                       borderSide: const BorderSide(color: AppColors.emerald),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ADD NEW CONTACT (same shared code as the Home screen)
+                whiteCard(
+                  child: settingsRow(
+                    const SettingsItem(
+                      Icons.person_add_alt_1,
+                      'Add new contact',
+                      'Save a contact to start chatting',
+                    ),
+                    onTap: () => openAddContact(context),
                   ),
                 ),
                 const SizedBox(height: 20),

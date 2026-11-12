@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../task_service.dart';
 import 'app_theme.dart';
-import 'add_contact_screen.dart';
+import 'add_contact_action.dart'; // shared "New contact" code (also used by Settings)
 import 'chat_screen.dart';
 import 'widgets/connection_banner.dart';
 import 'group_member_picker.dart';
@@ -283,19 +283,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> openAddContact() async {
-    final saved = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => const AddContactScreen()),
-    );
-
-    if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Contact saved successfully.')),
-      );
-    }
-  }
-
   // New group: pick members -> type the name -> open the new group chat
   Future<void> openNewGroup() async {
     final result = await Navigator.push<Object>(
@@ -382,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (choice == 'group') {
       openNewGroup();
     } else {
-      openAddContact();
+      openAddContact(context); // shared code in add_contact_action.dart
     }
   }
 

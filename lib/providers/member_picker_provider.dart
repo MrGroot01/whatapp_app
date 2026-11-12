@@ -12,8 +12,7 @@ import '../group_service.dart';
 // The screen only draws, and does the navigation (next page / give back
 // the ticked people).
 class MemberPickerProvider extends ChangeNotifier {
-  MemberPickerProvider({required Set<String> excludeIds})
-      : _excludeIds = excludeIds {
+  MemberPickerProvider({required this._excludeIds}) {
     _load();
   }
 

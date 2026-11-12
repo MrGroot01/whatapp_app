@@ -12,8 +12,7 @@ import '../status_service.dart';
 //
 // The screen only draws the rows and opens the other screens.
 class UpdatesProvider extends ChangeNotifier {
-  UpdatesProvider({required List<StatusContact> contacts})
-      : _contacts = contacts {
+  UpdatesProvider({required this._contacts}) {
     _start();
   }
 

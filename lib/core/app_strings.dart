@@ -93,6 +93,38 @@ class AppStrings {
   static const String ruleNumber = '1 number (0-9)';
   static const String ruleSpecial = '1 special character (! @ # \$ %)';
 
+  // ---------- SIGN UP ERRORS ----------
+  static const String emailAlreadyRegistered =
+      'This email is already registered. Please log in.';
+  static const String weakPassword =
+      'This password is too weak. Please choose another.';
+  static const String signupNotEnabled =
+      'Email/password sign-up is not enabled in Firebase Console.';
+  static const String signupFailed =
+      'Unable to create account. Please try again.';
+  static const String createAccountWentWrong =
+      'Something went wrong while creating the account. Please try again.';
+  static const String accountNotCreated =
+      'Account could not be created. Please try again.';
+  static const String phoneAlreadyRegistered =
+      'This phone number is already registered with another '
+      'account. Please use a different number.';
+  static const String phoneCheckFailed =
+      'Could not check the phone number. '
+      'Check your internet connection and try again.';
+  static const String phoneJustTaken =
+      'This phone number was just registered by another account. '
+      'Please use a different number.';
+  static const String phoneSaveFailed =
+      'Could not save the phone number. '
+      'Check your internet connection and try again.';
+  static const String verificationCancelled =
+      'Verification was cancelled, so no account was created. '
+      'Please try again.';
+
+  static String phoneSaveFailedCode(String code) =>
+      'Could not save the phone number ($code). Please try again.';
+
   // ---------- OTP ----------
   static const String verifyYourEmail = 'Verify your email';
   static const String verify = 'Verify';

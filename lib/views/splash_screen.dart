@@ -8,6 +8,7 @@ import '../core/app_theme.dart';
 import 'home_screen.dart';
 import 'welcome_screen.dart';
 
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 

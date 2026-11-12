@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-// The icons used by the screens, in one place.
-// To change an icon, change it here and every screen updates.
 class AppIcons {
   AppIcons._();
 

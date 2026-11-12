@@ -1,13 +1,18 @@
+
 import 'dart:async';
 import 'dart:math';
-import 'widgets/country_code_dropdown.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'app_theme.dart';
-import 'otp_screen.dart';
+import 'widgets/country_code_dropdown.dart';
+
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../services/phone_helper.dart';
+import 'otp_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -17,8 +22,6 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
-  static const Color _error = Color(0xFFD94B4B);
-
   final formKey = GlobalKey<FormState>();
   final emailController = TextEditingController();
   final nicknameController = TextEditingController();
@@ -45,42 +48,42 @@ class _SignupScreenState extends State<SignupScreen> {
 
   String? validateEmail(String? value) {
     final email = value?.trim() ?? '';
-    if (email.isEmpty) return 'Please enter your email';
+    if (email.isEmpty) return AppStrings.enterEmail;
     final regex =
     RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
     if (!regex.hasMatch(email)) {
-      return 'Enter a valid email (example: name@gmail.com)';
+      return AppStrings.invalidEmail;
     }
     return null;
   }
 
   String? validateNickname(String? value) {
     final name = value?.trim() ?? '';
-    if (name.isEmpty) return 'Please enter a nickname';
-    if (name.length < 3) return 'Use at least 3 characters';
-    if (name.length > 20) return 'Use at most 20 characters';
+    if (name.isEmpty) return AppStrings.enterNickname;
+    if (name.length < 3) return AppStrings.useAtLeast3;
+    if (name.length > 20) return AppStrings.useAtMost20;
     return null;
   }
 
   String? validatePassword(String? value) {
     final pass = value ?? '';
-    if (pass.isEmpty) return 'Please enter a password';
-    if (pass.length < 8) return 'Use at least 8 characters';
-    if (pass.contains(' ')) return 'Password cannot contain spaces';
-    if (!RegExp(r'[A-Z]').hasMatch(pass)) return 'Add 1 capital letter (A-Z)';
-    if (!RegExp(r'[a-z]').hasMatch(pass)) return 'Add 1 small letter (a-z)';
-    if (!RegExp(r'[0-9]').hasMatch(pass)) return 'Add 1 number (0-9)';
+    if (pass.isEmpty) return AppStrings.enterNewPassword;
+    if (pass.length < 8) return AppStrings.useAtLeast8;
+    if (pass.contains(' ')) return AppStrings.noSpaces;
+    if (!RegExp(r'[A-Z]').hasMatch(pass)) return AppStrings.addCapital;
+    if (!RegExp(r'[a-z]').hasMatch(pass)) return AppStrings.addSmall;
+    if (!RegExp(r'[0-9]').hasMatch(pass)) return AppStrings.addNumber;
     if (!RegExp(r'[!@#$%^&*(),.?":{}|<>_\-]').hasMatch(pass)) {
-      return 'Add 1 special character (! @ # \$ % & *)';
+      return AppStrings.addSpecial;
     }
     return null;
   }
 
   String? validateConfirm(String? value) {
     if (value == null || value.isEmpty) {
-      return 'Please confirm your password';
+      return AppStrings.confirmYourPassword;
     }
-    if (value != passwordController.text) return 'Passwords do not match';
+    if (value != passwordController.text) return AppStrings.passwordsDontMatch;
     return null;
   }
 
@@ -94,19 +97,19 @@ class _SignupScreenState extends State<SignupScreen> {
   String firebaseErrorMessage(FirebaseAuthException e) {
     switch (e.code) {
       case 'email-already-in-use':
-        return 'This email is already registered. Please log in.';
+        return AppStrings.emailAlreadyRegistered;
       case 'invalid-email':
-        return 'Please enter a valid email address.';
+        return AppStrings.invalidEmailAddress;
       case 'weak-password':
-        return 'This password is too weak. Please choose another.';
+        return AppStrings.weakPassword;
       case 'operation-not-allowed':
-        return 'Email/password sign-up is not enabled in Firebase Console.';
+        return AppStrings.signupNotEnabled;
       case 'network-request-failed':
-        return 'Network error. Check your internet connection.';
+        return AppStrings.networkError;
       case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
+        return AppStrings.tooManyAttempts;
       default:
-        return e.message ?? 'Unable to create account. Please try again.';
+        return e.message ?? AppStrings.signupFailed;
     }
   }
 
@@ -137,13 +140,11 @@ class _SignupScreenState extends State<SignupScreen> {
       return null;
     } on FirebaseException catch (e) {
       if (e.code == 'permission-denied') {
-        return 'This phone number was just registered by another account. '
-            'Please use a different number.';
+        return AppStrings.phoneJustTaken;
       }
-      return 'Could not save the phone number (${e.code}). Please try again.';
+      return AppStrings.phoneSaveFailedCode(e.code);
     } catch (e) {
-      return 'Could not save the phone number. '
-          'Check your internet connection and try again.';
+      return AppStrings.phoneSaveFailed;
     }
   }
 
@@ -183,8 +184,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage =
-        'Something went wrong while creating the account. Please try again.';
+        errorMessage = AppStrings.createAccountWentWrong;
       });
       return;
     }
@@ -194,7 +194,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = 'Account could not be created. Please try again.';
+        errorMessage = AppStrings.accountNotCreated;
       });
       return;
     }
@@ -208,10 +208,8 @@ class _SignupScreenState extends State<SignupScreen> {
       setState(() {
         isLoading = false;
         errorMessage = phoneFree == false
-            ? 'This phone number is already registered with another '
-            'account. Please use a different number.'
-            : 'Could not check the phone number. '
-            'Check your internet connection and try again.';
+            ? AppStrings.phoneAlreadyRegistered
+            : AppStrings.phoneCheckFailed;
       });
       return;
     }
@@ -235,8 +233,7 @@ class _SignupScreenState extends State<SignupScreen> {
       await _cancelSignup(newUser);
       if (!mounted) return;
       setState(() {
-        errorMessage =
-        'Verification was cancelled, so no account was created. Please try again.';
+        errorMessage = AppStrings.verificationCancelled;
       });
       return;
     }
@@ -322,12 +319,12 @@ class _SignupScreenState extends State<SignupScreen> {
       suffixIcon: suffix,
       filled: true,
       fillColor: AppColors.card,
-      errorStyle: const TextStyle(color: _error, fontSize: 14),
+      errorStyle: const TextStyle(color: AppColors.error, fontSize: 14),
       errorMaxLines: 2,
-      enabledBorder: boxBorder(const Color(0xFFE3DED2)),
+      enabledBorder: boxBorder(AppColors.border),
       focusedBorder: boxBorder(AppColors.emerald),
-      errorBorder: boxBorder(_error),
-      focusedErrorBorder: boxBorder(_error),
+      errorBorder: boxBorder(AppColors.error),
+      focusedErrorBorder: boxBorder(AppColors.error),
     );
   }
 
@@ -337,9 +334,9 @@ class _SignupScreenState extends State<SignupScreen> {
       child: Row(
         children: [
           Icon(
-            done ? Icons.check_circle : Icons.radio_button_unchecked,
+            done ? AppIcons.ruleDone : AppIcons.ruleTodo,
             size: 20,
-            color: done ? AppColors.emerald : const Color(0xFFB8C2C0),
+            color: done ? AppColors.emerald : AppColors.hint,
           ),
           const SizedBox(width: 10),
           Text(
@@ -378,11 +375,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(18),
                       decoration: const BoxDecoration(
-                        color: Color(0xFFE3F1ED),
+                        color: AppColors.softGreen,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
-                        Icons.person_add_alt_1_rounded,
+                        AppIcons.signupHeader,
                         size: 44,
                         color: AppColors.emerald,
                       ),
@@ -390,7 +387,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Create account',
+                    AppStrings.createAccount,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: AppColors.textDark,
@@ -400,7 +397,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Sign up with your email to get started.',
+                    AppStrings.signupSubtitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: AppColors.textSoft, fontSize: 16),
                   ),
@@ -421,8 +418,8 @@ class _SignupScreenState extends State<SignupScreen> {
                       }
                     },
                     decoration: fieldDecoration(
-                      label: 'Email',
-                      icon: Icons.email_outlined,
+                      label: AppStrings.email,
+                      icon: AppIcons.email,
                     ),
                     validator: validateEmail,
                   ),
@@ -438,8 +435,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     cursorColor: AppColors.emerald,
                     decoration: fieldDecoration(
-                      label: 'Nickname',
-                      icon: Icons.person_outline,
+                      label: AppStrings.nickname,
+                      icon: AppIcons.person,
                     ),
                     validator: validateNickname,
                   ),
@@ -453,7 +450,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         width: 108,
                         child: CountryCodeDropdown(
                           value: countryCode,
-                          decoration: fieldDecoration(label: 'Code'),
+                          decoration: fieldDecoration(label: AppStrings.code),
                           onChanged: isLoading
                               ? null
                               : (value) => setState(() {
@@ -485,8 +482,8 @@ class _SignupScreenState extends State<SignupScreen> {
                             }
                           },
                           decoration: fieldDecoration(
-                            label: 'Phone number',
-                            icon: Icons.phone_outlined,
+                            label: AppStrings.phoneNumber,
+                            icon: AppIcons.phone,
                           ),
                           validator: PhoneHelper.validate,
                         ),
@@ -509,13 +506,13 @@ class _SignupScreenState extends State<SignupScreen> {
                       if (errorMessage != null) errorMessage = null;
                     }),
                     decoration: fieldDecoration(
-                      label: 'Password',
-                      icon: Icons.lock_outline,
+                      label: AppStrings.password,
+                      icon: AppIcons.password,
                       suffix: IconButton(
                         icon: Icon(
                           hidePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
+                              ? AppIcons.hidePassword
+                              : AppIcons.showPassword,
                           color: AppColors.textSoft,
                         ),
                         onPressed: () =>
@@ -536,13 +533,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     cursorColor: AppColors.emerald,
                     decoration: fieldDecoration(
-                      label: 'Confirm password',
-                      icon: Icons.lock_reset,
+                      label: AppStrings.confirmPassword,
+                      icon: AppIcons.confirmPassword,
                       suffix: IconButton(
                         icon: Icon(
                           hideConfirm
-                              ? Icons.visibility_off
-                              : Icons.visibility,
+                              ? AppIcons.hidePassword
+                              : AppIcons.showPassword,
                           color: AppColors.textSoft,
                         ),
                         onPressed: () =>
@@ -557,16 +554,16 @@ class _SignupScreenState extends State<SignupScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.card,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE3DED2)),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        rule('At least 8 characters', hasLength),
-                        rule('1 capital letter (A-Z)', hasUpper),
-                        rule('1 small letter (a-z)', hasLower),
-                        rule('1 number (0-9)', hasNumber),
-                        rule('1 special character (! @ # \$ %)', hasSpecial),
+                        rule(AppStrings.ruleLength, hasLength),
+                        rule(AppStrings.ruleCapital, hasUpper),
+                        rule(AppStrings.ruleSmall, hasLower),
+                        rule(AppStrings.ruleNumber, hasNumber),
+                        rule(AppStrings.ruleSpecial, hasSpecial),
                       ],
                     ),
                   ),
@@ -575,14 +572,14 @@ class _SignupScreenState extends State<SignupScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFCEAEA),
+                        color: AppColors.errorBackground,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
                           const Icon(
-                            Icons.error_outline,
-                            color: _error,
+                            AppIcons.error,
+                            color: AppColors.error,
                             size: 20,
                           ),
                           const SizedBox(width: 10),
@@ -590,7 +587,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             child: Text(
                               errorMessage!,
                               style: const TextStyle(
-                                color: _error,
+                                color: AppColors.error,
                                 fontSize: 14.5,
                               ),
                             ),
@@ -622,7 +619,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       )
                           : const Text(
-                        'Register',
+                        AppStrings.register,
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
@@ -635,14 +632,14 @@ class _SignupScreenState extends State<SignupScreen> {
                     onPressed: isLoading ? null : () => Navigator.pop(context),
                     child: const Text.rich(
                       TextSpan(
-                        text: 'Already have an account? ',
+                        text: AppStrings.haveAccount,
                         style: TextStyle(
                           color: AppColors.textSoft,
                           fontSize: 15,
                         ),
                         children: [
                           TextSpan(
-                            text: 'Log in',
+                            text: AppStrings.logIn,
                             style: TextStyle(
                               color: AppColors.emerald,
                               fontWeight: FontWeight.bold,
