@@ -7,6 +7,11 @@ class AppStrings {
   static const String appName = 'Velora';
   static const String tagline = 'Messaging, beautifully simple.';
 
+  // The title at the top of the Home screen.
+  // It follows the app name. To show a different name only on the Home
+  // screen (for example 'WhatsApp'), change this one line.
+  static const String homeTitle = appName;
+
   // ---------- COMMON ----------
   static const String cancel = 'Cancel';
   static const String delete = 'Delete';
@@ -162,4 +167,44 @@ class AppStrings {
       'We sent a reset link to $email. '
           'Open it, choose a new password, then log in with it.\n\n'
           'Cannot see it? Check your Spam folder too.';
+
+  // ---------- HOME ----------
+  static const String updates = 'Updates';
+  static const String chats = 'Chats';
+  static const String search = 'Search';
+  static const String closeSearch = 'Close search';
+  static const String myTasks = 'My Tasks';
+  static const String newChat = 'New chat';
+  static const String newGroup = 'New group';
+  static const String newContact = 'New contact';
+  static const String pleaseLogIn = 'Please log in to view your contacts.';
+  static const String noChatsYet =
+      'No chats yet. Tap + to add a contact or create a group.';
+  static const String offlineNoContacts =
+      'You are offline. No contacts are saved on this device yet.';
+  static const String tapToStartChatting = 'Tap to start chatting';
+  static const String yesterday = 'Yesterday';
+  static const String contactSaved = 'Contact saved successfully.';
+
+  // last message line in the chat list
+  static const String videoCallNoAnswer = 'Video call · no answer';
+  static const String missedVideoCall = 'Missed video call';
+
+  static String youPrefix(String text) => 'You: $text';
+
+  static String membersCount(int count) => '$count members';
+
+  // delete chats (long-press)
+  static const String deleteChatTitle = 'Delete chat?';
+  static const String deleteChatBody =
+      'The chat is removed from your list only. '
+      'The other people keep their messages. '
+      'A new message brings the chat back.';
+  static const String chatDeleted = 'Chat deleted';
+  static const String couldNotDelete =
+      'Could not delete. Check your internet and try again.';
+
+  static String deleteChatsTitle(int count) => 'Delete $count chats?';
+
+  static String chatsDeleted(int count) => '$count chats deleted';
 }

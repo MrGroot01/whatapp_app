@@ -4,13 +4,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../task_service.dart';
-import 'app_theme.dart';
-import 'add_contact_action.dart'; // shared "New contact" code (also used by Settings)
-import 'chat_screen.dart';
-import 'widgets/connection_banner.dart';
-import 'group_member_picker.dart';
+
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../group_service.dart';
+import '../incoming_message_notifier.dart';
 import '../message_sync_service.dart';
 import '../models/chat_row.dart';
 import '../models/contact.dart';
@@ -19,14 +18,18 @@ import '../providers/chat_selection_provider.dart';
 import '../providers/contacts_provider.dart';
 import '../providers/groups_provider.dart';
 import '../providers/profile_provider.dart';
+import '../push_service.dart';
 import '../search_provider.dart';
 import '../session_helper.dart';
-import 'settings_screen.dart';
-import 'my_tasks_screen.dart';
-import '../incoming_message_notifier.dart';
-import '../push_service.dart';
 import '../status_service.dart'; // StatusContact
+import '../task_service.dart';
+import 'add_contact_screen.dart';
+import 'chat_screen.dart';
+import 'group_member_picker.dart';
+import 'my_tasks_screen.dart';
+import 'settings_screen.dart';
 import 'updates_screen.dart'; // the Updates tab
+import 'widgets/connection_banner.dart';
 
 export '../models/contact.dart';
 
@@ -40,11 +43,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const Color _tickRead = Color(0xFF34A7E0);
-  static const Color _tickGrey = Color(0xFF8A9A98);
-  static const Color _missedRed = Color(0xFFD94B4B);
-  static const Color _selectedTile = Color(0xFFD9F2E7);
-
   final searchController = TextEditingController();
 
   // 0 = Chats, 1 = Updates (status)
@@ -80,16 +78,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _selection.remove(groupId);
     };
 
-
     _groupsProvider.start(); // Start group listening
-
 
     // Session and background service.
     SessionHelper.saveSession(widget.email);
     IncomingMessageNotifier.start();
     TaskService.startListening();
     MessageSyncService.start(); // watches the internet + sends waiting messages
-
 
     //this is schedules pending-chat navigation after the first frame has neem rendered
     WidgetsBinding.instance.addPostFrameCallback(
@@ -113,13 +108,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-
   void _watchContactChats() {
     for (final c in _contactsProvider.contacts) {
       _chatList.watchChat(_chatList.chatIdWith(c.id));
     }
   }
-
 
   // Displays a readable timestamp beside each chat
   String _formatListTime(int ms) {
@@ -134,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final minute = t.minute.toString().padLeft(2, '0');
       return '$hour:$minute ${t.hour >= 12 ? 'pm' : 'am'}';
     }
-    if (diff == 1) return 'Yesterday';
+    if (diff == 1) return AppStrings.yesterday;
     return '${t.day}/${t.month}/${t.year}';
   }
 
@@ -164,18 +157,18 @@ class _HomeScreenState extends State<HomeScreen> {
       tick = Padding(
         padding: const EdgeInsets.only(right: 4),
         child: Icon(
-          status == 0 ? Icons.done : Icons.done_all,
+          status == 0 ? AppIcons.tickSent : AppIcons.tickDelivered,
           size: 17,
-          color: status >= 2 ? _tickRead : _tickGrey,
+          color: status >= 2 ? AppColors.tickRead : AppColors.tickGrey,
         ),
       );
     }
 
     String text = last.preview;
     if (isCall) {
-      text = mine ? 'Video call · no answer' : 'Missed video call';
+      text = mine ? AppStrings.videoCallNoAnswer : AppStrings.missedVideoCall;
     } else if (isGroup && mine) {
-      text = 'You: $text';
+      text = AppStrings.youPrefix(text);
     }
 
     return Row(
@@ -184,19 +177,19 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: Icon(
-              mine ? Icons.videocam : Icons.videocam_off,
+              mine ? AppIcons.videoCall : AppIcons.missedCall,
               size: 16,
-              color: mine ? AppColors.textSoft : _missedRed,
+              color: mine ? AppColors.textSoft : AppColors.error,
             ),
           ),
-        ? tick,
+        if (tick != null) tick,
         Expanded(
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: baseStyle.copyWith(
-              color: isCall && !mine ? _missedRed : AppColors.textSoft,
+              color: isCall && !mine ? AppColors.error : AppColors.textSoft,
             ),
           ),
         ),
@@ -225,32 +218,32 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          count == 1 ? 'Delete chat?' : 'Delete $count chats?',
+          count == 1
+              ? AppStrings.deleteChatTitle
+              : AppStrings.deleteChatsTitle(count),
           style: const TextStyle(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: const Text(
-          'The chat is removed from your list only. '
-              'The other people keep their messages. '
-              'A new message brings the chat back.',
+          AppStrings.deleteChatBody,
           style: TextStyle(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text(
-              'Cancel',
+              AppStrings.cancel,
               style: TextStyle(color: AppColors.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text(
-              'Delete',
+              AppStrings.delete,
               style: TextStyle(
-                color: _missedRed,
+                color: AppColors.error,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -269,7 +262,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _selection.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(count == 1 ? 'Chat deleted' : '$count chats deleted'),
+          content: Text(
+            count == 1
+                ? AppStrings.chatDeleted
+                : AppStrings.chatsDeleted(count),
+          ),
         ),
       );
     } catch (e) {
@@ -277,8 +274,21 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not delete. Check your internet and try again.'),
+          content: Text(AppStrings.couldNotDelete),
         ),
+      );
+    }
+  }
+
+  Future<void> openAddContact() async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const AddContactScreen()),
+    );
+
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.contactSaved)),
       );
     }
   }
@@ -344,7 +354,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const Padding(
               padding: EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Text(
-                'New chat',
+                AppStrings.newChat,
                 style: TextStyle(
                   color: AppColors.textDark,
                   fontSize: 20,
@@ -352,10 +362,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            option(Icons.group_add, 'New group', 'group', sheetContext),
             option(
-              Icons.person_add_alt_1,
-              'New contact',
+              AppIcons.addGroup,
+              AppStrings.newGroup,
+              'group',
+              sheetContext,
+            ),
+            option(
+              AppIcons.addContact,
+              AppStrings.newContact,
               'contact',
               sheetContext,
             ),
@@ -369,7 +384,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (choice == 'group') {
       openNewGroup();
     } else {
-      openAddContact(context); // shared code in add_contact_action.dart
+      openAddContact();
     }
   }
 
@@ -377,11 +392,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildGroupTile(GroupItem group) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      tileColor: _selection.isSelected(group.id) ? _selectedTile : null,
+      tileColor:
+      _selection.isSelected(group.id) ? AppColors.selectedTile : null,
       leading: CircleAvatar(
         radius: 26,
         backgroundColor: GroupService.colorFor(group.id),
-        child: const Icon(Icons.group, color: Colors.white, size: 28),
+        child: const Icon(AppIcons.group, color: Colors.white, size: 28),
       ),
       title: Text(
         group.name,
@@ -396,7 +412,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // the last message (or the member count when there is none)
       subtitle: _buildLastLine(
         group.id,
-        '${group.members.length} members',
+        AppStrings.membersCount(group.members.length),
         isGroup: true,
       ),
       trailing: _buildTimeText(group.id),
@@ -413,7 +429,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      tileColor: _selection.isSelected(chatId) ? _selectedTile : null,
+      tileColor: _selection.isSelected(chatId) ? AppColors.selectedTile : null,
       leading: StreamBuilder<DatabaseEvent>(
         // This listener receives DP changes from the contact's public profile.
         stream:
@@ -461,7 +477,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       // the last message (the phone number is no longer shown here)
-      subtitle: _buildLastLine(chatId, 'Tap to start chatting'),
+      subtitle: _buildLastLine(chatId, AppStrings.tapToStartChatting),
       trailing: _buildTimeText(chatId, fallback: contact.time),
       onLongPress: () => _selection.toggle(chatId),
       onTap: () {
@@ -499,8 +515,8 @@ class _HomeScreenState extends State<HomeScreen> {
         valueListenable: MessageSyncService.connection,
         builder: (context, state, _) {
           final message = state == ConnState.offline
-              ? 'You are offline. No contacts are saved on this device yet.'
-              : 'No chats yet. Tap + to add a contact or create a group.';
+              ? AppStrings.offlineNoContacts
+              : AppStrings.noChatsYet;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -526,7 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
         height: 1,
         indent: 88,
         endIndent: 16,
-        color: Color(0xFFE9E4D8),
+        color: AppColors.divider,
       ),
       itemBuilder: (context, index) {
         final ChatRow row = rows[index];
@@ -633,7 +649,7 @@ class _HomeScreenState extends State<HomeScreen> {
           scrolledUnderElevation: 0,
           leading: selecting
               ? IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(AppIcons.back),
             onPressed: _selection.clear,
           )
               : null,
@@ -646,7 +662,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           )
               : Text(
-            _tab == 0 ? AppBrand.name : 'Updates',
+            _tab == 0 ? AppStrings.homeTitle : AppStrings.updates,
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
@@ -656,8 +672,8 @@ class _HomeScreenState extends State<HomeScreen> {
           actions: selecting
               ? [
             IconButton(
-              tooltip: 'Delete',
-              icon: const Icon(Icons.delete_outline, color: Colors.white),
+              tooltip: AppStrings.delete,
+              icon: const Icon(AppIcons.deleteChat, color: Colors.white),
               onPressed: _deleteSelected,
             ),
             const SizedBox(width: 8),
@@ -666,9 +682,11 @@ class _HomeScreenState extends State<HomeScreen> {
             if (_tab == 0)
               Consumer<SearchProvider>(
                 builder: (_, search, _) => IconButton(
-                  tooltip: search.isSearching ? 'Close search' : 'Search',
+                  tooltip: search.isSearching
+                      ? AppStrings.closeSearch
+                      : AppStrings.search,
                   icon: Icon(
-                    search.isSearching ? Icons.close : Icons.search,
+                    search.isSearching ? AppIcons.close : AppIcons.search,
                     color: Colors.white,
                   ),
                   onPressed: () {
@@ -679,8 +697,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
             IconButton(
-              tooltip: 'My Tasks',
-              icon: const Icon(Icons.task_alt, color: Colors.white),
+              tooltip: AppStrings.myTasks,
+              icon: const Icon(AppIcons.tasks, color: Colors.white),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const MyTasksScreen()),
@@ -700,14 +718,14 @@ class _HomeScreenState extends State<HomeScreen> {
           onPressed: _openNewChatSheet,
           backgroundColor: AppColors.emerald,
           foregroundColor: Colors.white,
-          tooltip: 'New chat',
-          child: const Icon(Icons.add_comment),
+          tooltip: AppStrings.newChat,
+          child: const Icon(AppIcons.newChat),
         ),
 
         // bottom bar to switch between Chats and Updates
         bottomNavigationBar: NavigationBar(
           backgroundColor: Colors.white,
-          indicatorColor: const Color(0xFFE3F1ED),
+          indicatorColor: AppColors.softGreen,
           selectedIndex: _tab,
           onDestinationSelected: (i) {
             _selection.clear(); // leaving the tab leaves delete mode
@@ -715,14 +733,16 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           destinations: const [
             NavigationDestination(
-              icon: Icon(Icons.chat_bubble_outline),
-              selectedIcon: Icon(Icons.chat_bubble, color: AppColors.emerald),
-              label: 'Chats',
+              icon: Icon(AppIcons.chatsTab),
+              selectedIcon:
+              Icon(AppIcons.chatsTabSelected, color: AppColors.emerald),
+              label: AppStrings.chats,
             ),
             NavigationDestination(
-              icon: Icon(Icons.donut_large_outlined),
-              selectedIcon: Icon(Icons.donut_large, color: AppColors.emerald),
-              label: 'Updates',
+              icon: Icon(AppIcons.updatesTab),
+              selectedIcon:
+              Icon(AppIcons.updatesTabSelected, color: AppColors.emerald),
+              label: AppStrings.updates,
             ),
           ],
         ),
@@ -765,13 +785,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     onChanged: (value) =>
                         context.read<SearchProvider>().setQuery(value),
                     decoration: InputDecoration(
-                      hintText: 'Search',
+                      hintText: AppStrings.search,
                       hintStyle: const TextStyle(
                         color: AppColors.textSoft,
                         fontSize: 16,
                       ),
                       prefixIcon: const Icon(
-                        Icons.search,
+                        AppIcons.search,
                         color: AppColors.textSoft,
                       ),
                       filled: true,
@@ -795,7 +815,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: uid == null
                   ? const Center(
                 child: Text(
-                  'Please log in to view your contacts.',
+                  AppStrings.pleaseLogIn,
                   style: TextStyle(
                     color: AppColors.textSoft,
                     fontSize: 17,

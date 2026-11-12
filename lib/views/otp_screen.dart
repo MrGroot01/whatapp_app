@@ -3,7 +3,10 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'app_theme.dart';
+
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
@@ -16,8 +19,6 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  static const Color _error = Color(0xFFD94B4B);
-
   // true  = verify automatically right after the code is filled
   // false = the user taps the Verify button
   static const bool autoVerify = true;
@@ -129,7 +130,7 @@ class _OtpScreenState extends State<OtpScreen> {
     final entered = otpController.text.trim();
 
     if (entered.length != 4) {
-      setState(() => errorText = 'Enter all 4 digits');
+      setState(() => errorText = AppStrings.enterAllDigits);
       return;
     }
 
@@ -139,7 +140,7 @@ class _OtpScreenState extends State<OtpScreen> {
       // (the Sign up screen then goes back to the Login page)
       Navigator.pop(context, true);
     } else {
-      setState(() => errorText = 'Wrong OTP, try again');
+      setState(() => errorText = AppStrings.wrongOtp);
     }
   }
 
@@ -184,7 +185,7 @@ class _OtpScreenState extends State<OtpScreen> {
               const CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.emerald,
-                child: Icon(Icons.sms_rounded, color: Colors.white, size: 20),
+                child: Icon(AppIcons.sms, color: Colors.white, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -194,7 +195,7 @@ class _OtpScreenState extends State<OtpScreen> {
                     const Row(
                       children: [
                         Text(
-                          'Messages',
+                          AppStrings.messages,
                           style: TextStyle(
                             color: AppColors.textDark,
                             fontSize: 14,
@@ -203,7 +204,7 @@ class _OtpScreenState extends State<OtpScreen> {
                         ),
                         Spacer(),
                         Text(
-                          'now',
+                          AppStrings.now,
                           style: TextStyle(
                             color: AppColors.textSoft,
                             fontSize: 13,
@@ -213,8 +214,7 @@ class _OtpScreenState extends State<OtpScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Your ${AppBrand.name} verification code is $currentOtp. '
-                          'Do not share it with anyone.',
+                      AppStrings.otpMessage(currentOtp),
                       style: const TextStyle(
                         color: AppColors.textDark,
                         fontSize: 15,
@@ -235,7 +235,7 @@ class _OtpScreenState extends State<OtpScreen> {
     if (secondsLeft > 0) {
       final time = '0:${secondsLeft.toString().padLeft(2, '0')}';
       return Text(
-        'Resend code in $time',
+        AppStrings.resendCodeIn(time),
         textAlign: TextAlign.center,
         style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
       );
@@ -243,7 +243,7 @@ class _OtpScreenState extends State<OtpScreen> {
     return TextButton(
       onPressed: onResendPressed,
       child: const Text(
-        'Resend code',
+        AppStrings.resendCode,
         style: TextStyle(
           color: AppColors.emerald,
           fontSize: 16,
@@ -277,11 +277,11 @@ class _OtpScreenState extends State<OtpScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(18),
                         decoration: const BoxDecoration(
-                          color: Color(0xFFE3F1ED),
+                          color: AppColors.softGreen,
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.mark_email_read_rounded,
+                          AppIcons.otpHeader,
                           size: 44,
                           color: AppColors.emerald,
                         ),
@@ -289,7 +289,7 @@ class _OtpScreenState extends State<OtpScreen> {
                     ),
                     const SizedBox(height: 20),
                     const Text(
-                      'Verify your email',
+                      AppStrings.verifyYourEmail,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.textDark,
@@ -299,7 +299,7 @@ class _OtpScreenState extends State<OtpScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Enter the 4-digit code sent to\n${widget.email}',
+                      AppStrings.otpSentTo(widget.email),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: AppColors.textSoft,
@@ -332,16 +332,18 @@ class _OtpScreenState extends State<OtpScreen> {
                       decoration: InputDecoration(
                         counterText: '',
                         errorText: errorText,
-                        errorStyle:
-                        const TextStyle(color: _error, fontSize: 14),
+                        errorStyle: const TextStyle(
+                          color: AppColors.error,
+                          fontSize: 14,
+                        ),
                         hintText: '----',
-                        hintStyle: const TextStyle(color: Color(0xFFB8C2C0)),
+                        hintStyle: const TextStyle(color: AppColors.hint),
                         filled: true,
                         fillColor: AppColors.card,
-                        enabledBorder: border(const Color(0xFFE3DED2)),
+                        enabledBorder: border(AppColors.border),
                         focusedBorder: border(AppColors.emerald),
-                        errorBorder: border(_error),
-                        focusedErrorBorder: border(_error),
+                        errorBorder: border(AppColors.error),
+                        focusedErrorBorder: border(AppColors.error),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -360,7 +362,7 @@ class _OtpScreenState extends State<OtpScreen> {
                           ),
                         ),
                         child: const Text(
-                          'Verify',
+                          AppStrings.verify,
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,

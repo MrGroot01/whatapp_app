@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_strings.dart';
 
+// The app name. It comes from AppStrings, so it lives in ONE place.
 class AppBrand {
   static const String name = AppStrings.appName;
   static const String tagline = AppStrings.tagline;
@@ -22,6 +23,7 @@ class AppColors {
   static const Color lockedFill = Color(0xFFEFEBE0); // read-only boxes
   static const Color wallpaper = Color(0xFFEFEAE0); // chat background
   static const Color bubbleMine = Color(0xFFD9F2E7); // my message bubble
+  static const Color selectedTile = Color(0xFFD9F2E7); // a selected chat row
 
   // ---------- TEXT ----------
   static const Color textDark = Color(0xFF1C2B2A);
