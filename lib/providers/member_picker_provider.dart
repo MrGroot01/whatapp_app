@@ -4,13 +4,6 @@ import 'package:flutter/foundation.dart';
 import '../database_helper.dart';
 import '../group_service.dart';
 
-// The controller for the "Add group members" screen.
-// It loads my saved contacts from the phone (so it also works offline),
-// keeps the search text and the people I ticked, and builds the list with
-// the letter headers (A, B, C ...).
-//
-// The screen only draws, and does the navigation (next page / give back
-// the ticked people).
 class MemberPickerProvider extends ChangeNotifier {
   MemberPickerProvider({required this._excludeIds}) {
     _load();
@@ -46,8 +39,6 @@ class MemberPickerProvider extends ChangeNotifier {
     }).toList();
   }
 
-  // contacts with a letter header (A, B, C ...) like WhatsApp:
-  // a String is a header, a PickedContact is a person
   List<Object> get items {
     final list = <Object>[];
     var lastLetter = '';

@@ -1,5 +1,3 @@
-// All the texts the user can read, in one place.
-// To change a text, change it here and every screen updates.
 class AppStrings {
   AppStrings._(); // nobody makes an object of this class
 
@@ -7,9 +5,6 @@ class AppStrings {
   static const String appName = 'Velora';
   static const String tagline = 'Messaging, beautifully simple.';
 
-  // The title at the top of the Home screen.
-  // It follows the app name. To show a different name only on the Home
-  // screen (for example 'WhatsApp'), change this one line.
   static const String homeTitle = appName;
 
   // ---------- COMMON ----------

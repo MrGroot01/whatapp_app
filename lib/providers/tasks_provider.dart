@@ -5,16 +5,8 @@ import 'package:flutter/foundation.dart';
 
 import '../task_service.dart';
 
-// The five lists on the My Tasks screen
 enum TaskFilter { all, upcoming, completed, assignedToMe, assignedByMe }
 
-// The controller for the My Tasks screen.
-// It listens to my task list in Firebase, builds the five filtered lists
-// (with their counts), sorts them, and does "tick" and "delete".
-//
-// The screen only draws the chips and the cards. Actions return:
-//   null      = it worked
-//   a String  = the error text for the snack bar
 class TasksProvider extends ChangeNotifier {
   TasksProvider() {
     _start();

@@ -1,7 +1,5 @@
 import '../status_service.dart';
 
-// One row of the Updates list: a contact and their active statuses.
-// It is plain data: no Firebase code and no screen code in here.
 class StatusEntry {
   final StatusContact contact;
   final List<StatusItem> items; // active statuses, oldest first

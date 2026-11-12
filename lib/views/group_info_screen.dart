@@ -8,10 +8,6 @@ import 'group_member_picker.dart';
 import '../group_service.dart';
 import '../providers/group_info_provider.dart';
 
-// WhatsApp-style "Group info": name, members, admin tools, exit group.
-//
-// The provider is created here, inside the screen, so it stops when the
-// screen closes and never shows an old account's data.
 class GroupInfoScreen extends StatelessWidget {
   final String groupId;
   final String groupName;

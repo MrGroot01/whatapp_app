@@ -66,8 +66,6 @@ class VoiceInputProvider extends ChangeNotifier {
   );
 
   // ---------- CHOOSE THE LANGUAGE ----------
-  // currentText = what is in the message box now.
-  // If the mic is listening, it restarts in the new language.
   Future<void> changeLanguage(String id, String currentText) async {
     if (id == _localeId) return;
 

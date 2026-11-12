@@ -5,12 +5,6 @@ import 'package:flutter/foundation.dart';
 import '../models/status_entry.dart';
 import '../status_service.dart';
 
-// The controller for the Updates tab.
-// It watches my own statuses and the statuses of every contact in my list,
-// hides the ones that expired, and splits the contacts into
-// "Recent updates" (something I have not seen) and "Viewed updates".
-//
-// The screen only draws the rows and opens the other screens.
 class UpdatesProvider extends ChangeNotifier {
   UpdatesProvider({required this._contacts}) {
     _start();

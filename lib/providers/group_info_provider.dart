@@ -29,18 +29,6 @@ String disappearLabel(int ms) {
   return 'Off';
 }
 
-// The controller for the "Group info" screen.
-// It watches the group live (name, members, admins), finds the names of the
-// members, watches the disappearing-messages setting and the media count,
-// and does the admin actions (rename, add, remove) and "Exit group".
-//
-// The screen only draws. Actions return:
-//   null      = it worked (or nothing to do)
-//   a String  = the error text for the snack bar
-//
-// The provider talks to the screen through two callbacks:
-//   onGroupGone = the group was deleted or I was removed (screen closes)
-//   onExited    = I left the group (screen closes)
 class GroupInfoProvider extends ChangeNotifier {
   GroupInfoProvider({required this.groupId}) {
     _start();
@@ -224,7 +212,6 @@ class GroupInfoProvider extends ChangeNotifier {
   }
 
   // ---------- HELPERS ----------
-  // runs one action with the progress bar, and gives back null or the error
   Future<String?> _run(
       Future<void> Function() action,
       String failMessage,

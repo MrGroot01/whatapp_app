@@ -62,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    context.read<SearchProvider>().reset(); // start with search closed
+    context.read<SearchProvider>().reset();
 
     _chatList.start();
     _profile.start();
@@ -70,17 +70,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _contactsProvider.addListener(_watchContactChats);
     _contactsProvider.start();
 
-    _groupsProvider.onGroupAdded = _chatList.watchChat; // when a group is add , start watching the group chat
+    _groupsProvider.onGroupAdded = _chatList.watchChat;
 
-    //when the group is removed: - Stop tracking its chat
     _groupsProvider.onGroupRemoved = (groupId) {
       _chatList.forgetChat(groupId);
       _selection.remove(groupId);
     };
 
-    _groupsProvider.start(); // Start group listening
+    _groupsProvider.start();
 
-    // Session and background service.
     SessionHelper.saveSession(widget.email);
     IncomingMessageNotifier.start();
     TaskService.startListening();
@@ -182,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
               color: mine ? AppColors.textSoft : AppColors.error,
             ),
           ),
-        if (tick != null) tick,
+        ? tick,
         Expanded(
           child: Text(
             text,
@@ -371,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (choice == 'group') {
       openNewGroup();
     } else {
-      openAddContact(context); // shared code in add_contact_action.dart
+      openAddContact(context);
     }
   }
 

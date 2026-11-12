@@ -7,15 +7,6 @@ import '../group_service.dart';
 import 'new_group_screen.dart';
 import '../providers/member_picker_provider.dart';
 
-// "Add group members": search + tick your saved contacts.
-//
-// addMode = false (New group): the green arrow goes on to the name screen and
-//                              this screen gives back a GroupRef.
-// addMode = true  (add people to an existing group): the green tick gives back
-//                 a List<PickedContact>.
-//
-// The provider is created here, inside the screen, so it stops when the
-// screen closes and never shows an old account's contacts.
 class GroupMemberPickerScreen extends StatelessWidget {
   final bool addMode;
   final Set<String> excludeIds; // people who are already in the group
