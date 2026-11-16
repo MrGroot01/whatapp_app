@@ -67,4 +67,21 @@ class AppColors {
   static const Color attachGallery = Color(0xFFAC44CF);
   static const Color attachContact = Color(0xFF0795DC);
   static const Color attachLocation = Color(0xFF1FA855);
+
+
+  // ---------- PROFILE ----------
+  static const Color mutedText = Color(0xFF9AA5A3); // "Not added" text
+  static const Color buttonDisabledGrey = Color(0xFFB8C2C0); // disabled button
+
+
+  // ---------- GROUP INFO ----------
+  static const Color plainBackground = Color(0xFFF7F7F7); // group info page
+
+
+  // ---------- GROUP MEMBER PICKER ----------
+  static const Color removeBadge = Color(0xFF8A9A98); // small x on a picked person
+
+
+
+
 }

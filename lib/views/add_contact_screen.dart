@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import 'app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../models/found_profile.dart';
-import '../services/phone_helper.dart';
 import '../providers/add_contact_provider.dart';
+import '../services/phone_helper.dart';
 import 'widgets/country_code_dropdown.dart';
 
 class AddContactScreen extends StatelessWidget {
@@ -28,9 +30,6 @@ class _AddContactView extends StatefulWidget {
 }
 
 class _AddContactViewState extends State<_AddContactView> {
-  static const Color _error = Color(0xFFD94B4B);
-  static const Color _lockedFill = Color(0xFFEFEBE0);
-
   // only the form lives here (the text boxes and what we filled in them)
   final formKey = GlobalKey<FormState>();
 
@@ -158,17 +157,17 @@ class _AddContactViewState extends State<_AddContactView> {
         color: locked ? AppColors.textSoft : AppColors.emerald,
       ),
       suffixIcon: locked
-          ? const Icon(Icons.lock_outline, color: AppColors.textSoft, size: 20)
+          ? const Icon(AppIcons.locked, color: AppColors.textSoft, size: 20)
           : suffix,
       filled: true,
-      fillColor: locked ? _lockedFill : AppColors.card,
+      fillColor: locked ? AppColors.lockedFill : AppColors.card,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE3DED2)),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE3DED2)),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -207,36 +206,35 @@ class _AddContactViewState extends State<_AddContactView> {
         if (found == null) return const SizedBox.shrink();
         if (!found.hasPhone) {
           return _statusRow(
-            Icons.info_outline,
+            AppIcons.info,
             AppColors.textSoft,
-            'Registered user found. They have not added a phone number, '
-                'so please type it below.',
+            AppStrings.userFoundNoPhone,
           );
         }
         return _statusRow(
-          Icons.check_circle,
+          AppIcons.found,
           AppColors.emerald,
           found.name.isEmpty
-              ? 'Registered user found'
-              : 'Registered user found: ${found.name}',
+              ? AppStrings.userFound
+              : AppStrings.userFoundName(found.name),
         );
       case LookupState.notFound:
         return _statusRow(
-          Icons.error_outline,
-          _error,
-          'No registered user found with this email',
+          AppIcons.error,
+          AppColors.error,
+          AppStrings.userNotFound,
         );
       case LookupState.self:
         return _statusRow(
-          Icons.error_outline,
-          _error,
-          'You cannot add your own account.',
+          AppIcons.error,
+          AppColors.error,
+          AppStrings.cannotAddSelf,
         );
       case LookupState.error:
         return _statusRow(
-          Icons.error_outline,
-          _error,
-          add.lookupError ?? 'Could not look up this email.',
+          AppIcons.error,
+          AppColors.error,
+          add.lookupError ?? AppStrings.lookupFailed,
         );
     }
   }
@@ -255,7 +253,7 @@ class _AddContactViewState extends State<_AddContactView> {
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
         title: const Text(
-          'New contact',
+          AppStrings.newContact,
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
         elevation: 0,
@@ -273,11 +271,11 @@ class _AddContactViewState extends State<_AddContactView> {
                     width: 84,
                     height: 84,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFE3F1ED),
+                      color: AppColors.softGreen,
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
-                      Icons.person_add_alt_1,
+                      AppIcons.addContact,
                       color: AppColors.emerald,
                       size: 42,
                     ),
@@ -286,7 +284,7 @@ class _AddContactViewState extends State<_AddContactView> {
                 const SizedBox(height: 24),
 
                 const Text(
-                  'Add contact',
+                  AppStrings.addContactTitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.textDark,
@@ -297,7 +295,7 @@ class _AddContactViewState extends State<_AddContactView> {
                 const SizedBox(height: 8),
 
                 const Text(
-                  'Enter the contact details and their registered email.',
+                  AppStrings.addContactSubtitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.textSoft,
@@ -314,8 +312,8 @@ class _AddContactViewState extends State<_AddContactView> {
                   validator: AddContactProvider.validateName,
                   enabled: !isSaving,
                   decoration: decoration(
-                    label: 'Contact name',
-                    icon: Icons.person_outline,
+                    label: AppStrings.contactNameLabel,
+                    icon: AppIcons.person,
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -331,8 +329,8 @@ class _AddContactViewState extends State<_AddContactView> {
                   enabled: !isSaving,
                   onChanged: context.read<AddContactProvider>().onEmailChanged,
                   decoration: decoration(
-                    label: 'Registered email address',
-                    icon: Icons.email_outlined,
+                    label: AppStrings.registeredEmailLabel,
+                    icon: AppIcons.email,
                     suffix: add.state == LookupState.loading
                         ? const Padding(
                       padding: EdgeInsets.all(14),
@@ -359,7 +357,7 @@ class _AddContactViewState extends State<_AddContactView> {
                       width: 108,
                       child: CountryCodeDropdown(
                         value: countryCode,
-                        decoration: decoration(label: 'Code'),
+                        decoration: decoration(label: AppStrings.code),
                         onChanged: (isSaving || phoneLocked)
                             ? null
                             : (value) => setState(() => countryCode = value),
@@ -384,8 +382,8 @@ class _AddContactViewState extends State<_AddContactView> {
                           if (!isSaving && !blocked) _save();
                         },
                         decoration: decoration(
-                          label: 'Phone number',
-                          icon: Icons.phone_outlined,
+                          label: AppStrings.phoneNumber,
+                          icon: AppIcons.phone,
                           locked: phoneLocked,
                         ),
                       ),
@@ -398,12 +396,12 @@ class _AddContactViewState extends State<_AddContactView> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFCEAEA),
+                      color: AppColors.errorBackground,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       errorMessage!,
-                      style: const TextStyle(color: Color(0xFFD94B4B)),
+                      style: const TextStyle(color: AppColors.error),
                     ),
                   ),
                 ],
@@ -418,7 +416,7 @@ class _AddContactViewState extends State<_AddContactView> {
                       backgroundColor: AppColors.emerald,
                       disabledBackgroundColor: isSaving
                           ? AppColors.emerald
-                          : const Color(0xFFB8C2C0),
+                          : AppColors.buttonDisabledGrey,
                       foregroundColor: Colors.white,
                       disabledForegroundColor: Colors.white,
                       elevation: 0,
@@ -436,7 +434,7 @@ class _AddContactViewState extends State<_AddContactView> {
                       ),
                     )
                         : const Text(
-                      'Save contact',
+                      AppStrings.saveContact,
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,

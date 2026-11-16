@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../group_service.dart';
 
 // Step 2 of "New group": type the group name and create it.
@@ -31,7 +33,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
 
     final name = nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => error = 'Please type a group name');
+      setState(() => error = AppStrings.groupNameRequired);
       return;
     }
 
@@ -101,17 +103,17 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'New group',
+              AppStrings.newGroup,
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
             ),
             Text(
-              'Add a name',
+              AppStrings.addAName,
               style: GoogleFonts.poppins(
                 fontSize: 12,
-                color: const Color(0xCCFFFFFF),
+                color: AppColors.onEmeraldSoft,
               ),
             ),
           ],
@@ -130,7 +132,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             color: Colors.white,
           ),
         )
-            : const Icon(Icons.check),
+            : const Icon(AppIcons.confirm),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
@@ -140,11 +142,11 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
               width: 84,
               height: 84,
               decoration: const BoxDecoration(
-                color: Color(0xFFE3F1ED),
+                color: AppColors.softGreen,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.group,
+                AppIcons.group,
                 color: AppColors.emerald,
                 size: 44,
               ),
@@ -167,7 +169,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             },
             onSubmitted: (_) => _create(),
             decoration: InputDecoration(
-              hintText: 'Group name (required)',
+              hintText: AppStrings.groupNameHint,
               hintStyle: GoogleFonts.poppins(
                 color: AppColors.textSoft,
                 fontSize: 16,
@@ -176,11 +178,11 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
               fillColor: AppColors.card,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE3DED2)),
+                borderSide: const BorderSide(color: AppColors.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: Color(0xFFE3DED2)),
+                borderSide: const BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -196,13 +198,13 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFCEAEA),
+                color: AppColors.errorBackground,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 error!,
                 style: GoogleFonts.poppins(
-                  color: const Color(0xFFD94B4B),
+                  color: AppColors.error,
                   fontSize: 14,
                 ),
               ),
@@ -210,7 +212,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
           ],
           const SizedBox(height: 20),
           Text(
-            'Members: ${widget.members.length}',
+            AppStrings.membersTitle(widget.members.length),
             style: GoogleFonts.poppins(
               color: AppColors.textSoft,
               fontSize: 14,

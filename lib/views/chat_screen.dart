@@ -15,10 +15,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../incoming_message_notifier.dart';
-import '../core/app_theme.dart';
 import '../core/app_icons.dart';
 import '../core/app_strings.dart';
+import '../core/app_theme.dart';
+import '../incoming_message_notifier.dart';
 import 'widgets/connection_banner.dart';
 import '../message_sync_service.dart';
 import '../models/message.dart';
@@ -28,6 +28,8 @@ import '../providers/group_chat_provider.dart';
 import '../providers/messages_provider.dart';
 import '../providers/voice_input_provider.dart';
 
+// Message moved to models/message.dart. This line keeps every file that
+// still imports it from chat_screen.dart working.
 export '../models/message.dart';
 
 // One saved contact, used by the "share contact" and "forward" pickers
@@ -69,7 +71,6 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-
   // the quick reactions shown when you long-press a message
   static const List<String> _quickReactions = [
     '👍',
@@ -617,7 +618,7 @@ class _ChatScreenState extends State<ChatScreen> {
             list.add(
               _SavedContact(
                 id: key.toString(),
-                name: (data['name'] ?? AppStrings.attachContact).toString(),
+                name: (data['name'] ?? 'Contact').toString(),
                 phone: (data['phone'] ?? '').toString(),
                 countryCode: (data['countryCode'] ?? '+91').toString(),
               ),
@@ -851,7 +852,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ---------- SHARE A CONTACT ----------
   Future<void> shareContact() async {
-    final picked = await _pickContacts(title: AppStrings.shareContactTitle, multi: false);
+    final picked = await _pickContacts(
+      title: AppStrings.shareContactTitle,
+      multi: false,
+    );
     if (picked == null || picked.isEmpty) return;
 
     final c = picked.first;
@@ -1033,7 +1037,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'phone': msg.contactPhone,
         'countryCode': msg.contactCountryCode,
         'addedAt': ServerValue.timestamp,
-        'lastMessage': AppStrings.tapToStartChatting,
+        'lastMessage': 'Tap to start chatting',
         'time': '',
       });
       snack(AppStrings.contactSavedShort);
@@ -1088,7 +1092,10 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    final picked = await _pickContacts(title: AppStrings.forwardToTitle, multi: true);
+    final picked = await _pickContacts(
+      title: AppStrings.forwardToTitle,
+      multi: true,
+    );
     if (picked == null || picked.isEmpty) return;
     if (_myUid.isEmpty) {
       snack(AppStrings.pleaseLogInAgain);
@@ -1526,7 +1533,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: mine == e ? AppColors.bubbleMine : Colors.transparent,
+                          color:
+                          mine == e ? AppColors.bubbleMine : Colors.transparent,
                           shape: BoxShape.circle,
                         ),
                         child: Text(e, style: const TextStyle(fontSize: 28)),
@@ -1624,10 +1632,14 @@ class _ChatScreenState extends State<ChatScreen> {
             // only your own messages can be deleted
             if (msg.isMe)
               ListTile(
-                leading: const Icon(AppIcons.deleteMessage, color: AppColors.error),
+                leading:
+                const Icon(AppIcons.deleteMessage, color: AppColors.error),
                 title: Text(
                   AppStrings.delete,
-                  style: GoogleFonts.poppins(color: AppColors.error, fontSize: 17),
+                  style: GoogleFonts.poppins(
+                    color: AppColors.error,
+                    fontSize: 17,
+                  ),
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1686,7 +1698,7 @@ class _ChatScreenState extends State<ChatScreen> {
             runSpacing: 22,
             children: [
               item(
-                AppIcons.file,
+                AppIcons.attachDocument,
                 AppStrings.attachDocument,
                 AppColors.attachDocument,
                 pickDocument,
@@ -1784,11 +1796,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
     // Delivered: two grey ticks
     if (status == 1) {
-      return const Icon(AppIcons.tickDelivered, size: 17, color: AppColors.tickGrey);
+      return const Icon(
+        AppIcons.tickDelivered,
+        size: 17,
+        color: AppColors.tickGrey,
+      );
     }
 
     // Read: two blue ticks
-    return const Icon(AppIcons.tickDelivered, size: 17, color: AppColors.tickRead);
+    return const Icon(
+      AppIcons.tickDelivered,
+      size: 17,
+      color: AppColors.tickRead,
+    );
   }
 
   // the quoted message shown at the top of a reply bubble
@@ -2420,7 +2440,9 @@ class _ChatScreenState extends State<ChatScreen> {
                             _composer.setHasText(value.trim().isNotEmpty);
                           },
                           decoration: InputDecoration(
-                            hintText: listening ? AppStrings.listening : AppStrings.messageHint,
+                            hintText: listening
+                                ? AppStrings.listening
+                                : AppStrings.messageHint,
                             hintStyle: GoogleFonts.poppins(
                               color: AppColors.textSoft,
                               fontSize: 17,
@@ -2637,7 +2659,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
-                        color: const Color(0xCCFFFFFF),
+                        color: AppColors.onEmeraldSoft,
                         fontSize: 12,
                       ),
                     ),
@@ -2732,7 +2754,7 @@ class _ChatScreenState extends State<ChatScreen> {
         decoration: InputDecoration(
           hintText: AppStrings.searchHint,
           hintStyle: GoogleFonts.poppins(
-            color: const Color(0xB3FFFFFF),
+            color: AppColors.onEmeraldHint,
             fontSize: 17,
           ),
           border: InputBorder.none,
@@ -2818,8 +2840,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   horizontal: 12,
                 ),
                 child: Text(
-                  '⏱ Disappearing messages: '
-                      '${_disappearLabel(_messages.disappearMs)}',
+                  AppStrings.disappearingNotice(
+                    _disappearLabel(_messages.disappearMs),
+                  ),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
                     color: AppColors.textDark,

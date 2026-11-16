@@ -2,7 +2,7 @@ class AppStrings {
   AppStrings._(); // nobody makes an object of this class
 
   // ---------- BRAND ----------
-  static const String appName = 'Velora';
+  static const String appName = 'WhatApp';
   static const String tagline = 'Messaging, beautifully simple.';
 
   static const String homeTitle = appName;
@@ -378,4 +378,179 @@ class AppStrings {
   static const String noResults = 'No results';
 
   static String matchOf(int current, int total) => '$current of $total';
+
+
+  // ---------- PROFILE ----------
+  static const String profileTitle = 'Profile';
+  static const String nameLabel = 'Name';
+  static const String phoneLabel = 'Phone';
+  static const String notAdded = 'Not added';
+  static const String saveName = 'Save name';
+  static const String profileNameUpdated = 'Name updated';
+  static const String nameSavedNote =
+      'People who saved you keep the name they chose for you.';
+
+
+  // ---------- ADD CONTACT ----------
+  static const String addContactTitle = 'Add contact';
+  static const String addContactSubtitle =
+      'Enter registered email and automatically filling remaining part.';
+  static const String contactNameLabel = 'User name';
+  static const String registeredEmailLabel = 'Registered email address';
+
+  // lookup status under the email box
+  static const String userFound = 'Registered user found';
+  static const String userFoundNoPhone =
+      'Registered user found. They have not added a phone number, '
+      'so please type it below.';
+  static const String userNotFound =
+      'No registered user found with this email';
+  static const String cannotAddSelf = 'You cannot add your own account.';
+  static const String lookupFailed = 'Could not look up this email.';
+  static const String lookupFailedInternet =
+      'Could not look up this email. Check your internet connection.';
+
+  static String userFoundName(String name) => 'Registered user found: $name';
+
+  static String lookupFailedCode(String code) =>
+      'Could not look up this email ($code).';
+
+  // validation
+  static const String enterContactName = 'Enter the user name';
+  static const String nameTooShort = 'Name must be at least 4 characters';
+  static const String nameTooLong = 'Name must be 40 characters or less';
+  static const String enterRegisteredEmail =
+      'Enter the registered email address';
+  static const String enterValidEmail = 'Enter a valid email address';
+
+  // saving
+  static const String loginAgainToSave =
+      'Please log in again before saving contacts.';
+  static const String userAlreadyInContacts =
+      'This user is already in your contacts.';
+  static const String firebaseDenied =
+      'Firebase denied access. Check your database rules.';
+  static const String unknownError = 'Unknown error';
+
+  static String firebaseError(String code, String message) =>
+      'Firebase error ($code): $message';
+
+
+  // ---------- MY TASKS ----------
+  static const String newTask = 'New task';
+  static const String edit = 'Edit';
+  static const String deleteTaskTitle = 'Delete task?';
+  static const String deleteTaskBody =
+      'This task and its reminder will be removed.';
+  static const String taskDeleted = 'Task deleted';
+  static const String taskCompleted = 'Completed';
+  static const String noReminder = 'No reminder';
+
+  // empty and error states
+  static const String pleaseLogInTasks = 'Please log in to see your tasks.';
+  static const String couldNotLoadTasks =
+      'Unable to load tasks. Check your internet and the database rules.';
+  static const String emptyAssignedToMe = 'Nothing is assigned to you yet.';
+  static const String emptyAssignedByMe =
+      'You have not assigned any task yet.\n'
+      'Long-press a chat message and tap Create Task.';
+  static const String emptyNoTasks =
+      'No tasks yet.\nLong-press a chat message and tap Create Task.';
+  static const String emptyList = 'No tasks in this list.';
+
+  // filter chips
+  static String filterAll(int count) => 'All ($count)';
+
+  static String filterUpcoming(int count) => 'Upcoming ($count)';
+
+  static String filterCompleted(int count) => 'Completed ($count)';
+
+  static String filterAssignedToMe(int count) => 'Assigned to me ($count)';
+
+  static String filterAssignedByMe(int count) => 'Assigned by me ($count)';
+
+  // task card lines
+  static String doneBy(String name) => 'Done by $name';
+
+  static String waitingFor(String name) => 'Waiting for $name';
+
+  static String reminderPrefix(String label) => 'Reminder: $label';
+
+  static String assignedByLine(String name) => 'Assigned by $name';
+
+  static String assignedToLine(String name) => 'Assigned to $name';
+
+  static String fromLine(String name) => 'From: $name';
+
+  static String deleteTaskAssignedBody(String name) =>
+      'This task will be removed for you and for $name.';
+
+  // provider errors
+  static const String couldNotUpdateTask =
+      'Could not update the task. Check your internet connection.';
+  static const String couldNotDeleteTask =
+      'Could not delete the task. Check your internet connection.';
+
+
+
+  // ---------- GROUP INFO ----------
+  static const String groupNameTitle = 'Group name';
+  static const String changeGroupName = 'Change group name';
+  static const String addMembers = 'Add members';
+  static const String groupAdminBadge = 'Group admin';
+  static const String removeFromGroup = 'Remove from group';
+  static const String removeAction = 'Remove';
+  static const String removeMemberBody =
+      'They will not receive new messages from this group.';
+  static const String exitGroup = 'Exit group';
+  static const String exitGroupTitle = 'Exit group?';
+  static const String exitAction = 'Exit';
+  static const String exitGroupBody =
+      'You will no longer receive messages from this group.';
+  static const String disappearingTitle = 'Disappearing messages';
+  static const String disappearingGroupHelp =
+      'New messages in this group will disappear after the time you choose.';
+
+  static String removeMemberTitle(String name) => 'Remove $name?';
+
+  static String groupMembersLine(int count) => 'Group · $count members';
+
+
+  // ---------- GROUP MEMBER PICKER ----------
+  static const String addGroupMembers = 'Add group members';
+  static const String noContactsToAdd =
+      'No contacts to add. Save a contact first.';
+
+  static String selectedOf(int selected, int total) =>
+      '$selected of $total selected';
+
+
+  // ---------- NEW GROUP ----------
+  static const String addAName = 'Add a name';
+  static const String groupNameHint = 'Group name (required)';
+  static const String groupNameRequired = 'Please type a group name';
+
+  static String membersTitle(int count) => 'Members: $count';
+
+
+  // ---------- UPDATES (STATUS) ----------
+  static const String statusText = 'Text';
+  static const String addStatusTitle = 'Add status';
+  static const String myStatus = 'My status';
+  static const String tapToAddStatus = 'Tap to add status update';
+  static const String recentUpdates = 'Recent updates';
+  static const String viewedUpdates = 'Viewed updates';
+  static const String noRecentUpdates =
+      'No recent updates.\nStatuses from your contacts appear here '
+      'and disappear after a short time.';
+  static const String addStatusTooltip = 'Add status';
+  static const String textStatusTooltip = 'Text status';
+  static const String photoStatusTooltip = 'Photo status';
+  static const String couldNotOpenCameraOrGallery =
+      'Could not open the camera or gallery';
+
+  static String statusUpdatesLine(int count, String timeAgo) =>
+      '$count update${count == 1 ? '' : 's'} · $timeAgo';
+
 }
+

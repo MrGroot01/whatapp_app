@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../providers/account_provider.dart';
 
-// The provider is created here, inside the screen, so it stops when the
-// screen closes and never shows an old account's data after a new login.
 class ProfileScreen extends StatelessWidget {
   final String email;
 
@@ -30,9 +30,6 @@ class _ProfileView extends StatefulWidget {
 }
 
 class _ProfileViewState extends State<_ProfileView> {
-  static const Color _error = Color(0xFFD94B4B);
-  static const Color _lockedFill = Color(0xFFEFEBE0);
-
   // only the form lives here (pure UI state)
   final formKey = GlobalKey<FormState>();
   final nameController = TextEditingController();
@@ -48,8 +45,6 @@ class _ProfileViewState extends State<_ProfileView> {
     // start with the name we already know (the Firebase display name)
     nameController.text = account.savedName;
 
-    // when the live profile brings a new name, show it unless the user
-    // has already started typing
     account.onNameChanged = (name) {
       if (!_nameTouched) nameController.text = name;
     };
@@ -86,7 +81,7 @@ class _ProfileViewState extends State<_ProfileView> {
 
     setState(() => _nameTouched = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Name updated')),
+      const SnackBar(content: Text(AppStrings.profileNameUpdated)),
     );
   }
 
@@ -161,16 +156,16 @@ class _ProfileViewState extends State<_ProfileView> {
         color: locked ? AppColors.textSoft : AppColors.emerald,
       ),
       suffixIcon: locked
-          ? const Icon(Icons.lock_outline, color: AppColors.textSoft, size: 20)
+          ? const Icon(AppIcons.locked, color: AppColors.textSoft, size: 20)
           : null,
       filled: true,
-      fillColor: locked ? _lockedFill : AppColors.card,
-      errorStyle: const TextStyle(color: _error, fontSize: 14),
-      border: border(const Color(0xFFE3DED2)),
-      enabledBorder: border(const Color(0xFFE3DED2)),
+      fillColor: locked ? AppColors.lockedFill : AppColors.card,
+      errorStyle: const TextStyle(color: AppColors.error, fontSize: 14),
+      border: border(AppColors.border),
+      enabledBorder: border(AppColors.border),
       focusedBorder: border(AppColors.emerald, 1.5),
-      errorBorder: border(_error, 1.5),
-      focusedErrorBorder: border(_error, 1.5),
+      errorBorder: border(AppColors.error, 1.5),
+      focusedErrorBorder: border(AppColors.error, 1.5),
     );
   }
 
@@ -189,7 +184,7 @@ class _ProfileViewState extends State<_ProfileView> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: muted ? const Color(0xFF9AA5A3) : AppColors.textSoft,
+          color: muted ? AppColors.mutedText : AppColors.textSoft,
           fontSize: 17,
           fontStyle: muted ? FontStyle.italic : FontStyle.normal,
         ),
@@ -203,7 +198,7 @@ class _ProfileViewState extends State<_ProfileView> {
     final account = context.watch<AccountProvider>();
 
     final fullPhone = account.fullPhone;
-    final phoneText = fullPhone ?? 'Not added';
+    final phoneText = fullPhone ?? AppStrings.notAdded;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -212,7 +207,7 @@ class _ProfileViewState extends State<_ProfileView> {
         foregroundColor: Colors.white,
         elevation: 0,
         title: const Text(
-          'Profile',
+          AppStrings.profileTitle,
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
@@ -233,7 +228,7 @@ class _ProfileViewState extends State<_ProfileView> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Color(0x14000000),
+                          color: AppColors.shadow,
                           blurRadius: 12,
                           offset: Offset(0, 4),
                         ),
@@ -269,15 +264,15 @@ class _ProfileViewState extends State<_ProfileView> {
                     if (_canSave(account)) _saveName();
                   },
                   decoration: _decoration(
-                    label: 'Name',
-                    icon: Icons.person_outline,
+                    label: AppStrings.nameLabel,
+                    icon: AppIcons.person,
                   ).copyWith(counterText: ''),
                   validator: AccountProvider.validateName,
                 ),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(4, 6, 4, 0),
                   child: Text(
-                    'People who saved you keep the name they chose for you.',
+                    AppStrings.nameSavedNote,
                     style: TextStyle(color: AppColors.textSoft, fontSize: 13),
                   ),
                 ),
@@ -285,8 +280,8 @@ class _ProfileViewState extends State<_ProfileView> {
 
                 // PHONE (read-only)
                 _lockedField(
-                  label: 'Phone',
-                  icon: Icons.phone_outlined,
+                  label: AppStrings.phoneLabel,
+                  icon: AppIcons.phone,
                   value: phoneText,
                   muted: fullPhone == null,
                 ),
@@ -294,8 +289,8 @@ class _ProfileViewState extends State<_ProfileView> {
 
                 // EMAIL (read-only)
                 _lockedField(
-                  label: 'Email',
-                  icon: Icons.email_outlined,
+                  label: AppStrings.email,
+                  icon: AppIcons.email,
                   value: account.email,
                 ),
 
@@ -304,19 +299,19 @@ class _ProfileViewState extends State<_ProfileView> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFCEAEA),
+                      color: AppColors.errorBackground,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline,
-                            color: _error, size: 20),
+                        const Icon(AppIcons.error,
+                            color: AppColors.error, size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _errorMessage!,
                             style: const TextStyle(
-                              color: _error,
+                              color: AppColors.error,
                               fontSize: 14.5,
                             ),
                           ),
@@ -335,7 +330,7 @@ class _ProfileViewState extends State<_ProfileView> {
                       backgroundColor: AppColors.emerald,
                       disabledBackgroundColor: account.savingName
                           ? AppColors.emerald
-                          : const Color(0xFFB8C2C0),
+                          : AppColors.buttonDisabledGrey,
                       foregroundColor: Colors.white,
                       disabledForegroundColor: Colors.white,
                       elevation: 0,
@@ -353,7 +348,7 @@ class _ProfileViewState extends State<_ProfileView> {
                       ),
                     )
                         : const Text(
-                      'Save name',
+                      AppStrings.saveName,
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,

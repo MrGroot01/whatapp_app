@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import 'app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import 'create_status_screen.dart';
 import '../models/status_entry.dart';
 import '../providers/updates_provider.dart';
@@ -95,7 +97,9 @@ class _UpdatesViewState extends State<_UpdatesView> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the camera or gallery')),
+        const SnackBar(
+          content: Text(AppStrings.couldNotOpenCameraOrGallery),
+        ),
       );
     }
   }
@@ -133,7 +137,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
             const Padding(
               padding: EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Text(
-                'Add status',
+                AppStrings.addStatusTitle,
                 style: TextStyle(
                   color: AppColors.textDark,
                   fontSize: 20,
@@ -141,17 +145,22 @@ class _UpdatesViewState extends State<_UpdatesView> {
                 ),
               ),
             ),
-            option(Icons.edit, 'Text', const Color(0xFF0B6B57), _addText),
             option(
-              Icons.camera_alt,
-              'Camera',
-              const Color(0xFFD3396D),
+              AppIcons.addStatusText,
+              AppStrings.statusText,
+              AppColors.emerald,
+              _addText,
+            ),
+            option(
+              AppIcons.camera,
+              AppStrings.attachCamera,
+              AppColors.attachCamera,
                   () => _addPhoto(ImageSource.camera),
             ),
             option(
-              Icons.photo,
-              'Gallery',
-              const Color(0xFFAC44CF),
+              AppIcons.attachGallery,
+              AppStrings.attachGallery,
+              AppColors.attachGallery,
                   () => _addPhoto(ImageSource.gallery),
             ),
             const SizedBox(height: 12),
@@ -234,13 +243,17 @@ class _UpdatesViewState extends State<_UpdatesView> {
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: const Icon(Icons.add, color: Colors.white, size: 14),
+                child: const Icon(
+                  AppIcons.addEmoji,
+                  color: Colors.white,
+                  size: 14,
+                ),
               ),
             ),
         ],
       ),
       title: const Text(
-        'My status',
+        AppStrings.myStatus,
         style: TextStyle(
           color: AppColors.textDark,
           fontSize: 18,
@@ -249,17 +262,19 @@ class _UpdatesViewState extends State<_UpdatesView> {
       ),
       subtitle: Text(
         mine.isEmpty
-            ? 'Tap to add status update'
-            : '${mine.length} update${mine.length == 1 ? '' : 's'} · '
-            '${StatusService.timeAgo(mine.last.createdAt)}',
+            ? AppStrings.tapToAddStatus
+            : AppStrings.statusUpdatesLine(
+          mine.length,
+          StatusService.timeAgo(mine.last.createdAt),
+        ),
         style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
       ),
       trailing: mine.isEmpty
           ? null
           : IconButton(
-        tooltip: 'Add status',
+        tooltip: AppStrings.addStatusTooltip,
         icon: const Icon(
-          Icons.add_circle_outline,
+          AppIcons.addStatusFab,
           color: AppColors.emerald,
         ),
         onPressed: _showAddSheet,
@@ -270,7 +285,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
         } else {
           _openViewer(
             uid: me,
-            name: 'My status',
+            name: AppStrings.myStatus,
             color: AppColors.gold,
             items: mine,
             mine: true,
@@ -330,19 +345,18 @@ class _UpdatesViewState extends State<_UpdatesView> {
           children: [
             _myStatusTile(mine),
             if (recent.isNotEmpty) ...[
-              _sectionTitle('Recent updates'),
+              _sectionTitle(AppStrings.recentUpdates),
               for (final e in recent) _entryTile(e),
             ],
             if (viewed.isNotEmpty) ...[
-              _sectionTitle('Viewed updates'),
+              _sectionTitle(AppStrings.viewedUpdates),
               for (final e in viewed) _entryTile(e),
             ],
             if (recent.isEmpty && viewed.isEmpty)
               const Padding(
                 padding: EdgeInsets.fromLTRB(32, 40, 32, 0),
                 child: Text(
-                  'No recent updates.\nStatuses from your contacts appear here '
-                      'and disappear after a short time.',
+                  AppStrings.noRecentUpdates,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.textSoft,
@@ -363,18 +377,18 @@ class _UpdatesViewState extends State<_UpdatesView> {
                 heroTag: 'status_text_fab',
                 backgroundColor: Colors.white,
                 foregroundColor: AppColors.emerald,
-                tooltip: 'Text status',
+                tooltip: AppStrings.textStatusTooltip,
                 onPressed: _addText,
-                child: const Icon(Icons.edit),
+                child: const Icon(AppIcons.addStatusText),
               ),
               const SizedBox(height: 12),
               FloatingActionButton(
                 heroTag: 'status_camera_fab',
                 backgroundColor: AppColors.emerald,
                 foregroundColor: Colors.white,
-                tooltip: 'Photo status',
+                tooltip: AppStrings.photoStatusTooltip,
                 onPressed: () => _addPhoto(ImageSource.camera),
-                child: const Icon(Icons.camera_alt),
+                child: const Icon(AppIcons.camera),
               ),
             ],
           ),

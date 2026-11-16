@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import 'app_theme.dart';
-import 'chat_media_screen.dart';
-import 'group_member_picker.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../group_service.dart';
 import '../providers/group_info_provider.dart';
+import 'chat_media_screen.dart';
+import 'group_member_picker.dart';
 
 class GroupInfoScreen extends StatelessWidget {
   final String groupId;
@@ -86,7 +88,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
-              'Cancel',
+              AppStrings.cancel,
               style: GoogleFonts.poppins(color: AppColors.textSoft),
             ),
           ),
@@ -95,7 +97,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             child: Text(
               action,
               style: GoogleFonts.poppins(
-                color: const Color(0xFFD94B4B),
+                color: AppColors.error,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -119,7 +121,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          'Group name',
+          AppStrings.groupNameTitle,
           style: GoogleFonts.poppins(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
@@ -136,7 +138,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: Text(
-              'Cancel',
+              AppStrings.cancel,
               style: GoogleFonts.poppins(color: AppColors.textSoft),
             ),
           ),
@@ -144,7 +146,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             onPressed: () =>
                 Navigator.pop(dialogContext, controller.text.trim()),
             child: Text(
-              'Save',
+              AppStrings.save,
               style: GoogleFonts.poppins(
                 color: AppColors.emerald,
                 fontWeight: FontWeight.bold,
@@ -187,9 +189,9 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     final provider = context.read<GroupInfoProvider>();
 
     final ok = await _confirm(
-      'Remove ${provider.nameOf(uid)}?',
-      'They will not receive new messages from this group.',
-      'Remove',
+      AppStrings.removeMemberTitle(provider.nameOf(uid)),
+      AppStrings.removeMemberBody,
+      AppStrings.removeAction,
     );
     if (ok != true) return;
 
@@ -202,9 +204,9 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     if (provider.group == null) return;
 
     final ok = await _confirm(
-      'Exit group?',
-      'You will no longer receive messages from this group.',
-      'Exit',
+      AppStrings.exitGroupTitle,
+      AppStrings.exitGroupBody,
+      AppStrings.exitAction,
     );
     if (ok != true) return;
 
@@ -234,7 +236,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
               child: Text(
-                'Disappearing messages',
+                AppStrings.disappearingTitle,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 18,
@@ -245,7 +247,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                'New messages in this group will disappear after the time you choose.',
+                AppStrings.disappearingGroupHelp,
                 style: GoogleFonts.poppins(
                   color: AppColors.textSoft,
                   fontSize: 13,
@@ -262,9 +264,9 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                   ),
                 ),
                 trailing: current == o.ms
-                    ? const Icon(Icons.check_circle, color: AppColors.emerald)
+                    ? const Icon(AppIcons.selected, color: AppColors.emerald)
                     : const Icon(
-                  Icons.circle_outlined,
+                  AppIcons.notSelected,
                   color: AppColors.textSoft,
                 ),
                 onTap: () {
@@ -366,7 +368,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Group admin',
+                  AppStrings.groupAdminBadge,
                   style: GoogleFonts.poppins(
                     color: AppColors.emerald,
                     fontSize: 11,
@@ -375,10 +377,10 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               ),
             if (info.isAdmin && !isMe)
               IconButton(
-                tooltip: 'Remove from group',
+                tooltip: AppStrings.removeFromGroup,
                 icon: const Icon(
-                  Icons.person_remove_outlined,
-                  color: Color(0xFFD94B4B),
+                  AppIcons.removeMember,
+                  color: AppColors.error,
                 ),
                 onPressed: info.busy ? null : () => _removeMember(uid),
               ),
@@ -399,12 +401,12 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     final busy = info.busy;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.plainBackground,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
         title: Text(
-          'Group info',
+          AppStrings.groupInfo,
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
       ),
@@ -424,7 +426,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                       radius: 56,
                       backgroundColor: GroupService.colorFor(widget.groupId),
                       child: const Icon(
-                        Icons.group,
+                        AppIcons.group,
                         color: Colors.white,
                         size: 60,
                       ),
@@ -446,9 +448,9 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                         ),
                         if (info.isAdmin)
                           IconButton(
-                            tooltip: 'Change group name',
+                            tooltip: AppStrings.changeGroupName,
                             icon: const Icon(
-                              Icons.edit,
+                              AppIcons.editGroupName,
                               color: AppColors.emerald,
                               size: 20,
                             ),
@@ -458,7 +460,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Group · ${members.length} members',
+                      AppStrings.groupMembersLine(members.length),
                       style: GoogleFonts.poppins(
                         color: AppColors.textSoft,
                         fontSize: 15,
@@ -469,8 +471,8 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               ),
               const SizedBox(height: 8),
               _tile(
-                icon: Icons.photo_library_outlined,
-                title: 'Media, links, and docs',
+                icon: AppIcons.media,
+                title: AppStrings.mediaLinksDocs,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -483,7 +485,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                         ),
                       ),
                     const Icon(
-                      Icons.chevron_right,
+                      AppIcons.chevronRight,
                       color: AppColors.textSoft,
                     ),
                   ],
@@ -499,8 +501,8 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                 ),
               ),
               _tile(
-                icon: Icons.timer_outlined,
-                title: 'Disappearing messages',
+                icon: AppIcons.disappearing,
+                title: AppStrings.disappearingTitle,
                 subtitle: disappearLabel(info.disappearMs),
                 onTap: () => _showDisappearSheet(info.disappearMs),
               ),
@@ -509,7 +511,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                 color: Colors.white,
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
                 child: Text(
-                  '${members.length} members',
+                  AppStrings.membersCount(members.length),
                   style: GoogleFonts.poppins(
                     color: AppColors.textSoft,
                     fontSize: 14,
@@ -523,10 +525,10 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                   child: ListTile(
                     leading: const CircleAvatar(
                       backgroundColor: AppColors.emerald,
-                      child: Icon(Icons.person_add, color: Colors.white),
+                      child: Icon(AppIcons.addMember, color: Colors.white),
                     ),
                     title: Text(
-                      'Add members',
+                      AppStrings.addMembers,
                       style: GoogleFonts.poppins(
                         color: AppColors.textDark,
                         fontSize: 15,
@@ -540,9 +542,9 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                 for (final uid in members) _memberTile(info, g, uid),
               const SizedBox(height: 8),
               _tile(
-                icon: Icons.exit_to_app,
-                title: 'Exit group',
-                color: const Color(0xFFD94B4B),
+                icon: AppIcons.exitGroup,
+                title: AppStrings.exitGroup,
+                color: AppColors.error,
                 onTap: busy ? () {} : _exitGroup,
               ),
               const SizedBox(height: 24),

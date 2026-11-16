@@ -229,8 +229,8 @@ class WelcomeScreen extends StatelessWidget {
 
 // One small perk: round icon with a label below
 class _Perk extends StatelessWidget {
-  final IconData icon;
-  final String label;
+final IconData icon;
+final String label;
 
   const _Perk({required this.icon, required this.label});
 

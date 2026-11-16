@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import 'app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../group_service.dart';
-import 'new_group_screen.dart';
 import '../providers/member_picker_provider.dart';
+import 'new_group_screen.dart';
 
 class GroupMemberPickerScreen extends StatelessWidget {
   final bool addMode;
@@ -104,11 +106,11 @@ class _PickerViewState extends State<_PickerView> {
                         bottom: -2,
                         child: Container(
                           decoration: const BoxDecoration(
-                            color: Color(0xFF8A9A98),
+                            color: AppColors.removeBadge,
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
-                            Icons.close,
+                            AppIcons.close,
                             size: 15,
                             color: Colors.white,
                           ),
@@ -151,8 +153,8 @@ class _PickerViewState extends State<_PickerView> {
           padding: const EdgeInsets.all(24),
           child: Text(
             picker.allCount == 0
-                ? 'No contacts to add. Save a contact first.'
-                : 'No contact found',
+                ? AppStrings.noContactsToAdd
+                : AppStrings.noContactFound,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               color: AppColors.textSoft,
@@ -205,7 +207,7 @@ class _PickerViewState extends State<_PickerView> {
             ),
           ),
           trailing: Icon(
-            isOn ? Icons.check_circle : Icons.radio_button_unchecked,
+            isOn ? AppIcons.pickerOn : AppIcons.pickerOff,
             color: isOn ? AppColors.emerald : AppColors.textSoft,
           ),
           onTap: () => picker.toggle(c),
@@ -230,17 +232,19 @@ class _PickerViewState extends State<_PickerView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.addMode ? 'Add members' : 'Add group members',
+              widget.addMode
+                  ? AppStrings.addMembers
+                  : AppStrings.addGroupMembers,
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
             ),
             Text(
-              '$selectedCount of ${picker.allCount} selected',
+              AppStrings.selectedOf(selectedCount, picker.allCount),
               style: GoogleFonts.poppins(
                 fontSize: 12,
-                color: const Color(0xCCFFFFFF),
+                color: AppColors.onEmeraldSoft,
               ),
             ),
           ],
@@ -252,7 +256,7 @@ class _PickerViewState extends State<_PickerView> {
         onPressed: _next,
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
-        child: Icon(widget.addMode ? Icons.check : Icons.arrow_forward),
+        child: Icon(widget.addMode ? AppIcons.confirm : AppIcons.next),
       ),
       body: Column(
         children: [
@@ -268,17 +272,17 @@ class _PickerViewState extends State<_PickerView> {
                 fontSize: 16,
               ),
               decoration: InputDecoration(
-                hintText: 'Search name or number',
+                hintText: AppStrings.searchNameOrNumber,
                 hintStyle: GoogleFonts.poppins(
                   color: AppColors.textSoft,
                   fontSize: 15,
                 ),
                 prefixIcon: const Icon(
-                  Icons.search,
+                  AppIcons.search,
                   color: AppColors.textSoft,
                 ),
                 filled: true,
-                fillColor: const Color(0xFFF3F0E8),
+                fillColor: AppColors.searchFill,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),

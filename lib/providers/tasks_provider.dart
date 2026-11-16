@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/app_strings.dart';
 import '../task_service.dart';
 
 enum TaskFilter { all, upcoming, completed, assignedToMe, assignedByMe }
@@ -123,7 +124,7 @@ class TasksProvider extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Update task failed: $e');
-      return 'Could not update the task. Check your internet connection.';
+      return AppStrings.couldNotUpdateTask;
     }
   }
 
@@ -134,7 +135,7 @@ class TasksProvider extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Delete task failed: $e');
-      return 'Could not delete the task. Check your internet connection.';
+      return AppStrings.couldNotDeleteTask;
     }
   }
 

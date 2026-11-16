@@ -104,4 +104,45 @@ class AppIcons {
   static const IconData language = Icons.language;
   static const IconData selected = Icons.check_circle;
   static const IconData notSelected = Icons.circle_outlined;
+
+
+  // ---------- PROFILE ----------
+  static const IconData locked = Icons.lock_outline;
+
+
+  // ---------- ADD CONTACT ----------
+  static const IconData info = Icons.info_outline;
+  static const IconData found = Icons.check_circle;
+
+
+  // ---------- MY TASKS ----------
+  static const IconData addTask = Icons.add;
+  static const IconData editTask = Icons.edit_outlined;
+  static const IconData deleteTask = Icons.delete_outline;
+  static const IconData dueDate = Icons.event;
+  static const IconData reminder = Icons.notifications_none;
+  static const IconData taskDone = Icons.check_circle;
+  static const IconData taskDoneOutline = Icons.check_circle_outline;
+  static const IconData taskWaiting = Icons.hourglass_empty;
+  static const IconData taskWaitingTop = Icons.hourglass_top_rounded;
+
+
+  // ---------- GROUP INFO ----------
+  static const IconData removeMember = Icons.person_remove_outlined;
+  static const IconData editGroupName = Icons.edit;
+  static const IconData addMember = Icons.person_add;
+  static const IconData chevronRight = Icons.chevron_right;
+  static const IconData exitGroup = Icons.exit_to_app;
+
+
+  // ---------- GROUP MEMBER PICKER ----------
+  static const IconData pickerOn = Icons.check_circle;
+  static const IconData pickerOff = Icons.radio_button_unchecked;
+  static const IconData confirm = Icons.check;
+  static const IconData next = Icons.arrow_forward;
+
+
+  // ---------- UPDATES (STATUS) ----------
+  static const IconData addStatusText = Icons.edit;
+  static const IconData addStatusFab = Icons.add_circle_outline;
 }

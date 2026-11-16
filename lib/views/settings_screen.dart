@@ -464,18 +464,19 @@ class _SettingsViewState extends State<_SettingsView> {
                 ),
                 const SizedBox(height: 20),
 
-                // ADD NEW CONTACT (same shared code as the Home screen)
                 whiteCard(
                   child: settingsRow(
                     const SettingsItem(
                       AppIcons.addContact,
+
                       AppStrings.addNewContact,
                       AppStrings.addNewContactSub,
                     ),
                     onTap: () => openAddContact(context),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 10),
+
 
                 // SETTINGS ROWS (inside one white card)
                 if (shownItems.isEmpty)

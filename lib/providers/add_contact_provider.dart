@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/app_strings.dart';
 import '../database_helper.dart';
 import '../models/found_profile.dart';
 import '../services/phone_helper.dart';
@@ -59,9 +60,9 @@ class AddContactProvider extends ChangeNotifier {
   static String? validateName(String? value) {
     final name = value?.trim() ?? '';
 
-    if (name.isEmpty) return 'Enter the contact name';
-    if (name.length < 2) return 'Name must be at least 2 characters';
-    if (name.length > 40) return 'Name must be 40 characters or less';
+    if (name.isEmpty) return AppStrings.enterContactName;
+    if (name.length < 2) return AppStrings.nameTooShort;
+    if (name.length > 40) return AppStrings.nameTooLong;
 
     return null;
   }
@@ -69,8 +70,8 @@ class AddContactProvider extends ChangeNotifier {
   static String? validateEmail(String? value) {
     final email = (value ?? '').trim();
 
-    if (email.isEmpty) return 'Enter the registered email address';
-    if (!looksLikeEmail(email)) return 'Enter a valid email address';
+    if (email.isEmpty) return AppStrings.enterRegisteredEmail;
+    if (!looksLikeEmail(email)) return AppStrings.enterValidEmail;
 
     return null;
   }
@@ -176,21 +177,19 @@ class AddContactProvider extends ChangeNotifier {
     } on TimeoutException {
       if (_disposed || id != _lookupId) return;
       _state = LookupState.error;
-      _lookupError =
-      'Could not look up this email. Check your internet connection.';
+      _lookupError = AppStrings.lookupFailedInternet;
       _safeNotify();
     } on FirebaseException catch (e) {
       if (_disposed || id != _lookupId) return;
       _state = LookupState.error;
       _lookupError = e.code == 'permission-denied'
-          ? 'Firebase denied access. Check your database rules.'
-          : 'Could not look up this email (${e.code}).';
+          ? AppStrings.firebaseDenied
+          : AppStrings.lookupFailedCode(e.code);
       _safeNotify();
     } catch (e) {
       if (_disposed || id != _lookupId) return;
       _state = LookupState.error;
-      _lookupError =
-      'Could not look up this email. Check your internet connection.';
+      _lookupError = AppStrings.lookupFailedInternet;
       _safeNotify();
     }
   }
@@ -203,7 +202,7 @@ class AddContactProvider extends ChangeNotifier {
 
     final user = _auth.currentUser;
     if (user == null) {
-      return 'Please log in again before saving contacts.';
+      return AppStrings.loginAgainToSave;
     }
 
     final mail = email.trim().toLowerCase();
@@ -227,7 +226,7 @@ class AddContactProvider extends ChangeNotifier {
 
       final otherUid = found.uid;
       if (otherUid == user.uid) {
-        throw Exception('You cannot add your own account.');
+        throw Exception(AppStrings.cannotAddSelf);
       }
 
       final name = form.name.trim();
@@ -246,7 +245,7 @@ class AddContactProvider extends ChangeNotifier {
       await contactRef.get().timeout(const Duration(seconds: 12));
 
       if (existingContact.exists) {
-        throw Exception('This user is already in your contacts.');
+        throw Exception(AppStrings.userAlreadyInContacts);
       }
 
       await contactRef.set({
@@ -274,8 +273,11 @@ class AddContactProvider extends ChangeNotifier {
       return null;
     } on FirebaseException catch (e) {
       return e.code == 'permission-denied'
-          ? 'Firebase denied access. Check your database rules.'
-          : 'Firebase error (${e.code}): ${e.message ?? 'Unknown error'}';
+          ? AppStrings.firebaseDenied
+          : AppStrings.firebaseError(
+        e.code,
+        e.message ?? AppStrings.unknownError,
+      );
     } catch (e) {
       return e.toString().replaceFirst('Exception: ', '');
     } finally {

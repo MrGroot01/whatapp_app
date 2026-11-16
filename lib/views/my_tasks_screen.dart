@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'app_theme.dart';
-import 'create_task_screen.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../providers/tasks_provider.dart';
 import '../task_service.dart';
+import 'create_task_screen.dart';
 
 // The provider is created here, inside the screen, so it stops when the
 // screen closes and never shows an old account's tasks after a new login.
@@ -28,8 +30,6 @@ class _MyTasksView extends StatefulWidget {
 }
 
 class _MyTasksViewState extends State<_MyTasksView> {
-  static const Color _error = Color(0xFFD94B4B);
-
   void _snack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -69,7 +69,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
-          'Delete task?',
+          AppStrings.deleteTaskTitle,
           style: TextStyle(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
@@ -77,24 +77,24 @@ class _MyTasksViewState extends State<_MyTasksView> {
         ),
         content: Text(
           assigned
-              ? 'This task will be removed for you and for ${task.assignedToName}.'
-              : 'This task and its reminder will be removed.',
+              ? AppStrings.deleteTaskAssignedBody(task.assignedToName)
+              : AppStrings.deleteTaskBody,
           style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text(
-              'Cancel',
+              AppStrings.cancel,
               style: TextStyle(color: AppColors.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text(
-              'Delete',
+              AppStrings.delete,
               style: TextStyle(
-                color: _error,
+                color: AppColors.error,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -107,7 +107,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
     if (ok != true || !mounted) return;
 
     final error = await context.read<TasksProvider>().delete(task);
-    _snack(error ?? 'Task deleted');
+    _snack(error ?? AppStrings.taskDeleted);
   }
 
   // ---------- UI PIECES ----------
@@ -137,20 +137,24 @@ class _MyTasksViewState extends State<_MyTasksView> {
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
       child: Row(
         children: [
-          _chip('All (${tasks.allCount})', TaskFilter.all, tasks),
-          _chip('Upcoming (${tasks.upcomingCount})', TaskFilter.upcoming, tasks),
+          _chip(AppStrings.filterAll(tasks.allCount), TaskFilter.all, tasks),
           _chip(
-            'Completed (${tasks.completedCount})',
+            AppStrings.filterUpcoming(tasks.upcomingCount),
+            TaskFilter.upcoming,
+            tasks,
+          ),
+          _chip(
+            AppStrings.filterCompleted(tasks.completedCount),
             TaskFilter.completed,
             tasks,
           ),
           _chip(
-            'Assigned to me (${tasks.toMeCount})',
+            AppStrings.filterAssignedToMe(tasks.toMeCount),
             TaskFilter.assignedToMe,
             tasks,
           ),
           _chip(
-            'Assigned by me (${tasks.byMeCount})',
+            AppStrings.filterAssignedByMe(tasks.byMeCount),
             TaskFilter.assignedByMe,
             tasks,
           ),
@@ -164,33 +168,34 @@ class _MyTasksViewState extends State<_MyTasksView> {
     final byMe = t.isAssignedByMe(me); // I gave it to somebody
 
     final overdue = !t.done && t.due.isBefore(DateTime.now());
-    final dueColor = overdue ? _error : AppColors.textSoft;
+    final dueColor = overdue ? AppColors.error : AppColors.textSoft;
 
     // the line with the bell
     final String statusText;
     final IconData statusIcon;
     if (byMe) {
       statusText = t.done
-          ? 'Done by ${t.assignedToName}'
-          : 'Waiting for ${t.assignedToName}';
-      statusIcon = t.done ? Icons.check_circle_outline : Icons.hourglass_empty;
+          ? AppStrings.doneBy(t.assignedToName)
+          : AppStrings.waitingFor(t.assignedToName);
+      statusIcon =
+      t.done ? AppIcons.taskDoneOutline : AppIcons.taskWaiting;
     } else {
       statusText = t.done
-          ? 'Completed'
+          ? AppStrings.taskCompleted
           : (t.reminderMinutes < 0
-          ? 'No reminder'
-          : 'Reminder: ${reminderLabel(t.reminderMinutes)}');
-      statusIcon = Icons.notifications_none;
+          ? AppStrings.noReminder
+          : AppStrings.reminderPrefix(reminderLabel(t.reminderMinutes)));
+      statusIcon = AppIcons.reminder;
     }
 
     // who gave / who got the task
     String? peopleLine;
     if (toMe) {
-      peopleLine = 'Assigned by ${t.createdByName}';
+      peopleLine = AppStrings.assignedByLine(t.createdByName);
     } else if (byMe) {
-      peopleLine = 'Assigned to ${t.assignedToName}';
+      peopleLine = AppStrings.assignedToLine(t.assignedToName);
     } else if (t.fromName.isNotEmpty) {
-      peopleLine = 'From: ${t.fromName}';
+      peopleLine = AppStrings.fromLine(t.fromName);
     }
 
     // the checkbox (the person who made the task cannot tick it for the other)
@@ -198,7 +203,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
         ? Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Icon(
-        t.done ? Icons.check_circle : Icons.hourglass_top_rounded,
+        t.done ? AppIcons.taskDone : AppIcons.taskWaitingTop,
         color: t.done ? AppColors.emerald : AppColors.textSoft,
       ),
     )
@@ -215,7 +220,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x14000000),
+            color: AppColors.shadow,
             blurRadius: 4,
             offset: Offset(0, 1),
           ),
@@ -267,7 +272,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(Icons.event, size: 17, color: dueColor),
+                          Icon(AppIcons.dueDate, size: 17, color: dueColor),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -310,7 +315,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
               else
                 PopupMenuButton<String>(
                   color: Colors.white,
-                  icon: const Icon(Icons.more_vert, color: AppColors.textSoft),
+                  icon: const Icon(AppIcons.more, color: AppColors.textSoft),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -323,9 +328,9 @@ class _MyTasksViewState extends State<_MyTasksView> {
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(Icons.edit_outlined, color: AppColors.emerald),
+                          Icon(AppIcons.editTask, color: AppColors.emerald),
                           SizedBox(width: 10),
-                          Text('Edit'),
+                          Text(AppStrings.edit),
                         ],
                       ),
                     ),
@@ -333,9 +338,9 @@ class _MyTasksViewState extends State<_MyTasksView> {
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(Icons.delete_outline, color: _error),
+                          Icon(AppIcons.deleteTask, color: AppColors.error),
                           SizedBox(width: 10),
-                          Text('Delete'),
+                          Text(AppStrings.delete),
                         ],
                       ),
                     ),
@@ -367,26 +372,24 @@ class _MyTasksViewState extends State<_MyTasksView> {
 
   String _emptyText(TasksProvider tasks) {
     if (tasks.filter == TaskFilter.assignedToMe) {
-      return 'Nothing is assigned to you yet.';
+      return AppStrings.emptyAssignedToMe;
     }
     if (tasks.filter == TaskFilter.assignedByMe) {
-      return 'You have not assigned any task yet.\nLong-press a chat message and tap Create Task.';
+      return AppStrings.emptyAssignedByMe;
     }
     if (tasks.allCount == 0) {
-      return 'No tasks yet.\nLong-press a chat message and tap Create Task.';
+      return AppStrings.emptyNoTasks;
     }
-    return 'No tasks in this list.';
+    return AppStrings.emptyList;
   }
 
   Widget _buildBody(TasksProvider tasks) {
     if (!tasks.loggedIn) {
-      return _centerText('Please log in to see your tasks.');
+      return _centerText(AppStrings.pleaseLogInTasks);
     }
 
     if (tasks.loadError) {
-      return _centerText(
-        'Unable to load tasks. Check your internet and the database rules.',
-      );
+      return _centerText(AppStrings.couldNotLoadTasks);
     }
 
     if (tasks.loading) {
@@ -427,13 +430,13 @@ class _MyTasksViewState extends State<_MyTasksView> {
         elevation: 0,
         scrolledUnderElevation: 0,
         title: const Text(
-          'My Tasks',
+          AppStrings.myTasks,
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
         ),
         actions: [
           IconButton(
-            tooltip: 'New task',
-            icon: const Icon(Icons.add),
+            tooltip: AppStrings.newTask,
+            icon: const Icon(AppIcons.addTask),
             onPressed: _newTask,
           ),
         ],
