@@ -5,12 +5,14 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'app_theme.dart';
 import '../chat_media.dart';
-import 'chat_media_screen.dart';
-
-import 'widgets/media_widgets.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../models/media_entry.dart';
+import 'chat_media_screen.dart';
+import 'widgets/media_widgets.dart';
+
 class ContactInfoScreen extends StatefulWidget {
   final String name;
   final Color color;
@@ -51,10 +53,10 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
   late final Stream<DatabaseEvent> _disappearStream = _disappearRef.onValue;
 
   static const List<List<Object>> _disappearOptions = [
-    ['Off', 0],
-    ['5 minutes', 300000],
-    ['1 day', 86400000],
-    ['7 days', 604800000],
+    [AppStrings.disappearOff, 0],
+    [AppStrings.disappear5Min, 300000],
+    [AppStrings.disappear1Day, 86400000],
+    [AppStrings.disappear7Days, 604800000],
   ];
 
   // Resolve the other participant from the sorted direct-chat ID.
@@ -94,7 +96,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
     for (final o in _disappearOptions) {
       if (o[1] == ms) return o[0] as String;
     }
-    return 'Off';
+    return AppStrings.disappearOff;
   }
 
   Future<void> _setDisappear(int ms) async {
@@ -106,7 +108,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context, 'Could not change the setting. Check your internet.');
+      _showMessage(context, AppStrings.couldNotChangeSetting);
     }
   }
 
@@ -125,7 +127,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
               child: Text(
-                'Disappearing messages',
+                AppStrings.disappearingTitle,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 18,
@@ -136,7 +138,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                'New messages in this chat will disappear after the time you choose.',
+                AppStrings.disappearingChatHelp,
                 style: GoogleFonts.poppins(
                   color: AppColors.textSoft,
                   fontSize: 13,
@@ -153,9 +155,9 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                   ),
                 ),
                 trailing: current == o[1]
-                    ? const Icon(Icons.check_circle, color: AppColors.emerald)
+                    ? const Icon(AppIcons.selected, color: AppColors.emerald)
                     : const Icon(
-                  Icons.circle_outlined,
+                  AppIcons.notSelected,
                   color: AppColors.textSoft,
                 ),
                 onTap: () {
@@ -176,12 +178,12 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
     final softColor = AppColors.textSoft;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: AppColors.plainBackground,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
         title: Text(
-          'Contact info',
+          AppStrings.contactInfoTitle,
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         actions: [
@@ -190,7 +192,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
               if (value == 'clear') widget.onClearChat();
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'clear', child: Text('Clear chat')),
+              PopupMenuItem(value: 'clear', child: Text(AppStrings.clearChat)),
             ],
           ),
         ],
@@ -247,7 +249,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  fullPhone.isEmpty ? 'Phone number unavailable' : fullPhone,
+                  fullPhone.isEmpty ? AppStrings.phoneUnavailable : fullPhone,
                   style: GoogleFonts.poppins(color: softColor, fontSize: 16),
                 ),
                 const SizedBox(height: 24),
@@ -255,18 +257,18 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _ActionButton(
-                      icon: Icons.call_outlined,
-                      label: 'Audio',
+                      icon: AppIcons.infoAudioCall,
+                      label: AppStrings.actionAudio,
                       onTap: widget.onAudioCall,
                     ),
                     _ActionButton(
-                      icon: Icons.videocam_outlined,
-                      label: 'Video',
+                      icon: AppIcons.infoVideoCall,
+                      label: AppStrings.actionVideo,
                       onTap: widget.onVideoCall,
                     ),
                     _ActionButton(
-                      icon: Icons.search,
-                      label: 'Search',
+                      icon: AppIcons.search,
+                      label: AppStrings.search,
                       // close this page first, then start the search in the chat
                       onTap: () {
                         Navigator.pop(context);
@@ -282,23 +284,21 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
           _mediaSection(),
           const SizedBox(height: 8),
           _section(
-            icon: Icons.notifications_outlined,
-            title: 'Notifications',
-            onTap: () => _showMessage(context, 'Notification settings'),
+            icon: AppIcons.infoNotifications,
+            title: AppStrings.settingsNotifications,
+            onTap: () => _showMessage(context, AppStrings.notificationSettingsMsg),
           ),
           _section(
-            icon: Icons.image_outlined,
-            title: 'Media visibility',
-            onTap: () => _showMessage(context, 'Media visibility settings'),
+            icon: AppIcons.infoMediaVisibility,
+            title: AppStrings.mediaVisibility,
+            onTap: () =>
+                _showMessage(context, AppStrings.mediaVisibilitySettingsMsg),
           ),
           _section(
-            icon: Icons.lock_outline,
-            title: 'Encryption',
-            subtitle: 'Messages and calls are not yet end-to-end encrypted.',
-            onTap: () => _showMessage(
-              context,
-              'This app does not currently implement end-to-end encryption.',
-            ),
+            icon: AppIcons.locked,
+            title: AppStrings.encryption,
+            subtitle: AppStrings.encryptionSub,
+            onTap: () => _showMessage(context, AppStrings.encryptionMsg),
           ),
           StreamBuilder<DatabaseEvent>(
             stream: _disappearStream,
@@ -306,8 +306,8 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
               final v = snap.data?.snapshot.value;
               final ms = v is num ? v.toInt() : 0;
               return _section(
-                icon: Icons.timer_outlined,
-                title: 'Disappearing messages',
+                icon: AppIcons.disappearing,
+                title: AppStrings.disappearingTitle,
                 subtitle: _disappearLabel(ms),
                 onTap: () => _showDisappearSheet(ms),
               );
@@ -315,19 +315,16 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
           ),
           const SizedBox(height: 8),
           _section(
-            icon: Icons.cleaning_services_outlined,
-            title: 'Clear chat',
-            titleColor: Colors.red,
+            icon: AppIcons.infoClearChat,
+            title: AppStrings.clearChat,
+            titleColor: AppColors.dangerRed,
             onTap: widget.onClearChat,
           ),
           _section(
-            icon: Icons.block,
-            title: 'Block contact',
-            titleColor: Colors.red,
-            onTap: () => _showMessage(
-              context,
-              'Contact blocking is not implemented yet.',
-            ),
+            icon: AppIcons.infoBlock,
+            title: AppStrings.blockContact,
+            titleColor: AppColors.dangerRed,
+            onTap: () => _showMessage(context, AppStrings.blockingNotImplemented),
           ),
           const SizedBox(height: 20),
         ],
@@ -357,7 +354,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          'Media, links, and docs',
+                          AppStrings.mediaLinksDocs,
                           style: GoogleFonts.poppins(
                             color: AppColors.textDark,
                             fontSize: 15,
@@ -373,7 +370,10 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                             fontSize: 14,
                           ),
                         ),
-                      const Icon(Icons.chevron_right, color: AppColors.textSoft),
+                      const Icon(
+                        AppIcons.chevronRight,
+                        color: AppColors.textSoft,
+                      ),
                     ],
                   ),
                   if (shown > 0) ...[

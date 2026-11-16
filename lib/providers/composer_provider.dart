@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 
 import '../message_sync_service.dart';
 import '../models/message.dart';
-import '../push_queue.dart';
+import '../services/push_queue.dart';
 
 class ComposerProvider extends ChangeNotifier {
   ComposerProvider({

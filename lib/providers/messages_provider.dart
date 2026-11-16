@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
-import '../database_helper.dart';
+import '../services/database_helper.dart';
 import '../message_sync_service.dart';
 import '../models/message.dart';
 

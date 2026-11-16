@@ -4,7 +4,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import 'app_theme.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../status_service.dart';
 import 'widgets/status_widgets.dart';
 
@@ -174,7 +176,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
                 children: [
                   Expanded(
                     child: Text(
-                      'Viewed by ${item.viewers.length}',
+                      AppStrings.viewedBy(item.viewers.length),
                       style: const TextStyle(
                         color: AppColors.textDark,
                         fontSize: 18,
@@ -183,10 +185,10 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Delete status',
+                    tooltip: AppStrings.deleteStatus,
                     icon: const Icon(
-                      Icons.delete_outline,
-                      color: Color(0xFFD94B4B),
+                      AppIcons.deleteStatus,
+                      color: AppColors.error,
                     ),
                     onPressed: () {
                       Navigator.pop(sheetContext);
@@ -200,7 +202,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 20),
                   child: Text(
-                    'No views yet',
+                    AppStrings.noViewsYet,
                     style: TextStyle(color: AppColors.textSoft, fontSize: 16),
                   ),
                 )
@@ -273,7 +275,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
           : _bytes != null
           ? Image.memory(_bytes!, fit: BoxFit.contain, gaplessPlayback: true)
           : const Text(
-        'Could not load this photo',
+        AppStrings.couldNotLoadPhoto,
         style: TextStyle(color: Colors.white70, fontSize: 16),
       ),
     );
@@ -309,7 +311,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
   @override
   Widget build(BuildContext context) {
     final item = _items[_index];
-    final title = widget.isMine ? 'My status' : widget.ownerName;
+    final title = widget.isMine ? AppStrings.myStatus : widget.ownerName;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -351,7 +353,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x99000000), Color(0x00000000)],
+                  colors: [AppColors.statusScrim, AppColors.statusScrimClear],
                 ),
               ),
               child: SafeArea(
@@ -367,7 +369,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
                         children: [
                           IconButton(
                             icon: const Icon(
-                              Icons.arrow_back,
+                              AppIcons.back,
                               color: Colors.white,
                             ),
                             onPressed: () => Navigator.of(context).maybePop(),
@@ -419,7 +421,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
               right: 0,
               bottom: widget.isMine ? 64 : 0,
               child: Container(
-                color: const Color(0x99000000),
+                color: AppColors.statusScrim,
                 padding: EdgeInsets.fromLTRB(
                   20,
                   12,
@@ -446,7 +448,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
                   child: TextButton.icon(
                     onPressed: _showViewers,
                     icon: const Icon(
-                      Icons.remove_red_eye_outlined,
+                      AppIcons.viewedBy,
                       color: Colors.white,
                     ),
                     label: Text(

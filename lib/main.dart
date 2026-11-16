@@ -3,13 +3,13 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
-import 'notification_service.dart';
+import 'services/notification_service.dart';
 import 'firebase_options.dart';
 import 'views/splash_screen.dart';
-import 'fcm_service.dart';
+import 'services/fcm_service.dart';
 import 'push_service.dart';
 import 'package:provider/provider.dart';
-import 'search_provider.dart';
+import 'providers/search_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

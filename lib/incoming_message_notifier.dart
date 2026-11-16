@@ -5,7 +5,7 @@
   import 'package:flutter/widgets.dart';
 
   import 'message_sync_service.dart';
-  import 'notification_service.dart';
+  import 'services/notification_service.dart';
 
   // Shows a notification on THIS phone when somebody sends me a new message
   // (in a 1-to-1 chat or in a group).

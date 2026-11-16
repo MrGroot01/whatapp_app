@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'views/chat_screen.dart';
 import 'group_service.dart';
 import 'incoming_message_notifier.dart';
-import 'notification_service.dart';
+import 'services/notification_service.dart';
 
 // Runs when a push arrives while the app is in the background or closed.
 // It must be a top-level function.

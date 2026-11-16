@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../message_sync_service.dart';
-import '../push_queue.dart';
+import 'push_queue.dart';
 
 enum CallPhase { starting, ringing, connecting, connected, ended }
 

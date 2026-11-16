@@ -7,7 +7,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
-import '../database_helper.dart';
+import '../services/database_helper.dart';
 class ProfileProvider extends ChangeNotifier {
   final FirebaseDatabase _database = FirebaseDatabase.instance;
 

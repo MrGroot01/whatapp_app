@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'push_queue.dart';
+import 'services/push_queue.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
-import 'database_helper.dart';
+import 'services/database_helper.dart';
 
 // online     = the phone can reach Firebase
 // connecting = the phone has a network but Firebase does not answer yet

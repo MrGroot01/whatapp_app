@@ -145,4 +145,22 @@ class AppIcons {
   // ---------- UPDATES (STATUS) ----------
   static const IconData addStatusText = Icons.edit;
   static const IconData addStatusFab = Icons.add_circle_outline;
+
+
+  static const IconData statusSend = Icons.send_rounded;
+  static const IconData statusChangeColour = Icons.palette_outlined;
+
+
+  // ---------- STATUS VIEWER ----------
+  static const IconData deleteStatus = Icons.delete_outline;
+  static const IconData viewedBy = Icons.remove_red_eye_outlined;
+
+
+  // ---------- CONTACT INFO ----------
+  static const IconData infoAudioCall = Icons.call_outlined;
+  static const IconData infoVideoCall = Icons.videocam_outlined;
+  static const IconData infoNotifications = Icons.notifications_outlined;
+  static const IconData infoMediaVisibility = Icons.image_outlined;
+  static const IconData infoClearChat = Icons.cleaning_services_outlined;
+  static const IconData infoBlock = Icons.block;
 }

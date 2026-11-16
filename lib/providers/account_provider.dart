@@ -8,8 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../database_helper.dart';
-import '../fcm_service.dart';
+import '../services/database_helper.dart';
+import '../services/fcm_service.dart';
 import '../services/phone_helper.dart';
 
 class AccountProvider extends ChangeNotifier {

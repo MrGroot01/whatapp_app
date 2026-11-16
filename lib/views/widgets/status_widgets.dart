@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
+import '../../core/app_theme.dart';
 
 // The green ring around an avatar: one segment per status.
 // Segments of statuses I have already seen are grey.
@@ -19,7 +19,7 @@ class StatusRingPainter extends CustomPainter {
     if (count <= 0) return;
 
     const stroke = 3.0;
-    const grey = Color(0xFFB8C2C0);
+    const grey = AppColors.statusRingSeen;
     final rect = Rect.fromLTWH(
       stroke / 2,
       stroke / 2,

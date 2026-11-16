@@ -552,5 +552,45 @@ class AppStrings {
   static String statusUpdatesLine(int count, String timeAgo) =>
       '$count update${count == 1 ? '' : 's'} · $timeAgo';
 
+
+  static const String typeSomethingFirst = 'Type something first';
+  static const String statusOfflineQueued =
+      'No internet. Your status will post when you are back online.';
+  static const String addCaption = 'Add a caption...';
+  static const String typeAStatus = 'Type a status';
+  static const String changeColour = 'Change colour';
+
+
+  // ---------- STATUS VIEWER ----------
+  static const String deleteStatus = 'Delete status';
+  static const String noViewsYet = 'No views yet';
+  static const String couldNotLoadPhoto = 'Could not load this photo';
+
+  static String viewedBy(int count) => 'Viewed by $count';
+
+
+  // ---------- CONTACT INFO ----------
+  static const String contactInfoTitle = 'Contact info';
+  static const String phoneUnavailable = 'Phone number unavailable';
+  static const String actionAudio = 'Audio';
+  static const String actionVideo = 'Video';
+  static const String mediaVisibility = 'Media visibility';
+  static const String encryption = 'Encryption';
+  static const String encryptionSub =
+      'Messages and calls are not yet end-to-end encrypted.';
+  static const String blockContact = 'Block contact';
+  static const String disappearingChatHelp =
+      'New messages in this chat will disappear after the time you choose.';
+
+  // messages shown at the bottom of the screen
+  static const String couldNotChangeSetting =
+      'Could not change the setting. Check your internet.';
+  static const String notificationSettingsMsg = 'Notification settings';
+  static const String mediaVisibilitySettingsMsg = 'Media visibility settings';
+  static const String encryptionMsg =
+      'This app does not currently implement end-to-end encryption.';
+  static const String blockingNotImplemented =
+      'Contact blocking is not implemented yet.';
+
 }
 

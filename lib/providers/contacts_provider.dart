@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
-import '../database_helper.dart';
+import '../services/database_helper.dart';
 import '../models/contact.dart';
 
 class ContactsProvider extends ChangeNotifier {

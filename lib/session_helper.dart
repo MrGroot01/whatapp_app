@@ -1,5 +1,5 @@
 import 'package:sqflite/sqflite.dart';
-import 'database_helper.dart';
+import 'services/database_helper.dart';
 
 // The "who is logged in right now" note.
 // Kept in SQLite, so it survives app stop and phone restart.

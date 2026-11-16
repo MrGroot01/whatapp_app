@@ -81,7 +81,17 @@ class AppColors {
   // ---------- GROUP MEMBER PICKER ----------
   static const Color removeBadge = Color(0xFF8A9A98); // small x on a picked person
 
+  // ---------- STATUS VIEWER ----------
+  static const Color statusScrim = Color(0x99000000); // dark shade on a status
+  static const Color statusScrimClear = Color(0x00000000); // fades to nothing
 
+
+  // ---------- STATUS RING ----------
+  static const Color statusRingSeen = Color(0xFFB8C2C0); // ring of a seen status
+
+
+  // ---------- CONTACT INFO ----------
+  static const Color dangerRed = Color(0xFFF44336); // Clear chat / Block contact
 
 
 }

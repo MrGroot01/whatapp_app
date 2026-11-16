@@ -19,7 +19,7 @@ import '../providers/contacts_provider.dart';
 import '../providers/groups_provider.dart';
 import '../providers/profile_provider.dart';
 import '../push_service.dart';
-import '../search_provider.dart';
+import '../providers/search_provider.dart';
 import '../session_helper.dart';
 import '../status_service.dart'; // StatusContact
 import '../task_service.dart';

@@ -5,7 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/app_strings.dart';
-import '../database_helper.dart';
+import '../services/database_helper.dart';
 import '../models/found_profile.dart';
 import '../services/phone_helper.dart';
 
@@ -61,7 +61,7 @@ class AddContactProvider extends ChangeNotifier {
     final name = value?.trim() ?? '';
 
     if (name.isEmpty) return AppStrings.enterContactName;
-    if (name.length < 2) return AppStrings.nameTooShort;
+    if (name.length < 4) return AppStrings.nameTooShort;
     if (name.length > 40) return AppStrings.nameTooLong;
 
     return null;
