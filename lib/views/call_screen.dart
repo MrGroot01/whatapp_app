@@ -1,6 +1,10 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
+
 class CallScreen extends StatefulWidget {
   final String name;
   final Color color;
@@ -27,10 +31,6 @@ class CallScreen extends StatefulWidget {
 }
 
 class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
-  static const Color _panel = Color(0xCC17201D);
-  static const Color _buttonBg = Color(0x26FFFFFF);
-  static const Color _endRed = Color(0xFFF0145A);
-
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
 
@@ -80,7 +80,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
     try {
       if (_cameras.isEmpty) _cameras = await availableCameras();
       if (_cameras.isEmpty) {
-        _cameraFailed('No camera found on this device');
+        _cameraFailed(AppStrings.noCameraFound);
         return;
       }
 
@@ -112,12 +112,12 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
       debugPrint('Camera error: ${e.code} ${e.description}');
       _cameraFailed(
         e.code.startsWith('CameraAccess')
-            ? 'Camera permission denied. Allow it in the app settings.'
-            : 'Could not open the camera',
+            ? AppStrings.cameraPermissionDenied
+            : AppStrings.callCouldNotOpenCamera,
       );
     } catch (e) {
       debugPrint('Camera error: $e');
-      _cameraFailed('Could not open the camera');
+      _cameraFailed(AppStrings.callCouldNotOpenCamera);
     } finally {
       _starting = false;
     }
@@ -202,7 +202,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
           shape: BoxShape.circle,
           boxShadow: const [
             BoxShadow(
-              color: Color(0x55000000),
+              color: AppColors.callAvatarShadow,
               blurRadius: 24,
               offset: Offset(0, 8),
             ),
@@ -222,7 +222,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
 
   Widget _roundIcon(IconData icon, VoidCallback onTap) {
     return Material(
-      color: _buttonBg,
+      color: AppColors.callButtonBg,
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -246,7 +246,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _roundIcon(Icons.close_fullscreen, () => Navigator.pop(context)),
+          _roundIcon(AppIcons.callMinimize, () => Navigator.pop(context)),
           Expanded(
             child: Column(
               children: [
@@ -264,14 +264,14 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
                   Text(
                     number,
                     style: const TextStyle(
-                      color: Color(0xB3FFFFFF),
+                      color: AppColors.onEmeraldHint,
                       fontSize: 15,
                     ),
                   ),
                 Text(
-                  _cameraOn ? 'Video calling...' : 'Calling...',
+                  _cameraOn ? AppStrings.videoCalling : AppStrings.calling,
                   style: const TextStyle(
-                    color: Color(0xB3FFFFFF),
+                    color: AppColors.onEmeraldHint,
                     fontSize: 15,
                   ),
                 ),
@@ -279,8 +279,8 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
             ),
           ),
           _roundIcon(
-            Icons.person_add_alt_1,
-                () => _snack('Adding people is coming soon'),
+            AppIcons.addContact,
+                () => _snack(AppStrings.addPeopleSoon),
           ),
         ],
       ),
@@ -294,10 +294,10 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
     bool active = false,
     Color? background,
   }) {
-    final bg = background ?? (active ? Colors.white : _buttonBg);
+    final bg = background ?? (active ? Colors.white : AppColors.callButtonBg);
     final fg = background != null
         ? Colors.white
-        : (active ? const Color(0xFF111B21) : Colors.white);
+        : (active ? AppColors.callActiveIcon : Colors.white);
 
     return SizedBox(
       width: 84,
@@ -332,7 +332,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
       decoration: BoxDecoration(
-        color: _panel,
+        color: AppColors.callPanel,
         borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
@@ -342,20 +342,20 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _controlButton(
-                icon: Icons.volume_up,
-                label: 'Speaker',
+                icon: AppIcons.callSpeaker,
+                label: AppStrings.callSpeaker,
                 active: _speaker,
                 onTap: () => setState(() => _speaker = !_speaker),
               ),
               _controlButton(
-                icon: _cameraOn ? Icons.videocam : Icons.videocam_off,
-                label: 'Video',
+                icon: _cameraOn ? AppIcons.callVideoOn : AppIcons.callVideoOff,
+                label: AppStrings.actionVideo,
                 active: _cameraOn,
                 onTap: _toggleCamera,
               ),
               _controlButton(
-                icon: Icons.mic_off,
-                label: 'Mute',
+                icon: AppIcons.callMute,
+                label: AppStrings.callMute,
                 active: _muted,
                 onTap: () => setState(() => _muted = !_muted),
               ),
@@ -367,25 +367,25 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
             children: [
               if (_cameraOn)
                 _controlButton(
-                  icon: Icons.flip_camera_android,
-                  label: 'Flip',
+                  icon: AppIcons.callFlip,
+                  label: AppStrings.callFlip,
                   onTap: _flipCamera,
                 )
               else
                 _controlButton(
-                  icon: Icons.more_horiz,
-                  label: 'More',
-                  onTap: () => _snack('More options are coming soon'),
+                  icon: AppIcons.callMore,
+                  label: AppStrings.callMore,
+                  onTap: () => _snack(AppStrings.moreOptionsSoon),
                 ),
               _controlButton(
-                icon: Icons.ios_share,
-                label: 'Share',
-                onTap: () => _snack('Sharing is coming soon'),
+                icon: AppIcons.callShare,
+                label: AppStrings.callShare,
+                onTap: () => _snack(AppStrings.sharingSoon),
               ),
               _controlButton(
-                icon: Icons.call_end,
-                label: 'End',
-                background: _endRed,
+                icon: AppIcons.callEnd,
+                label: AppStrings.callEnd,
+                background: AppColors.callEndRed,
                 onTap: () => Navigator.pop(context),
               ),
             ],
@@ -413,7 +413,10 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0xFF0E4D3E), Color(0xFF06140F)],
+                  colors: [
+                    AppColors.callGradientTop,
+                    AppColors.callGradientBottom,
+                  ],
                 ),
               ),
             ),
@@ -427,9 +430,9 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Color(0x99000000),
-                      Color(0x00000000),
-                      Color(0x99000000),
+                      AppColors.callShade,
+                      AppColors.callShadeClear,
+                      AppColors.callShade,
                     ],
                     stops: [0.0, 0.45, 1.0],
                   ),

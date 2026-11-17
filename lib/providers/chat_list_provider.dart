@@ -4,8 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
-import '../group_service.dart';
-import '../message_sync_service.dart';
+import '../services/group_service.dart';
+import '../services/message_sync_service.dart';
 import '../models/chat_row.dart';
 import '../models/contact.dart';
 import '../models/last_message.dart';

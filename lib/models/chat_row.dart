@@ -1,4 +1,4 @@
-import '../group_service.dart';
+import '../services/group_service.dart';
 import 'contact.dart';
 
 class ChatRow {

@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/app_icons.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
-import '../group_service.dart';
+import '../services/group_service.dart';
 import '../providers/group_info_provider.dart';
 import 'chat_media_screen.dart';
 import 'group_member_picker.dart';

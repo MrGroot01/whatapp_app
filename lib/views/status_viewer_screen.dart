@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/app_icons.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
-import '../status_service.dart';
+import '../services/status_service.dart';
 import 'widgets/status_widgets.dart';
 
 // Full-screen status viewer (like WhatsApp):

@@ -6,7 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
-import '../message_sync_service.dart';
+import '../services/message_sync_service.dart';
 import '../models/message.dart';
 import '../services/push_queue.dart';
 

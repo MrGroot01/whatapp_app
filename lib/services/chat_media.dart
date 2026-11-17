@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 
-import 'models/media_entry.dart';
+import '../models/media_entry.dart';
 
 final RegExp _linkPattern = RegExp(
   r'(https?://|www\.)[^\s]+',

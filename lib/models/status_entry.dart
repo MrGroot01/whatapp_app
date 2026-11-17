@@ -1,4 +1,4 @@
-import '../status_service.dart';
+import '../services/status_service.dart';
 
 class StatusEntry {
   final StatusContact contact;

@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
-import 'services/notification_service.dart';
+import 'notification_service.dart';
 
 const List<String> _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const List<String> _months = [
@@ -130,7 +130,7 @@ class TaskService {
 
   static const Duration _timeout = Duration(seconds: 10);
 
-  static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+  static String? get _uid => FirebaseAuth.instance.      currentUser?.uid;
   static String? get myUid => _uid;
 
   // my name, shown to the person I assign a task to

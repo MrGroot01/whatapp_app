@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/app_icons.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
-import '../group_service.dart';
+import '../services/group_service.dart';
 
 // Step 2 of "New group": type the group name and create it.
 // Gives back a GroupRef when the group was created.

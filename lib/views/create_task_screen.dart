@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
-import '../task_service.dart';
+import '../services/task_service.dart';
 
 // Used for two things:
 //  - a NEW task (from a chat message, or empty)

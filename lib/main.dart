@@ -7,7 +7,7 @@ import 'services/notification_service.dart';
 import 'firebase_options.dart';
 import 'views/splash_screen.dart';
 import 'services/fcm_service.dart';
-import 'push_service.dart';
+import 'services/push_service.dart';
 import 'package:provider/provider.dart';
 import 'providers/search_provider.dart';
 

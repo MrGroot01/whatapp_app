@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../services/database_helper.dart';
-import '../group_service.dart';
+import '../services/group_service.dart';
 
 class MemberPickerProvider extends ChangeNotifier {
   MemberPickerProvider({required this._excludeIds}) {

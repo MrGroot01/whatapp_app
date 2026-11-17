@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
-
+import '../services/chat_media.dart';
+import '../core/app_icons.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../models/media_entry.dart';
-import 'app_theme.dart';
-import '../chat_media.dart';
 import 'media_viewer_screen.dart';
 import 'widgets/media_widgets.dart';
 
@@ -43,19 +43,19 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
 
   Color _fileColor(String name) {
     final lower = name.toLowerCase();
-    if (lower.endsWith('.pdf')) return const Color(0xFFE53935);
+    if (lower.endsWith('.pdf')) return AppColors.filePdf;
     if (lower.endsWith('.doc') || lower.endsWith('.docx')) {
-      return const Color(0xFF1E88E5);
+      return AppColors.fileDoc;
     }
     if (lower.endsWith('.xls') ||
         lower.endsWith('.xlsx') ||
         lower.endsWith('.csv')) {
-      return const Color(0xFF43A047);
+      return AppColors.fileSheet;
     }
     if (lower.endsWith('.ppt') || lower.endsWith('.pptx')) {
-      return const Color(0xFFFB8C00);
+      return AppColors.fileSlide;
     }
-    return const Color(0xFF607D8B);
+    return AppColors.fileOther;
   }
 
   Widget _empty(IconData icon, String text) {
@@ -63,7 +63,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 64, color: const Color(0xFFCFC9BA)),
+          Icon(icon, size: 64, color: AppColors.emptyIcon),
           const SizedBox(height: 12),
           Text(
             text,
@@ -77,7 +77,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
   // ---------- TAB 1: PHOTOS, grouped by month ----------
   Widget _mediaTab(List<MediaEntry> images) {
     if (images.isEmpty) {
-      return _empty(Icons.photo_library_outlined, 'No photos shared yet');
+      return _empty(AppIcons.media, AppStrings.noPhotosYet);
     }
 
     // the list is already newest first, so the months come in order
@@ -131,7 +131,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
   // ---------- TAB 2: DOCUMENTS ----------
   Widget _docsTab(List<MediaEntry> files) {
     if (files.isEmpty) {
-      return _empty(Icons.insert_drive_file_outlined, 'No documents shared yet');
+      return _empty(AppIcons.emptyDocs, AppStrings.noDocsYet);
     }
 
     return ListView.separated(
@@ -141,7 +141,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
         height: 1,
         indent: 76,
         endIndent: 16,
-        color: Color(0xFFE9E4D8),
+        color: AppColors.divider,
       ),
       itemBuilder: (context, i) {
         final e = files[i];
@@ -155,10 +155,10 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
               color: color.withAlpha(30),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.insert_drive_file, color: color, size: 26),
+            child: Icon(AppIcons.file, color: color, size: 26),
           ),
           title: Text(
-            e.title.isEmpty ? 'Document' : e.title,
+            e.title.isEmpty ? AppStrings.attachDocument : e.title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.poppins(
@@ -168,7 +168,10 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             ),
           ),
           subtitle: Text(
-            '${e.isMe ? 'You' : widget.name}  •  ${formatDate(e.time)}',
+            AppStrings.sharedBy(
+              e.isMe ? AppStrings.you : widget.name,
+              formatDate(e.time),
+            ),
             style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 12.5),
           ),
           onTap: () => openExternal(context, e.url),
@@ -180,7 +183,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
   // ---------- TAB 3: LINKS ----------
   Widget _linksTab(List<MediaEntry> links) {
     if (links.isEmpty) {
-      return _empty(Icons.link, 'No links shared yet');
+      return _empty(AppIcons.link, AppStrings.noLinksYet);
     }
 
     return ListView.separated(
@@ -190,7 +193,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
         height: 1,
         indent: 76,
         endIndent: 16,
-        color: Color(0xFFE9E4D8),
+        color: AppColors.divider,
       ),
       itemBuilder: (context, i) {
         final e = links[i];
@@ -200,23 +203,27 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: const Color(0xFFE3F1ED),
+              color: AppColors.softGreen,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.link, color: AppColors.emerald, size: 26),
+            child: const Icon(AppIcons.link, color: AppColors.emerald, size: 26),
           ),
           title: Text(
             e.url,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.poppins(
-              color: const Color(0xFF1E6FD9),
+              color: AppColors.linkBlue,
               fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
           ),
           subtitle: Text(
-            '${e.title}\n${e.isMe ? 'You' : widget.name}  •  ${formatDate(e.time)}',
+            AppStrings.linkSubtitle(
+              e.title,
+              e.isMe ? AppStrings.you : widget.name,
+              formatDate(e.time),
+            ),
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 12.5),
@@ -251,15 +258,15 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             indicatorColor: Colors.white,
             indicatorWeight: 3,
             labelColor: Colors.white,
-            unselectedLabelColor: const Color(0xB3FFFFFF),
+            unselectedLabelColor: AppColors.onEmeraldHint,
             labelStyle: GoogleFonts.poppins(
               fontWeight: FontWeight.w600,
               fontSize: 15,
             ),
             tabs: const [
-              Tab(text: 'Media'),
-              Tab(text: 'Docs'),
-              Tab(text: 'Links'),
+              Tab(text: AppStrings.tabMedia),
+              Tab(text: AppStrings.tabDocs),
+              Tab(text: AppStrings.tabLinks),
             ],
           ),
         ),
@@ -271,7 +278,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Text(
-                    'Unable to load. Check your Firebase Realtime Database rules.',
+                    AppStrings.couldNotLoadMedia,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(color: AppColors.textSoft),
                   ),

@@ -94,4 +94,26 @@ class AppColors {
   static const Color dangerRed = Color(0xFFF44336); // Clear chat / Block contact
 
 
+  // ---------- CALL ----------
+  static const Color callPanel = Color(0xCC17201D); // control panel
+  static const Color callButtonBg = Color(0x26FFFFFF); // round buttons
+  static const Color callEndRed = Color(0xFFF0145A); // end call button
+  static const Color callAvatarShadow = Color(0x55000000);
+  static const Color callActiveIcon = Color(0xFF111B21); // icon on a white button
+  static const Color callGradientTop = Color(0xFF0E4D3E);
+  static const Color callGradientBottom = Color(0xFF06140F);
+  static const Color callShade = Color(0x99000000); // dark shade over the camera
+  static const Color callShadeClear = Color(0x00000000);
+
+
+  // ---------- CHAT MEDIA ----------
+  static const Color filePdf = Color(0xFFE53935);
+  static const Color fileDoc = Color(0xFF1E88E5);
+  static const Color fileSheet = Color(0xFF43A047);
+  static const Color fileSlide = Color(0xFFFB8C00);
+  static const Color fileOther = Color(0xFF607D8B);
+  static const Color emptyIcon = Color(0xFFCFC9BA); // icon on an empty tab
+  static const Color linkBlue = Color(0xFF1E6FD9); // link text
+
+
 }

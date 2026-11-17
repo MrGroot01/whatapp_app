@@ -8,9 +8,9 @@ import 'package:provider/provider.dart';
 import '../core/app_icons.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
-import '../group_service.dart';
-import '../incoming_message_notifier.dart';
-import '../message_sync_service.dart';
+import '../services/group_service.dart';
+import '../services/incoming_message_notifier.dart';
+import '../services/message_sync_service.dart';
 import '../models/chat_row.dart';
 import '../models/contact.dart';
 import '../providers/chat_list_provider.dart';
@@ -18,11 +18,11 @@ import '../providers/chat_selection_provider.dart';
 import '../providers/contacts_provider.dart';
 import '../providers/groups_provider.dart';
 import '../providers/profile_provider.dart';
-import '../push_service.dart';
+import '../services/push_service.dart';
 import '../providers/search_provider.dart';
-import '../session_helper.dart';
-import '../status_service.dart'; // StatusContact
-import '../task_service.dart';
+import '../services/session_helper.dart';
+import '../services/status_service.dart'; // StatusContact
+import '../services/task_service.dart';
 import 'add_contact_action.dart'; // shared "New contact" code (also used by Settings)
 import 'chat_screen.dart';
 import 'group_member_picker.dart';

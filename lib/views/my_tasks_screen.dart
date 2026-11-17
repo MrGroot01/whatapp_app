@@ -5,7 +5,7 @@ import '../core/app_icons.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
 import '../providers/tasks_provider.dart';
-import '../task_service.dart';
+import '../services/task_service.dart';
 import 'create_task_screen.dart';
 
 // The provider is created here, inside the screen, so it stops when the

@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/app_icons.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
-import '../group_service.dart';
+import '../services/group_service.dart';
 import '../providers/member_picker_provider.dart';
 import 'new_group_screen.dart';
 

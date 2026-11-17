@@ -163,4 +163,21 @@ class AppIcons {
   static const IconData infoMediaVisibility = Icons.image_outlined;
   static const IconData infoClearChat = Icons.cleaning_services_outlined;
   static const IconData infoBlock = Icons.block;
+
+
+  // ---------- CALL ----------
+  static const IconData callMinimize = Icons.close_fullscreen;
+  static const IconData callSpeaker = Icons.volume_up;
+  static const IconData callVideoOn = Icons.videocam;
+  static const IconData callVideoOff = Icons.videocam_off;
+  static const IconData callMute = Icons.mic_off;
+  static const IconData callFlip = Icons.flip_camera_android;
+  static const IconData callMore = Icons.more_horiz;
+  static const IconData callShare = Icons.ios_share;
+  static const IconData callEnd = Icons.call_end;
+
+
+  // ---------- CHAT MEDIA ----------
+  static const IconData emptyDocs = Icons.insert_drive_file_outlined;
+  static const IconData link = Icons.link;
 }

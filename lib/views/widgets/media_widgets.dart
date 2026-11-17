@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../services/chat_media.dart';
+import '../../core/app_icons.dart';
+import '../../core/app_strings.dart';
+import '../../core/app_theme.dart';
 import '../../models/media_entry.dart';
-import '../../chat_media.dart';
-import '../app_theme.dart';
 
 // A photo from a chat (stored as Base64, or an old web address).
 class MediaImage extends StatelessWidget {
@@ -20,9 +22,9 @@ class MediaImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final broken = Container(
-      color: const Color(0xFFE9E4D8),
+      color: AppColors.divider,
       child: const Center(
-        child: Icon(Icons.broken_image, color: AppColors.textSoft),
+        child: Icon(AppIcons.brokenImage, color: AppColors.textSoft),
       ),
     );
 
@@ -55,7 +57,7 @@ Future<void> openExternal(BuildContext context, String url) async {
   final messenger = ScaffoldMessenger.of(context);
   if (url.isEmpty) {
     messenger.showSnackBar(
-      const SnackBar(content: Text('Nothing to open here')),
+      const SnackBar(content: Text(AppStrings.nothingToOpen)),
     );
     return;
   }
@@ -66,12 +68,12 @@ Future<void> openExternal(BuildContext context, String url) async {
     );
     if (!ok) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Could not open this')),
+        const SnackBar(content: Text(AppStrings.couldNotOpenThis)),
       );
     }
   } catch (e) {
     messenger.showSnackBar(
-      const SnackBar(content: Text('Could not open this')),
+      const SnackBar(content: Text(AppStrings.couldNotOpenThis)),
     );
   }
 }

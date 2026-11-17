@@ -5,10 +5,10 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
-import 'views/chat_screen.dart';
+import '../views/chat_screen.dart';
 import 'group_service.dart';
 import 'incoming_message_notifier.dart';
-import 'services/notification_service.dart';
+import 'notification_service.dart';
 
 // Runs when a push arrives while the app is in the background or closed.
 // It must be a top-level function.

@@ -4,7 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/app_strings.dart';
-import '../task_service.dart';
+import '../services/task_service.dart';
 
 enum TaskFilter { all, upcoming, completed, assignedToMe, assignedByMe }
 

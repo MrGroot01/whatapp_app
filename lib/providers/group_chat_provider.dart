@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
-import '../group_service.dart';
+import '../services/group_service.dart';
 
 class GroupChatProvider extends ChangeNotifier {
   GroupChatProvider({required this.groupId, required this.myUid});

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/chat_media.dart';
+import '../core/app_strings.dart';
+import '../core/app_theme.dart';
 import '../models/media_entry.dart';
-import '../chat_media.dart';
 import 'widgets/media_widgets.dart';
 
 // full screen photo viewer: swipe left and right, pinch to zoom
@@ -46,7 +48,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              entry.isMe ? 'You' : widget.otherName,
+              entry.isMe ? AppStrings.you : widget.otherName,
               style: GoogleFonts.poppins(
                 color: Colors.white,
                 fontSize: 17,
@@ -56,7 +58,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
             Text(
               '${formatDate(entry.time)}, ${formatClock(entry.time)}',
               style: GoogleFonts.poppins(
-                color: const Color(0xB3FFFFFF),
+                color: AppColors.onEmeraldHint,
                 fontSize: 12,
               ),
             ),

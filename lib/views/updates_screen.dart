@@ -10,7 +10,7 @@ import '../core/app_theme.dart';
 import 'create_status_screen.dart';
 import '../models/status_entry.dart';
 import '../providers/updates_provider.dart';
-import '../status_service.dart';
+import '../services/status_service.dart';
 import 'status_viewer_screen.dart';
 import 'widgets/status_widgets.dart';
 

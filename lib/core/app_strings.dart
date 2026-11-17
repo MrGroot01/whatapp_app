@@ -2,7 +2,7 @@ class AppStrings {
   AppStrings._(); // nobody makes an object of this class
 
   // ---------- BRAND ----------
-  static const String appName = 'WhatApp';
+  static const String appName = 'Velora';
   static const String tagline = 'Messaging, beautifully simple.';
 
   static const String homeTitle = appName;
@@ -591,6 +591,45 @@ class AppStrings {
       'This app does not currently implement end-to-end encryption.';
   static const String blockingNotImplemented =
       'Contact blocking is not implemented yet.';
+
+
+
+  // ---------- CALL ----------
+  static const String calling = 'Calling...';
+  static const String videoCalling = 'Video calling...';
+  static const String callSpeaker = 'Speaker';
+  static const String callMute = 'Mute';
+  static const String callFlip = 'Flip';
+  static const String callMore = 'More';
+  static const String callShare = 'Share';
+  static const String callEnd = 'End';
+  static const String addPeopleSoon = 'Adding people is coming soon';
+  static const String moreOptionsSoon = 'More options are coming soon';
+  static const String sharingSoon = 'Sharing is coming soon';
+  static const String noCameraFound = 'No camera found on this device';
+  static const String cameraPermissionDenied =
+      'Camera permission denied. Allow it in the app settings.';
+  static const String callCouldNotOpenCamera = 'Could not open the camera';
+
+  // ---------- MEDIA ----------
+  static const String nothingToOpen = 'Nothing to open here';
+  static const String couldNotOpenThis = 'Could not open this';
+
+
+  // ---------- CHAT MEDIA ----------
+  static const String tabMedia = 'Media';
+  static const String tabDocs = 'Docs';
+  static const String tabLinks = 'Links';
+  static const String noPhotosYet = 'No photos shared yet';
+  static const String noDocsYet = 'No documents shared yet';
+  static const String noLinksYet = 'No links shared yet';
+  static const String couldNotLoadMedia =
+      'Unable to load. Check your Firebase Realtime Database rules.';
+
+  static String sharedBy(String who, String date) => '$who  •  $date';
+
+  static String linkSubtitle(String title, String who, String date) =>
+      '$title\n$who  •  $date';
 
 }
 

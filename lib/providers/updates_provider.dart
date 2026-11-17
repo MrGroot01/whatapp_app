@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/status_entry.dart';
-import '../status_service.dart';
+import '../services/status_service.dart';
 
 class UpdatesProvider extends ChangeNotifier {
   UpdatesProvider({required this._contacts}) {
