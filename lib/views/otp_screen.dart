@@ -170,11 +170,9 @@ class _OtpScreenState extends State<OtpScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0x800B6B57)),
-            boxShadow: const [
+            border: Border.all(color: AppColors.otpBannerBorder),            boxShadow: const [
               BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 16,
+                color: AppColors.shadowMedium,                blurRadius: 16,
                 offset: Offset(0, 6),
               ),
             ],

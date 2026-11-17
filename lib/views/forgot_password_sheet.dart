@@ -152,7 +152,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         width: 44,
         height: 4,
         decoration: BoxDecoration(
-          color: const Color(0xFFD5D5D5),
+          color: AppColors.splashShadow,
           borderRadius: BorderRadius.circular(4),
         ),
       ),

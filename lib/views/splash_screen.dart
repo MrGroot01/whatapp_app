@@ -87,8 +87,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: const [
                     BoxShadow(
-                      color: Color(0x44000000),
-                      blurRadius: 24,
+                      color: AppColors.splashShadow,                      blurRadius: 24,
                       offset: Offset(0, 10),
                     ),
                   ],
@@ -137,8 +136,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 padding: EdgeInsets.only(bottom: 24),
                 child: Text(
                   AppStrings.tagline,
-                  style: TextStyle(color: Color(0xCCFFFFFF), fontSize: 14),
-                ),
+                  style: TextStyle(color: AppColors.onEmeraldSoft, fontSize: 14),                ),
               ),
             ],
           ),

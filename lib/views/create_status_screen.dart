@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../core/app_icons.dart';
 import '../core/app_strings.dart';
-import 'app_theme.dart';
+import '../core/app_theme.dart';
 import '../services/status_service.dart';
 
 // image == null  -> a text status on a coloured background

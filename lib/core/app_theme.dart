@@ -116,4 +116,9 @@ class AppColors {
   static const Color linkBlue = Color(0xFF1E6FD9); // link text
 
 
+  // ---------- START FLOW ----------
+  static const Color shadowMedium = Color(0x33000000); // logo and banner shadow
+  static const Color splashShadow = Color(0x44000000); // logo shadow on splash
+  static const Color otpBannerBorder = Color(0x800B6B57); // incoming SMS banner
+
 }
