@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../views/chat_screen.dart';
 import 'group_service.dart';
+import '../core/app_text.dart';
 import 'incoming_message_notifier.dart';
 import 'notification_service.dart';
 
@@ -52,6 +53,10 @@ class PushService {
 
   // turns the data of a push into a notification on this phone
   static Future<void> showFromMessage(RemoteMessage message) async {
+    // a push that arrives while the app is closed must still use the language
+    // the user chose
+    await AppText.loadSaved();
+
     final d = message.data;
     final chatId = (d['chatId'] ?? '').toString();
     if (chatId.isEmpty) return;
@@ -65,7 +70,7 @@ class PushService {
     await NotificationService.initQuiet();
     await NotificationService.showIncomingMessage(
       id: NotificationService.idFor(chatId, messageId),
-      title: title.isEmpty ? 'New message' : title,
+      title: title.isEmpty ? AppText.l.newMessage : title,
       body: body,
       payload: 'chat|$chatId|$isGroup|$senderId',
     );
@@ -147,7 +152,7 @@ class PushService {
       nav.push(
         MaterialPageRoute(
           builder: (_) => ChatScreen(
-            name: name.isEmpty ? 'Chat' : name,
+            name: name.isEmpty ? AppText.l.chatWord : name,
             color: GroupService.colorFor(senderId),
             chatKey: '${me}_$senderId',
             phone: phone,

@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 
 import '../core/app_icons.dart';
 import '../core/app_images.dart';
+import '../core/app_localization.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
 import 'home_screen.dart';
 import 'welcome_screen.dart';
-
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -87,7 +87,8 @@ class _SplashScreenState extends State<SplashScreen> {
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: const [
                     BoxShadow(
-                      color: AppColors.splashShadow,                      blurRadius: 24,
+                      color: AppColors.splashShadow,
+                      blurRadius: 24,
                       offset: Offset(0, 10),
                     ),
                   ],
@@ -109,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               const SizedBox(height: 28),
 
-              // BRAND NAME
+              // BRAND NAME (the same in every language)
               Text(
                 AppStrings.appName.toUpperCase(),
                 style: const TextStyle(
@@ -132,11 +133,15 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
 
               const Spacer(),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 24),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24),
                 child: Text(
-                  AppStrings.tagline,
-                  style: TextStyle(color: AppColors.onEmeraldSoft, fontSize: 14),                ),
+                  context.l10n.tagline,
+                  style: const TextStyle(
+                    color: AppColors.onEmeraldSoft,
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ],
           ),

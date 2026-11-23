@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../providers/tasks_provider.dart';
 import '../services/task_service.dart';
@@ -63,37 +63,39 @@ class _MyTasksViewState extends State<_MyTasksView> {
   }
 
   Future<void> _confirmDelete(TaskItem task, {required bool assigned}) async {
+    final l = context.l10n;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          AppStrings.deleteTaskTitle,
-          style: TextStyle(
+        title: Text(
+          l.deleteTaskTitle,
+          style: const TextStyle(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
           assigned
-              ? AppStrings.deleteTaskAssignedBody(task.assignedToName)
-              : AppStrings.deleteTaskBody,
+              ? l.deleteTaskAssignedBody(task.assignedToName)
+              : l.deleteTaskBody,
           style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              AppStrings.cancel,
-              style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+            child: Text(
+              l.cancel,
+              style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              AppStrings.delete,
-              style: TextStyle(
+            child: Text(
+              l.delete,
+              style: const TextStyle(
                 color: AppColors.error,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -107,7 +109,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
     if (ok != true || !mounted) return;
 
     final error = await context.read<TasksProvider>().delete(task);
-    _snack(error ?? AppStrings.taskDeleted);
+    _snack(error ?? l.taskDeleted);
   }
 
   // ---------- UI PIECES ----------
@@ -132,29 +134,31 @@ class _MyTasksViewState extends State<_MyTasksView> {
   }
 
   Widget _buildFilters(TasksProvider tasks) {
+    final l = context.l10n;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
       child: Row(
         children: [
-          _chip(AppStrings.filterAll(tasks.allCount), TaskFilter.all, tasks),
+          _chip(l.filterAll(tasks.allCount), TaskFilter.all, tasks),
           _chip(
-            AppStrings.filterUpcoming(tasks.upcomingCount),
+            l.filterUpcoming(tasks.upcomingCount),
             TaskFilter.upcoming,
             tasks,
           ),
           _chip(
-            AppStrings.filterCompleted(tasks.completedCount),
+            l.filterCompleted(tasks.completedCount),
             TaskFilter.completed,
             tasks,
           ),
           _chip(
-            AppStrings.filterAssignedToMe(tasks.toMeCount),
+            l.filterAssignedToMe(tasks.toMeCount),
             TaskFilter.assignedToMe,
             tasks,
           ),
           _chip(
-            AppStrings.filterAssignedByMe(tasks.byMeCount),
+            l.filterAssignedByMe(tasks.byMeCount),
             TaskFilter.assignedByMe,
             tasks,
           ),
@@ -164,6 +168,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
   }
 
   Widget _buildCard(TaskItem t, String me) {
+    final l = context.l10n;
     final toMe = t.isAssignedToMe(me); // somebody gave it to me
     final byMe = t.isAssignedByMe(me); // I gave it to somebody
 
@@ -174,28 +179,27 @@ class _MyTasksViewState extends State<_MyTasksView> {
     final String statusText;
     final IconData statusIcon;
     if (byMe) {
-      statusText = t.done
-          ? AppStrings.doneBy(t.assignedToName)
-          : AppStrings.waitingFor(t.assignedToName);
+      statusText =
+      t.done ? l.doneBy(t.assignedToName) : l.waitingFor(t.assignedToName);
       statusIcon =
       t.done ? AppIcons.taskDoneOutline : AppIcons.taskWaiting;
     } else {
       statusText = t.done
-          ? AppStrings.taskCompleted
+          ? l.taskCompleted
           : (t.reminderMinutes < 0
-          ? AppStrings.noReminder
-          : AppStrings.reminderPrefix(reminderLabel(t.reminderMinutes)));
+          ? l.noReminder
+          : l.reminderPrefix(reminderLabel(t.reminderMinutes)));
       statusIcon = AppIcons.reminder;
     }
 
     // who gave / who got the task
     String? peopleLine;
     if (toMe) {
-      peopleLine = AppStrings.assignedByLine(t.createdByName);
+      peopleLine = l.assignedByLine(t.createdByName);
     } else if (byMe) {
-      peopleLine = AppStrings.assignedToLine(t.assignedToName);
+      peopleLine = l.assignedToLine(t.assignedToName);
     } else if (t.fromName.isNotEmpty) {
-      peopleLine = AppStrings.fromLine(t.fromName);
+      peopleLine = l.fromLine(t.fromName);
     }
 
     // the checkbox (the person who made the task cannot tick it for the other)
@@ -323,14 +327,17 @@ class _MyTasksViewState extends State<_MyTasksView> {
                     if (value == 'edit') _edit(t);
                     if (value == 'delete') _confirmDelete(t, assigned: byMe);
                   },
-                  itemBuilder: (context) => const [
+                  itemBuilder: (context) => [
                     PopupMenuItem<String>(
                       value: 'edit',
                       child: Row(
                         children: [
-                          Icon(AppIcons.editTask, color: AppColors.emerald),
-                          SizedBox(width: 10),
-                          Text(AppStrings.edit),
+                          const Icon(
+                            AppIcons.editTask,
+                            color: AppColors.emerald,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(l.edit),
                         ],
                       ),
                     ),
@@ -338,9 +345,12 @@ class _MyTasksViewState extends State<_MyTasksView> {
                       value: 'delete',
                       child: Row(
                         children: [
-                          Icon(AppIcons.deleteTask, color: AppColors.error),
-                          SizedBox(width: 10),
-                          Text(AppStrings.delete),
+                          const Icon(
+                            AppIcons.deleteTask,
+                            color: AppColors.error,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(l.delete),
                         ],
                       ),
                     ),
@@ -371,25 +381,29 @@ class _MyTasksViewState extends State<_MyTasksView> {
   }
 
   String _emptyText(TasksProvider tasks) {
+    final l = context.l10n;
+
     if (tasks.filter == TaskFilter.assignedToMe) {
-      return AppStrings.emptyAssignedToMe;
+      return l.emptyAssignedToMe;
     }
     if (tasks.filter == TaskFilter.assignedByMe) {
-      return AppStrings.emptyAssignedByMe;
+      return l.emptyAssignedByMe;
     }
     if (tasks.allCount == 0) {
-      return AppStrings.emptyNoTasks;
+      return l.emptyNoTasks;
     }
-    return AppStrings.emptyList;
+    return l.emptyList;
   }
 
   Widget _buildBody(TasksProvider tasks) {
+    final l = context.l10n;
+
     if (!tasks.loggedIn) {
-      return _centerText(AppStrings.pleaseLogInTasks);
+      return _centerText(l.pleaseLogInTasks);
     }
 
     if (tasks.loadError) {
-      return _centerText(AppStrings.couldNotLoadTasks);
+      return _centerText(l.couldNotLoadTasks);
     }
 
     if (tasks.loading) {
@@ -419,6 +433,8 @@ class _MyTasksViewState extends State<_MyTasksView> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     // rebuilds whenever the provider changes (new data, filter...)
     final tasks = context.watch<TasksProvider>();
 
@@ -429,13 +445,13 @@ class _MyTasksViewState extends State<_MyTasksView> {
         foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text(
-          AppStrings.myTasks,
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+        title: Text(
+          l.myTasks,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
         ),
         actions: [
           IconButton(
-            tooltip: AppStrings.newTask,
+            tooltip: l.newTask,
             icon: const Icon(AppIcons.addTask),
             onPressed: _newTask,
           ),

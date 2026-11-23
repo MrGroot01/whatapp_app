@@ -1,8 +1,10 @@
+// A photo from a chat (stored as Base64, or an old web address).
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../services/chat_media.dart';
 import '../../core/app_icons.dart';
-import '../../core/app_strings.dart';
+import '../../core/app_localization.dart';
 import '../../core/app_theme.dart';
 import '../../models/media_entry.dart';
 
@@ -55,10 +57,10 @@ class MediaImage extends StatelessWidget {
 // open a link or a document in the browser / another app
 Future<void> openExternal(BuildContext context, String url) async {
   final messenger = ScaffoldMessenger.of(context);
+  final l = context.l10n; // read before any "await"
+
   if (url.isEmpty) {
-    messenger.showSnackBar(
-      const SnackBar(content: Text(AppStrings.nothingToOpen)),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(l.nothingToOpen)));
     return;
   }
   try {
@@ -67,13 +69,9 @@ Future<void> openExternal(BuildContext context, String url) async {
       mode: LaunchMode.externalApplication,
     );
     if (!ok) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text(AppStrings.couldNotOpenThis)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l.couldNotOpenThis)));
     }
   } catch (e) {
-    messenger.showSnackBar(
-      const SnackBar(content: Text(AppStrings.couldNotOpenThis)),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(l.couldNotOpenThis)));
   }
 }

@@ -8,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../core/app_text.dart';
+import '../l10n/app_localizations.dart';
 import '../services/database_helper.dart';
 import '../services/fcm_service.dart';
 import '../services/phone_helper.dart';
@@ -60,11 +62,11 @@ class AccountProvider extends ChangeNotifier {
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   // the same rules as the nickname
-  static String? validateName(String? value) {
+  static String? validateName(AppLocalizations l, String? value) {
     final name = value?.trim() ?? '';
-    if (name.isEmpty) return 'Please enter your name';
-    if (name.length < 3) return 'Use at least 3 characters';
-    if (name.length > 20) return 'Use at most 20 characters';
+    if (name.isEmpty) return l.enterYourName;
+    if (name.length < 3) return l.useAtLeast3;
+    if (name.length > 20) return l.useAtMost20;
     return null;
   }
 
@@ -158,7 +160,7 @@ class AccountProvider extends ChangeNotifier {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return 'Please log in again before changing your picture.';
+      return AppText.l.pleaseLogInBeforePicture;
     }
 
     try {
@@ -176,11 +178,11 @@ class AccountProvider extends ChangeNotifier {
 
       final imageBytes = await picked.readAsBytes();
       if (imageBytes.length > 650 * 1024) {
-        return 'This picture is too large. Please choose a smaller image.';
+        return AppText.l.pictureTooLarge;
       }
 
       if (!await _isOnline()) {
-        return 'You are offline. Connect to the internet and try again.';
+        return AppText.l.youAreOfflineTryAgain;
       }
 
       final encoded = base64Encode(imageBytes);
@@ -218,7 +220,7 @@ class AccountProvider extends ChangeNotifier {
     } catch (e, stackTrace) {
       debugPrint('Profile picture update failed: $e');
       debugPrintStack(stackTrace: stackTrace);
-      return 'Profile update failed: $e';
+      return AppText.l.profileUpdateFailed(e.toString());
     } finally {
       _uploadingPhoto = false;
       _safeNotify();
@@ -230,7 +232,7 @@ class AccountProvider extends ChangeNotifier {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return 'Please log in again before changing your name.';
+      return AppText.l.pleaseLogInBeforeName;
     }
 
     final name = newName.trim();
@@ -241,7 +243,7 @@ class AccountProvider extends ChangeNotifier {
 
     try {
       if (!await _isOnline()) {
-        return 'You are offline. Connect to the internet and try again.';
+        return AppText.l.youAreOfflineTryAgain;
       }
 
       await FirebaseDatabase.instance
@@ -260,14 +262,13 @@ class AccountProvider extends ChangeNotifier {
       _savedName = name;
       return null;
     } on TimeoutException {
-      return 'The server did not answer. '
-          'Check your internet connection and try again.';
+      return AppText.l.serverNoAnswer;
     } on FirebaseException catch (e) {
       return e.code == 'permission-denied'
-          ? 'Firebase denied access. Check your database rules.'
-          : 'Could not save your name (${e.code}). Please try again.';
+          ? AppText.l.firebaseDenied
+          : AppText.l.couldNotSaveNameCode(e.code);
     } catch (e) {
-      return 'Could not save your name. Please try again.';
+      return AppText.l.couldNotSaveName;
     } finally {
       _savingName = false;
       _safeNotify();

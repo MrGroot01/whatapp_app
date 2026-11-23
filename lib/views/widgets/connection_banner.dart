@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_localization.dart';
 import '../../core/app_theme.dart';
 import '../../services/message_sync_service.dart';
 
@@ -8,11 +9,12 @@ import '../../services/message_sync_service.dart';
 class ConnectionBanner extends StatelessWidget {
   const ConnectionBanner({super.key});
 
-  static const Color _red = Color(0xFFD94B4B);
   static const Color _amber = Color(0xFFE09B00);
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     return ListenableBuilder(
       listenable: Listenable.merge([
         MessageSyncService.connection,
@@ -24,9 +26,8 @@ class ConnectionBanner extends StatelessWidget {
         final pending = MessageSyncService.pendingCount.value;
         final back = MessageSyncService.backOnline.value;
 
-        final waiting = pending == 1
-            ? '1 message is waiting to be sent.'
-            : '$pending messages are waiting to be sent.';
+        final waiting =
+        pending == 1 ? l.waitingOne : l.waitingMany(pending);
 
         String? text;
         Color color = AppColors.emeraldLight;
@@ -34,18 +35,16 @@ class ConnectionBanner extends StatelessWidget {
 
         if (state == ConnState.offline) {
           text = pending > 0
-              ? 'You are offline. $waiting'
-              : 'You are offline. Please turn on your internet connection.';
-          color = _red;
+              ? l.offlineWithPending(waiting)
+              : l.offlineNoPending;
+          color = AppColors.error;
           icon = Icons.wifi_off_rounded;
         } else if (state == ConnState.connecting) {
-          text = pending > 0 ? 'Connecting... $waiting' : 'Connecting...';
+          text = pending > 0 ? l.connectingWithPending(waiting) : l.connecting;
           color = _amber;
           icon = Icons.sync_problem_rounded;
         } else if (back) {
-          text = pending > 0
-              ? 'Back online. Sending your messages...'
-              : 'You are back online.';
+          text = pending > 0 ? l.backOnlineSending : l.backOnline;
           icon = pending > 0 ? Icons.sync_rounded : Icons.wifi_rounded;
         }
 

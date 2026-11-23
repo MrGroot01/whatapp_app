@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import 'add_contact_screen.dart';
 
 Future<void> openAddContact(BuildContext context) async {
@@ -11,7 +11,7 @@ Future<void> openAddContact(BuildContext context) async {
 
   if (saved == true && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text(AppStrings.contactSaved)),
+      SnackBar(content: Text(context.l10n.contactSaved)),
     );
   }
 }

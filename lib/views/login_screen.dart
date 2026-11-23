@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import 'forgot_password_sheet.dart';
 import 'home_screen.dart';
@@ -36,38 +36,40 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String? validateEmail(String? value) {
+    final l = context.l10n;
     final email = value?.trim() ?? '';
-    if (email.isEmpty) return AppStrings.enterEmail;
+    if (email.isEmpty) return l.enterEmail;
     final regex =
     RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
     if (!regex.hasMatch(email)) {
-      return AppStrings.invalidEmail;
+      return l.invalidEmail;
     }
     return null;
   }
 
   String? validatePassword(String? value) {
-    if (value == null || value.isEmpty) return AppStrings.enterPassword;
+    if (value == null || value.isEmpty) return context.l10n.enterPassword;
     return null;
   }
 
   String firebaseErrorMessage(FirebaseAuthException e) {
+    final l = context.l10n;
     switch (e.code) {
       case 'invalid-email':
-        return AppStrings.invalidEmailAddress;
+        return l.invalidEmailAddress;
       case 'user-not-found':
       case 'invalid-credential':
       case 'wrong-password':
       // Firebase uses one answer for "no account" and "wrong password"
-        return AppStrings.loginCredentials;
+        return l.loginCredentials;
       case 'user-disabled':
-        return AppStrings.accountDisabled;
+        return l.accountDisabled;
       case 'too-many-requests':
-        return AppStrings.tooManyAttempts;
+        return l.tooManyAttempts;
       case 'network-request-failed':
-        return AppStrings.networkError;
+        return l.networkError;
       default:
-        return e.message ?? AppStrings.loginFailed;
+        return e.message ?? l.loginFailed;
     }
   }
 
@@ -98,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() {
           isLoading = false;
           needsVerification = true;
-          errorMessage = AppStrings.verifyEmailFirst;
+          errorMessage = context.l10n.verifyEmailFirst;
         });
         return;
       }
@@ -126,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = AppStrings.somethingWentWrong;
+        errorMessage = context.l10n.somethingWentWrong;
       });
     }
   }
@@ -150,8 +152,8 @@ class _LoginScreenState extends State<LoginScreen> {
         needsVerification = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppStrings.verificationSent),
+        SnackBar(
+          content: Text(context.l10n.verificationSent),
         ),
       );
     } on FirebaseAuthException catch (e) {
@@ -185,8 +187,8 @@ class _LoginScreenState extends State<LoginScreen> {
         errorMessage = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppStrings.accountVerified),
+        SnackBar(
+          content: Text(context.l10n.accountVerified),
         ),
       );
     }
@@ -224,6 +226,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -257,20 +261,23 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    AppStrings.welcomeBack,
+                  Text(
+                    l.welcomeBack,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: AppColors.textDark,
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    AppStrings.loginSubtitle,
+                  Text(
+                    l.loginSubtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 16,
+                    ),
                   ),
                   const SizedBox(height: 28),
                   TextFormField(
@@ -289,7 +296,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                     },
                     decoration: fieldDecoration(
-                      label: AppStrings.email,
+                      label: l.email,
                       icon: AppIcons.email,
                     ),
                     validator: validateEmail,
@@ -313,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                     },
                     decoration: fieldDecoration(
-                      label: AppStrings.password,
+                      label: l.password,
                       icon: AppIcons.password,
                       suffix: IconButton(
                         icon: Icon(
@@ -334,9 +341,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: isLoading ? null : openForgotPassword,
-                      child: const Text(
-                        AppStrings.forgotPassword,
-                        style: TextStyle(
+                      child: Text(
+                        l.forgotPassword,
+                        style: const TextStyle(
                           color: AppColors.emerald,
                           fontWeight: FontWeight.w600,
                         ),
@@ -377,9 +384,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         alignment: Alignment.centerLeft,
                         child: TextButton(
                           onPressed: isLoading ? null : resendVerification,
-                          child: const Text(
-                            AppStrings.resendVerification,
-                            style: TextStyle(
+                          child: Text(
+                            l.resendVerification,
+                            style: const TextStyle(
                               color: AppColors.emerald,
                               fontWeight: FontWeight.bold,
                             ),
@@ -409,9 +416,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: Colors.white,
                         ),
                       )
-                          : const Text(
-                        AppStrings.login,
-                        style: TextStyle(
+                          : Text(
+                        l.login,
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
@@ -421,17 +428,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: isLoading ? null : openSignup,
-                    child: const Text.rich(
+                    child: Text.rich(
                       TextSpan(
-                        text: AppStrings.noAccount,
-                        style: TextStyle(
+                        text: '${l.noAccount} ',
+                        style: const TextStyle(
                           color: AppColors.textSoft,
                           fontSize: 15,
                         ),
                         children: [
                           TextSpan(
-                            text: AppStrings.signUp,
-                            style: TextStyle(
+                            text: l.signUp,
+                            style: const TextStyle(
                               color: AppColors.emerald,
                               fontWeight: FontWeight.bold,
                             ),

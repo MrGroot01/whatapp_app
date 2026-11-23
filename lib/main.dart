@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'core/app_strings.dart';
 
 import 'services/notification_service.dart';
 import 'firebase_options.dart';
@@ -9,6 +10,8 @@ import 'views/splash_screen.dart';
 import 'services/fcm_service.dart';
 import 'services/push_service.dart';
 import 'package:provider/provider.dart';
+import 'l10n/app_localizations.dart';
+import 'providers/locale_provider.dart';
 import 'providers/search_provider.dart';
 
 Future<void> main() async {
@@ -52,9 +55,17 @@ Future<void> main() async {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
 
+  // the saved language is read BEFORE the first screen, so the app opens
+  // in the language the user chose last time
+  final localeProvider = LocaleProvider();
+  await localeProvider.load();
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => SearchProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SearchProvider()),
+        ChangeNotifierProvider<LocaleProvider>.value(value: localeProvider),
+      ],
       child: MyApp(startupError: startupError),
     ),
   );
@@ -86,10 +97,28 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    // when the language changes, this rebuilds the whole app at once
+    final locale = context.watch<LocaleProvider>().locale;
+
     return MaterialApp(
       navigatorKey: NotificationService.navigatorKey,
       debugShowCheckedModeBanner: false,
-      title: 'WhatsApp',
+      onGenerateTitle: (_) => AppStrings.appName,
+
+      // ---------- LANGUAGE ----------
+      locale: locale, // null = follow the phone
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      // a phone language we do not support falls back to English
+      localeResolutionCallback: (deviceLocale, supported) {
+        if (deviceLocale != null) {
+          for (final l in supported) {
+            if (l.languageCode == deviceLocale.languageCode) return l;
+          }
+        }
+        return const Locale('en');
+      },
+
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF25D366),
@@ -189,9 +218,9 @@ class StartupErrorScreen extends StatelessWidget {
                 size: 48,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Firebase could not start',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context).firebaseCouldNotStart,
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                 ),

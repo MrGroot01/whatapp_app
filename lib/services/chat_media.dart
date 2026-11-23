@@ -3,7 +3,9 @@ import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:intl/intl.dart';
 
+import '../core/app_text.dart';
 import '../models/media_entry.dart';
 
 final RegExp _linkPattern = RegExp(
@@ -100,12 +102,40 @@ const List<String> _longMonths = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-String formatDate(DateTime t) =>
-    '${t.day} ${_shortMonths[t.month - 1]} ${t.year}';
+// 20 Nov 2026 in English; the month names of the language in use otherwise
+String formatDate(DateTime t) {
+  final code = AppText.languageCode;
+  if (code != 'en') {
+    try {
+      return DateFormat('d MMM y', code).format(t);
+    } catch (_) {
+      // fall through to the English style below
+    }
+  }
+  return '${t.day} ${_shortMonths[t.month - 1]} ${t.year}';
+}
 
-String monthYear(DateTime t) => '${_longMonths[t.month - 1]} ${t.year}';
+String monthYear(DateTime t) {
+  final code = AppText.languageCode;
+  if (code != 'en') {
+    try {
+      return DateFormat('MMMM y', code).format(t);
+    } catch (_) {
+      // fall through to the English style below
+    }
+  }
+  return '${_longMonths[t.month - 1]} ${t.year}';
+}
 
 String formatClock(DateTime t) {
+  final code = AppText.languageCode;
+  if (code != 'en') {
+    try {
+      return DateFormat.jm(code).format(t);
+    } catch (_) {
+      // fall through to the English style below
+    }
+  }
   final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
   final minute = t.minute.toString().padLeft(2, '0');
   return '$hour:$minute ${t.hour >= 12 ? 'pm' : 'am'}';

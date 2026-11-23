@@ -1,3 +1,6 @@
+// lib/services/phone_helper.dart
+import '../core/app_localization.dart';
+
 class CountryCode {
   final String code; // for example '+91'
   final String label; // for example '+91 IN'
@@ -21,17 +24,14 @@ class PhoneHelper {
     return value.replaceAll(RegExp(r'[\s()\-]'), '');
   }
 
-  // digits only, 6 to 15 digits (after cleaning)
-  static String? validate(String? value) {
+  // digits only, 6 to 15 digits (after cleaning),
+  // with the message in the language of the app
+  static String? validateLocalized(AppLocalizations l, String? value) {
     final phone = clean(value ?? '');
 
-    if (phone.isEmpty) return 'Enter the phone number';
-    if (!RegExp(r'^[0-9]+$').hasMatch(phone)) {
-      return 'Use digits only';
-    }
-    if (phone.length < 6 || phone.length > 15) {
-      return 'Enter a valid phone number (6–15 digits)';
-    }
+    if (phone.isEmpty) return l.enterPhone;
+    if (!RegExp(r'^[0-9]+$').hasMatch(phone)) return l.digitsOnly;
+    if (phone.length < 6 || phone.length > 15) return l.invalidPhone;
     return null;
   }
 

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
+import '../core/app_text.dart';
 import 'message_sync_service.dart';
 
 // A saved contact chosen for a group
@@ -118,9 +119,7 @@ class GroupService {
 
   static void _needInternet() {
     if (MessageSyncService.connection.value != ConnState.online) {
-      throw Exception(
-        'You are offline. Connect to the internet and try again.',
-      );
+      throw Exception(AppText.l.youAreOfflineTryAgain);
     }
   }
 
@@ -130,7 +129,7 @@ class GroupService {
     required List<String> memberIds,
   }) async {
     final me = _me;
-    if (me.isEmpty) throw Exception('Please log in again');
+    if (me.isEmpty) throw Exception(AppText.l.pleaseLogInAgain);
     _needInternet();
 
     // the id has no "_" so it can never look like a 1-to-1 chat id
@@ -185,7 +184,7 @@ class GroupService {
   // I leave the group
   static Future<void> leaveGroup(GroupItem g) async {
     final me = _me;
-    if (me.isEmpty) throw Exception('Please log in again');
+    if (me.isEmpty) throw Exception(AppText.l.pleaseLogInAgain);
     _needInternet();
 
     final others = g.members.where((m) => m != me).toList();
@@ -255,7 +254,7 @@ class GroupService {
         if (v is Map) {
           final name = (v['name'] ?? '').toString();
           result[uid] = MemberInfo(
-            name: name.isEmpty ? 'Member' : '~ $name',
+            name: name.isEmpty ? AppText.l.member : '~ $name',
             phone: '${v['countryCode'] ?? ''} ${v['phone'] ?? ''}'.trim(),
             saved: false,
           );
@@ -265,7 +264,8 @@ class GroupService {
         debugPrint('Could not read profile of $uid: $e');
       }
 
-      result[uid] = const MemberInfo(name: 'Member', phone: '', saved: false);
+      result[uid] =
+          MemberInfo(name: AppText.l.member, phone: '', saved: false);
     }
 
     return result;

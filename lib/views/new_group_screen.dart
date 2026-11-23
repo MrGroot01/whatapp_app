@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../services/group_service.dart';
 
@@ -33,7 +33,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
 
     final name = nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => error = AppStrings.groupNameRequired);
+      setState(() => error = context.l10n.groupNameRequired);
       return;
     }
 
@@ -93,6 +93,8 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -103,14 +105,14 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              AppStrings.newGroup,
+              l.newGroup,
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
               ),
             ),
             Text(
-              AppStrings.addAName,
+              l.addAName,
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 color: AppColors.onEmeraldSoft,
@@ -169,7 +171,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             },
             onSubmitted: (_) => _create(),
             decoration: InputDecoration(
-              hintText: AppStrings.groupNameHint,
+              hintText: l.groupNameHint,
               hintStyle: GoogleFonts.poppins(
                 color: AppColors.textSoft,
                 fontSize: 16,
@@ -212,7 +214,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
           ],
           const SizedBox(height: 20),
           Text(
-            AppStrings.membersTitle(widget.members.length),
+            l.membersTitle(widget.members.length),
             style: GoogleFonts.poppins(
               color: AppColors.textSoft,
               fontSize: 14,

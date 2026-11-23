@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../providers/account_provider.dart';
 
@@ -81,7 +81,7 @@ class _ProfileViewState extends State<_ProfileView> {
 
     setState(() => _nameTouched = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text(AppStrings.profileNameUpdated)),
+      SnackBar(content: Text(context.l10n.profileNameUpdated)),
     );
   }
 
@@ -194,11 +194,13 @@ class _ProfileViewState extends State<_ProfileView> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     // rebuilds whenever the provider changes (name, picture, saving...)
     final account = context.watch<AccountProvider>();
 
     final fullPhone = account.fullPhone;
-    final phoneText = fullPhone ?? AppStrings.notAdded;
+    final phoneText = fullPhone ?? l.notAdded;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -206,9 +208,9 @@ class _ProfileViewState extends State<_ProfileView> {
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          AppStrings.profileTitle,
-          style: TextStyle(fontWeight: FontWeight.w700),
+        title: Text(
+          l.profileTitle,
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
       body: SafeArea(
@@ -264,23 +266,27 @@ class _ProfileViewState extends State<_ProfileView> {
                     if (_canSave(account)) _saveName();
                   },
                   decoration: _decoration(
-                    label: AppStrings.nameLabel,
+                    label: l.nameLabel,
                     icon: AppIcons.person,
                   ).copyWith(counterText: ''),
-                  validator: AccountProvider.validateName,
+                  validator: (value) =>
+                      AccountProvider.validateName(context.l10n, value),
                 ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(4, 6, 4, 0),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
                   child: Text(
-                    AppStrings.nameSavedNote,
-                    style: TextStyle(color: AppColors.textSoft, fontSize: 13),
+                    l.nameSavedNote,
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 18),
 
                 // PHONE (read-only)
                 _lockedField(
-                  label: AppStrings.phoneLabel,
+                  label: l.phoneLabel,
                   icon: AppIcons.phone,
                   value: phoneText,
                   muted: fullPhone == null,
@@ -289,7 +295,7 @@ class _ProfileViewState extends State<_ProfileView> {
 
                 // EMAIL (read-only)
                 _lockedField(
-                  label: AppStrings.email,
+                  label: l.email,
                   icon: AppIcons.email,
                   value: account.email,
                 ),
@@ -347,9 +353,9 @@ class _ProfileViewState extends State<_ProfileView> {
                         color: Colors.white,
                       ),
                     )
-                        : const Text(
-                      AppStrings.saveName,
-                      style: TextStyle(
+                        : Text(
+                      l.saveName,
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),

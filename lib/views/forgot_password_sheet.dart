@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 
 // Opens the "Forgot password?" bottom sheet.
@@ -59,27 +59,29 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
   }
 
   String? validateEmail(String? value) {
+    final l = context.l10n;
     final email = value?.trim() ?? '';
-    if (email.isEmpty) return AppStrings.enterEmail;
+    if (email.isEmpty) return l.enterEmail;
     final regex = RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
     if (!regex.hasMatch(email)) {
-      return AppStrings.invalidEmail;
+      return l.invalidEmail;
     }
     return null;
   }
 
   String firebaseErrorMessage(FirebaseAuthException e) {
+    final l = context.l10n;
     switch (e.code) {
       case 'invalid-email':
-        return AppStrings.invalidEmailAddress;
+        return l.invalidEmailAddress;
       case 'user-not-found':
-        return AppStrings.noAccountFound;
+        return l.noAccountFound;
       case 'network-request-failed':
-        return AppStrings.networkError;
+        return l.networkError;
       case 'too-many-requests':
-        return AppStrings.tooManyAttempts;
+        return l.tooManyAttempts;
       default:
-        return e.message ?? AppStrings.couldNotSendEmail;
+        return e.message ?? l.couldNotSendEmail;
     }
   }
 
@@ -134,7 +136,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = AppStrings.somethingWentWrong;
+        errorMessage = context.l10n.somethingWentWrong;
       });
     }
   }
@@ -152,7 +154,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         width: 44,
         height: 4,
         decoration: BoxDecoration(
-          color: AppColors.splashShadow,
+          color: AppColors.sheetHandle,
           borderRadius: BorderRadius.circular(4),
         ),
       ),
@@ -174,6 +176,8 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
 
   // ---------- STEP 1: ask for the email ----------
   Widget _buildAskEmail() {
+    final l = context.l10n;
+
     return Form(
       key: formKey,
       child: Column(
@@ -184,20 +188,20 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
           const SizedBox(height: 20),
           _iconCircle(AppIcons.forgotHeader),
           const SizedBox(height: 16),
-          const Text(
-            AppStrings.forgotPassword,
+          Text(
+            l.forgotPassword,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: AppColors.textDark,
               fontSize: 24,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            AppStrings.forgotSubtitle,
+          Text(
+            l.forgotSubtitle,
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSoft, fontSize: 15.5),
+            style: const TextStyle(color: AppColors.textSoft, fontSize: 15.5),
           ),
           const SizedBox(height: 20),
           TextFormField(
@@ -214,7 +218,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
             onFieldSubmitted: (_) => sendLink(),
             validator: validateEmail,
             decoration: InputDecoration(
-              labelText: AppStrings.email,
+              labelText: l.email,
               labelStyle:
               const TextStyle(color: AppColors.textSoft, fontSize: 16),
               floatingLabelStyle:
@@ -280,18 +284,21 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
                   color: Colors.white,
                 ),
               )
-                  : const Text(
-                AppStrings.sendResetLink,
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                  : Text(
+                l.sendResetLink,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
           const SizedBox(height: 4),
           TextButton(
             onPressed: isLoading ? null : () => Navigator.pop(context),
-            child: const Text(
-              AppStrings.backToLogin,
-              style: TextStyle(
+            child: Text(
+              l.backToLogin,
+              style: const TextStyle(
                 color: AppColors.emerald,
                 fontWeight: FontWeight.w600,
               ),
@@ -304,6 +311,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
 
   // ---------- STEP 2: "check your inbox" ----------
   Widget _buildSent() {
+    final l = context.l10n;
     final email = emailController.text.trim().toLowerCase();
 
     return Column(
@@ -314,10 +322,10 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         const SizedBox(height: 20),
         _iconCircle(AppIcons.inboxHeader),
         const SizedBox(height: 16),
-        const Text(
-          AppStrings.checkInbox,
+        Text(
+          l.checkInbox,
           textAlign: TextAlign.center,
-          style: TextStyle(
+          style: const TextStyle(
             color: AppColors.textDark,
             fontSize: 24,
             fontWeight: FontWeight.w800,
@@ -325,7 +333,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
         ),
         const SizedBox(height: 8),
         Text(
-          AppStrings.resetLinkSent(email),
+          l.resetLinkSent(email),
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: AppColors.textSoft,
@@ -346,9 +354,12 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
-            child: const Text(
-              AppStrings.backToLogin,
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            child: Text(
+              l.backToLogin,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -368,9 +379,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
             TextButton(
               onPressed: (cooldown > 0 || isLoading) ? null : sendLink,
               child: Text(
-                cooldown > 0
-                    ? AppStrings.resendIn(cooldown)
-                    : AppStrings.resendLink,
+                cooldown > 0 ? l.resendIn(cooldown) : l.resendLink,
                 style: TextStyle(
                   color: cooldown > 0 ? AppColors.textSoft : AppColors.emerald,
                   fontWeight: FontWeight.w600,
@@ -384,9 +393,9 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
                 linkSent = false;
                 errorMessage = null;
               }),
-              child: const Text(
-                AppStrings.changeEmail,
-                style: TextStyle(
+              child: Text(
+                l.changeEmail,
+                style: const TextStyle(
                   color: AppColors.emerald,
                   fontWeight: FontWeight.w600,
                 ),

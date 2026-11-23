@@ -4,9 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
-import '../core/app_strings.dart';
-import '../services/database_helper.dart';
+import '../core/app_text.dart';
+import '../l10n/app_localizations.dart';
 import '../models/found_profile.dart';
+import '../services/database_helper.dart';
 import '../services/phone_helper.dart';
 
 enum LookupState { idle, loading, found, notFound, self, error }
@@ -26,6 +27,9 @@ class ContactForm {
 class AddContactProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseDatabase _database = FirebaseDatabase.instance;
+
+  // the shortest name that is accepted
+  static const int minName = 4;
 
   void Function(FoundProfile found)? onFound;
   VoidCallback? onCleared;
@@ -57,21 +61,22 @@ class AddContactProvider extends ChangeNotifier {
     return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
   }
 
-  static String? validateName(String? value) {
+  // l = the texts of the language in use (the screen passes context.l10n)
+  static String? validateName(AppLocalizations l, String? value) {
     final name = value?.trim() ?? '';
 
-    if (name.isEmpty) return AppStrings.enterContactName;
-    if (name.length < 4) return AppStrings.nameTooShort;
-    if (name.length > 40) return AppStrings.nameTooLong;
+    if (name.isEmpty) return l.enterContactName;
+    if (name.length < minName) return l.nameTooShort;
+    if (name.length > 40) return l.nameTooLong;
 
     return null;
   }
 
-  static String? validateEmail(String? value) {
+  static String? validateEmail(AppLocalizations l, String? value) {
     final email = (value ?? '').trim();
 
-    if (email.isEmpty) return AppStrings.enterRegisteredEmail;
-    if (!looksLikeEmail(email)) return AppStrings.enterValidEmail;
+    if (email.isEmpty) return l.enterRegisteredEmail;
+    if (!looksLikeEmail(email)) return l.enterValidEmail;
 
     return null;
   }
@@ -177,19 +182,19 @@ class AddContactProvider extends ChangeNotifier {
     } on TimeoutException {
       if (_disposed || id != _lookupId) return;
       _state = LookupState.error;
-      _lookupError = AppStrings.lookupFailedInternet;
+      _lookupError = AppText.l.lookupFailedInternet;
       _safeNotify();
     } on FirebaseException catch (e) {
       if (_disposed || id != _lookupId) return;
       _state = LookupState.error;
       _lookupError = e.code == 'permission-denied'
-          ? AppStrings.firebaseDenied
-          : AppStrings.lookupFailedCode(e.code);
+          ? AppText.l.firebaseDenied
+          : AppText.l.lookupFailedCode(e.code);
       _safeNotify();
     } catch (e) {
       if (_disposed || id != _lookupId) return;
       _state = LookupState.error;
-      _lookupError = AppStrings.lookupFailedInternet;
+      _lookupError = AppText.l.lookupFailedInternet;
       _safeNotify();
     }
   }
@@ -202,7 +207,7 @@ class AddContactProvider extends ChangeNotifier {
 
     final user = _auth.currentUser;
     if (user == null) {
-      return AppStrings.loginAgainToSave;
+      return AppText.l.loginAgainToSave;
     }
 
     final mail = email.trim().toLowerCase();
@@ -226,7 +231,7 @@ class AddContactProvider extends ChangeNotifier {
 
       final otherUid = found.uid;
       if (otherUid == user.uid) {
-        throw Exception(AppStrings.cannotAddSelf);
+        throw Exception(AppText.l.cannotAddSelf);
       }
 
       final name = form.name.trim();
@@ -245,7 +250,7 @@ class AddContactProvider extends ChangeNotifier {
       await contactRef.get().timeout(const Duration(seconds: 12));
 
       if (existingContact.exists) {
-        throw Exception(AppStrings.userAlreadyInContacts);
+        throw Exception(AppText.l.userAlreadyInContacts);
       }
 
       await contactRef.set({
@@ -273,10 +278,10 @@ class AddContactProvider extends ChangeNotifier {
       return null;
     } on FirebaseException catch (e) {
       return e.code == 'permission-denied'
-          ? AppStrings.firebaseDenied
-          : AppStrings.firebaseError(
+          ? AppText.l.firebaseDenied
+          : AppText.l.firebaseError(
         e.code,
-        e.message ?? AppStrings.unknownError,
+        e.message ?? AppText.l.unknownError,
       );
     } catch (e) {
       return e.toString().replaceFirst('Exception: ', '');

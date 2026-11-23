@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import '../core/app_text.dart';
 import '../models/media_entry.dart';
 import '../services/chat_media.dart';
 import '../services/group_service.dart';
@@ -15,18 +16,22 @@ class DisappearOption {
   const DisappearOption(this.label, this.ms);
 }
 
-const List<DisappearOption> disappearOptions = [
-  DisappearOption('Off', 0),
-  DisappearOption('5 minutes', 300000),
-  DisappearOption('1 day', 86400000),
-  DisappearOption('7 days', 604800000),
-];
+// the choices, in the language in use
+List<DisappearOption> get disappearOptions {
+  final l = AppText.l;
+  return [
+    DisappearOption(l.disappearOff, 0),
+    DisappearOption(l.disappear5Min, 300000),
+    DisappearOption(l.disappear1Day, 86400000),
+    DisappearOption(l.disappear7Days, 604800000),
+  ];
+}
 
 String disappearLabel(int ms) {
   for (final o in disappearOptions) {
     if (o.ms == ms) return o.label;
   }
-  return 'Off';
+  return AppText.l.disappearOff;
 }
 
 class GroupInfoProvider extends ChangeNotifier {
@@ -65,8 +70,9 @@ class GroupInfoProvider extends ChangeNotifier {
 
   MemberInfo? infoOf(String uid) => _infos[uid];
 
-  String nameOf(String uid) =>
-      uid == me ? 'You' : (_infos[uid]?.name ?? 'Member');
+  String nameOf(String uid) => uid == me
+      ? AppText.l.you
+      : (_infos[uid]?.name ?? AppText.l.member);
 
   // me first, then the others A-Z
   List<String> get orderedMembers {
@@ -154,21 +160,21 @@ class GroupInfoProvider extends ChangeNotifier {
   Future<String?> rename(String newName) {
     return _run(
           () => GroupService.renameGroup(groupId, newName),
-      'Could not rename the group',
+      AppText.l.couldNotRenameGroup,
     );
   }
 
   Future<String?> addMembers(List<String> ids) {
     return _run(
           () => GroupService.addMembers(groupId, ids),
-      'Could not add the members',
+      AppText.l.couldNotAddMembers,
     );
   }
 
   Future<String?> removeMember(String uid) {
     return _run(
           () => GroupService.removeMember(groupId, uid),
-      'Could not remove this member',
+      AppText.l.couldNotRemoveMember,
     );
   }
 
@@ -188,7 +194,7 @@ class GroupInfoProvider extends ChangeNotifier {
     } catch (e) {
       _leaving = false;
       debugPrint('Exit group failed: $e');
-      return _errorText(e, 'Could not exit the group');
+      return _errorText(e, AppText.l.couldNotExitGroup);
     } finally {
       _busy = false;
       _safeNotify();
@@ -207,7 +213,7 @@ class GroupInfoProvider extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Disappear setting failed: $e');
-      return 'Could not change the setting. Check your internet.';
+      return AppText.l.couldNotChangeSetting;
     }
   }
 
@@ -236,7 +242,7 @@ class GroupInfoProvider extends ChangeNotifier {
   // the offline message is shown as it is; anything else gets a short text
   String _errorText(Object e, String failMessage) {
     final text = e.toString().replaceFirst('Exception: ', '');
-    return text.startsWith('You are offline') ? text : failMessage;
+    return text == AppText.l.youAreOfflineTryAgain ? text : failMessage;
   }
 
   void _safeNotify() {

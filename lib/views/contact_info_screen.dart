@@ -1,13 +1,11 @@
 import 'dart:convert';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import '../services/chat_media.dart';
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../models/media_entry.dart';
 import 'chat_media_screen.dart';
@@ -52,12 +50,16 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
   );
   late final Stream<DatabaseEvent> _disappearStream = _disappearRef.onValue;
 
-  static const List<List<Object>> _disappearOptions = [
-    [AppStrings.disappearOff, 0],
-    [AppStrings.disappear5Min, 300000],
-    [AppStrings.disappear1Day, 86400000],
-    [AppStrings.disappear7Days, 604800000],
-  ];
+  // the choices (label in the language in use, time in milliseconds)
+  List<(String, int)> _disappearOptions() {
+    final l = context.l10n;
+    return [
+      (l.disappearOff, 0),
+      (l.disappear5Min, 300000),
+      (l.disappear1Day, 86400000),
+      (l.disappear7Days, 604800000),
+    ];
+  }
 
   // Resolve the other participant from the sorted direct-chat ID.
   // Direct chat IDs are stored as UID1_UID2, with both UIDs sorted.
@@ -93,13 +95,14 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
   }
 
   String _disappearLabel(int ms) {
-    for (final o in _disappearOptions) {
-      if (o[1] == ms) return o[0] as String;
+    for (final o in _disappearOptions()) {
+      if (o.$2 == ms) return o.$1;
     }
-    return AppStrings.disappearOff;
+    return context.l10n.disappearOff;
   }
 
   Future<void> _setDisappear(int ms) async {
+    final l = context.l10n; // read before any "await"
     try {
       if (ms == 0) {
         await _disappearRef.remove();
@@ -108,11 +111,13 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showMessage(context, AppStrings.couldNotChangeSetting);
+      _showMessage(context, l.couldNotChangeSetting);
     }
   }
 
   void _showDisappearSheet(int current) {
+    final l = context.l10n;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -127,7 +132,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
               child: Text(
-                AppStrings.disappearingTitle,
+                l.disappearingTitle,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 18,
@@ -138,23 +143,23 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                AppStrings.disappearingChatHelp,
+                l.disappearingChatHelp,
                 style: GoogleFonts.poppins(
                   color: AppColors.textSoft,
                   fontSize: 13,
                 ),
               ),
             ),
-            for (final o in _disappearOptions)
+            for (final o in _disappearOptions())
               ListTile(
                 title: Text(
-                  o[0] as String,
+                  o.$1,
                   style: GoogleFonts.poppins(
                     color: AppColors.textDark,
                     fontSize: 16,
                   ),
                 ),
-                trailing: current == o[1]
+                trailing: current == o.$2
                     ? const Icon(AppIcons.selected, color: AppColors.emerald)
                     : const Icon(
                   AppIcons.notSelected,
@@ -162,7 +167,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  _setDisappear(o[1] as int);
+                  _setDisappear(o.$2);
                 },
               ),
             const SizedBox(height: 8),
@@ -174,6 +179,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final textColor = AppColors.textDark;
     final softColor = AppColors.textSoft;
 
@@ -183,7 +189,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
         title: Text(
-          AppStrings.contactInfoTitle,
+          l.contactInfoTitle,
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
         actions: [
@@ -191,8 +197,8 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
             onSelected: (value) {
               if (value == 'clear') widget.onClearChat();
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'clear', child: Text(AppStrings.clearChat)),
+            itemBuilder: (_) => [
+              PopupMenuItem(value: 'clear', child: Text(l.clearChat)),
             ],
           ),
         ],
@@ -249,7 +255,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  fullPhone.isEmpty ? AppStrings.phoneUnavailable : fullPhone,
+                  fullPhone.isEmpty ? l.phoneUnavailable : fullPhone,
                   style: GoogleFonts.poppins(color: softColor, fontSize: 16),
                 ),
                 const SizedBox(height: 24),
@@ -258,17 +264,17 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                   children: [
                     _ActionButton(
                       icon: AppIcons.infoAudioCall,
-                      label: AppStrings.actionAudio,
+                      label: l.actionAudio,
                       onTap: widget.onAudioCall,
                     ),
                     _ActionButton(
                       icon: AppIcons.infoVideoCall,
-                      label: AppStrings.actionVideo,
+                      label: l.actionVideo,
                       onTap: widget.onVideoCall,
                     ),
                     _ActionButton(
                       icon: AppIcons.search,
-                      label: AppStrings.search,
+                      label: l.search,
                       // close this page first, then start the search in the chat
                       onTap: () {
                         Navigator.pop(context);
@@ -285,20 +291,19 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
           const SizedBox(height: 8),
           _section(
             icon: AppIcons.infoNotifications,
-            title: AppStrings.settingsNotifications,
-            onTap: () => _showMessage(context, AppStrings.notificationSettingsMsg),
+            title: l.settingsNotifications,
+            onTap: () => _showMessage(context, l.notificationSettingsMsg),
           ),
           _section(
             icon: AppIcons.infoMediaVisibility,
-            title: AppStrings.mediaVisibility,
-            onTap: () =>
-                _showMessage(context, AppStrings.mediaVisibilitySettingsMsg),
+            title: l.mediaVisibility,
+            onTap: () => _showMessage(context, l.mediaVisibilitySettingsMsg),
           ),
           _section(
             icon: AppIcons.locked,
-            title: AppStrings.encryption,
-            subtitle: AppStrings.encryptionSub,
-            onTap: () => _showMessage(context, AppStrings.encryptionMsg),
+            title: l.encryption,
+            subtitle: l.encryptionSub,
+            onTap: () => _showMessage(context, l.encryptionMsg),
           ),
           StreamBuilder<DatabaseEvent>(
             stream: _disappearStream,
@@ -307,7 +312,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
               final ms = v is num ? v.toInt() : 0;
               return _section(
                 icon: AppIcons.disappearing,
-                title: AppStrings.disappearingTitle,
+                title: l.disappearingTitle,
                 subtitle: _disappearLabel(ms),
                 onTap: () => _showDisappearSheet(ms),
               );
@@ -316,15 +321,15 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
           const SizedBox(height: 8),
           _section(
             icon: AppIcons.infoClearChat,
-            title: AppStrings.clearChat,
+            title: l.clearChat,
             titleColor: AppColors.dangerRed,
             onTap: widget.onClearChat,
           ),
           _section(
             icon: AppIcons.infoBlock,
-            title: AppStrings.blockContact,
+            title: l.blockContact,
             titleColor: AppColors.dangerRed,
-            onTap: () => _showMessage(context, AppStrings.blockingNotImplemented),
+            onTap: () => _showMessage(context, l.blockingNotImplemented),
           ),
           const SizedBox(height: 20),
         ],
@@ -354,7 +359,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          AppStrings.mediaLinksDocs,
+                          context.l10n.mediaLinksDocs,
                           style: GoogleFonts.poppins(
                             color: AppColors.textDark,
                             fontSize: 15,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/chat_media.dart';
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../models/media_entry.dart';
 import 'media_viewer_screen.dart';
@@ -67,6 +67,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
           const SizedBox(height: 12),
           Text(
             text,
+            textAlign: TextAlign.center,
             style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
           ),
         ],
@@ -77,7 +78,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
   // ---------- TAB 1: PHOTOS, grouped by month ----------
   Widget _mediaTab(List<MediaEntry> images) {
     if (images.isEmpty) {
-      return _empty(AppIcons.media, AppStrings.noPhotosYet);
+      return _empty(AppIcons.media, context.l10n.noPhotosYet);
     }
 
     // the list is already newest first, so the months come in order
@@ -130,8 +131,10 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
 
   // ---------- TAB 2: DOCUMENTS ----------
   Widget _docsTab(List<MediaEntry> files) {
+    final l = context.l10n;
+
     if (files.isEmpty) {
-      return _empty(AppIcons.emptyDocs, AppStrings.noDocsYet);
+      return _empty(AppIcons.emptyDocs, l.noDocsYet);
     }
 
     return ListView.separated(
@@ -158,7 +161,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             child: Icon(AppIcons.file, color: color, size: 26),
           ),
           title: Text(
-            e.title.isEmpty ? AppStrings.attachDocument : e.title,
+            e.title.isEmpty ? l.attachDocument : e.title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.poppins(
@@ -168,10 +171,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             ),
           ),
           subtitle: Text(
-            AppStrings.sharedBy(
-              e.isMe ? AppStrings.you : widget.name,
-              formatDate(e.time),
-            ),
+            l.sharedBy(e.isMe ? l.you : widget.name, formatDate(e.time)),
             style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 12.5),
           ),
           onTap: () => openExternal(context, e.url),
@@ -182,8 +182,10 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
 
   // ---------- TAB 3: LINKS ----------
   Widget _linksTab(List<MediaEntry> links) {
+    final l = context.l10n;
+
     if (links.isEmpty) {
-      return _empty(AppIcons.link, AppStrings.noLinksYet);
+      return _empty(AppIcons.link, l.noLinksYet);
     }
 
     return ListView.separated(
@@ -219,9 +221,9 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             ),
           ),
           subtitle: Text(
-            AppStrings.linkSubtitle(
+            l.linkSubtitle(
               e.title,
-              e.isMe ? AppStrings.you : widget.name,
+              e.isMe ? l.you : widget.name,
               formatDate(e.time),
             ),
             maxLines: 3,
@@ -236,6 +238,8 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     return DefaultTabController(
       length: 3,
       initialIndex: widget.initialTab,
@@ -263,10 +267,10 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
               fontWeight: FontWeight.w600,
               fontSize: 15,
             ),
-            tabs: const [
-              Tab(text: AppStrings.tabMedia),
-              Tab(text: AppStrings.tabDocs),
-              Tab(text: AppStrings.tabLinks),
+            tabs: [
+              Tab(text: l.tabMedia),
+              Tab(text: l.tabDocs),
+              Tab(text: l.tabLinks),
             ],
           ),
         ),
@@ -278,7 +282,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Text(
-                    AppStrings.couldNotLoadMedia,
+                    l.couldNotLoadMedia,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(color: AppColors.textSoft),
                   ),

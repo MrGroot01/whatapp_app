@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import 'create_status_screen.dart';
 import '../models/status_entry.dart';
@@ -80,6 +80,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
   }
 
   Future<void> _addPhoto(ImageSource source) async {
+    final l = context.l10n;
     try {
       final x = await _picker.pickImage(
         source: source,
@@ -97,14 +98,14 @@ class _UpdatesViewState extends State<_UpdatesView> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppStrings.couldNotOpenCameraOrGallery),
-        ),
+        SnackBar(content: Text(l.couldNotOpenCameraOrGallery)),
       );
     }
   }
 
   Future<void> _showAddSheet() async {
+    final l = context.l10n;
+
     Widget option(IconData icon, String label, Color color, VoidCallback go) {
       return ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
@@ -134,11 +135,11 @@ class _UpdatesViewState extends State<_UpdatesView> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(24, 20, 24, 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Text(
-                AppStrings.addStatusTitle,
-                style: TextStyle(
+                l.addStatusTitle,
+                style: const TextStyle(
                   color: AppColors.textDark,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
@@ -147,19 +148,19 @@ class _UpdatesViewState extends State<_UpdatesView> {
             ),
             option(
               AppIcons.addStatusText,
-              AppStrings.statusText,
+              l.statusText,
               AppColors.emerald,
               _addText,
             ),
             option(
               AppIcons.camera,
-              AppStrings.attachCamera,
+              l.attachCamera,
               AppColors.attachCamera,
                   () => _addPhoto(ImageSource.camera),
             ),
             option(
               AppIcons.attachGallery,
-              AppStrings.attachGallery,
+              l.attachGallery,
               AppColors.attachGallery,
                   () => _addPhoto(ImageSource.gallery),
             ),
@@ -217,6 +218,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
   }
 
   Widget _myStatusTile(List<StatusItem> mine) {
+    final l = context.l10n;
     final me = StatusService.myUid;
 
     return ListTile(
@@ -252,9 +254,9 @@ class _UpdatesViewState extends State<_UpdatesView> {
             ),
         ],
       ),
-      title: const Text(
-        AppStrings.myStatus,
-        style: TextStyle(
+      title: Text(
+        l.myStatus,
+        style: const TextStyle(
           color: AppColors.textDark,
           fontSize: 18,
           fontWeight: FontWeight.w600,
@@ -262,8 +264,8 @@ class _UpdatesViewState extends State<_UpdatesView> {
       ),
       subtitle: Text(
         mine.isEmpty
-            ? AppStrings.tapToAddStatus
-            : AppStrings.statusUpdatesLine(
+            ? l.tapToAddStatus
+            : l.statusUpdatesLine(
           mine.length,
           StatusService.timeAgo(mine.last.createdAt),
         ),
@@ -272,7 +274,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
       trailing: mine.isEmpty
           ? null
           : IconButton(
-        tooltip: AppStrings.addStatusTooltip,
+        tooltip: l.addStatusTooltip,
         icon: const Icon(
           AppIcons.addStatusFab,
           color: AppColors.emerald,
@@ -285,7 +287,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
         } else {
           _openViewer(
             uid: me,
-            name: AppStrings.myStatus,
+            name: l.myStatus,
             color: AppColors.gold,
             items: mine,
             mine: true,
@@ -331,6 +333,8 @@ class _UpdatesViewState extends State<_UpdatesView> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     // rebuilds whenever the provider changes (new status, tick, contacts...)
     final updates = context.watch<UpdatesProvider>();
 
@@ -345,20 +349,20 @@ class _UpdatesViewState extends State<_UpdatesView> {
           children: [
             _myStatusTile(mine),
             if (recent.isNotEmpty) ...[
-              _sectionTitle(AppStrings.recentUpdates),
+              _sectionTitle(l.recentUpdates),
               for (final e in recent) _entryTile(e),
             ],
             if (viewed.isNotEmpty) ...[
-              _sectionTitle(AppStrings.viewedUpdates),
+              _sectionTitle(l.viewedUpdates),
               for (final e in viewed) _entryTile(e),
             ],
             if (recent.isEmpty && viewed.isEmpty)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(32, 40, 32, 0),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(32, 40, 32, 0),
                 child: Text(
-                  AppStrings.noRecentUpdates,
+                  l.noRecentUpdates,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.textSoft,
                     fontSize: 16,
                     height: 1.4,
@@ -377,7 +381,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                 heroTag: 'status_text_fab',
                 backgroundColor: Colors.white,
                 foregroundColor: AppColors.emerald,
-                tooltip: AppStrings.textStatusTooltip,
+                tooltip: l.textStatusTooltip,
                 onPressed: _addText,
                 child: const Icon(AppIcons.addStatusText),
               ),
@@ -386,7 +390,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                 heroTag: 'status_camera_fab',
                 backgroundColor: AppColors.emerald,
                 foregroundColor: Colors.white,
-                tooltip: AppStrings.photoStatusTooltip,
+                tooltip: l.photoStatusTooltip,
                 onPressed: () => _addPhoto(ImageSource.camera),
                 child: const Icon(AppIcons.camera),
               ),

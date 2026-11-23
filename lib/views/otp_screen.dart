@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_icons.dart';
+import '../core/app_localization.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
 
@@ -127,10 +128,11 @@ class _OtpScreenState extends State<OtpScreen> {
   void onVerifyPressed() {
     if (finished) return;
 
+    final l = context.l10n;
     final entered = otpController.text.trim();
 
     if (entered.length != 4) {
-      setState(() => errorText = AppStrings.enterAllDigits);
+      setState(() => errorText = l.enterAllDigits);
       return;
     }
 
@@ -140,7 +142,7 @@ class _OtpScreenState extends State<OtpScreen> {
       // (the Sign up screen then goes back to the Login page)
       Navigator.pop(context, true);
     } else {
-      setState(() => errorText = AppStrings.wrongOtp);
+      setState(() => errorText = l.wrongOtp);
     }
   }
 
@@ -154,6 +156,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
   // the "incoming SMS" banner that slides down from the top
   Widget buildMessageBanner() {
+    final l = context.l10n;
+
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic,
@@ -170,9 +174,11 @@ class _OtpScreenState extends State<OtpScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.otpBannerBorder),            boxShadow: const [
+            border: Border.all(color: AppColors.otpBannerBorder),
+            boxShadow: const [
               BoxShadow(
-                color: AppColors.shadowMedium,                blurRadius: 16,
+                color: AppColors.shadowMedium,
+                blurRadius: 16,
                 offset: Offset(0, 6),
               ),
             ],
@@ -190,20 +196,20 @@ class _OtpScreenState extends State<OtpScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
                         Text(
-                          AppStrings.messages,
-                          style: TextStyle(
+                          l.messages,
+                          style: const TextStyle(
                             color: AppColors.textDark,
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Spacer(),
+                        const Spacer(),
                         Text(
-                          AppStrings.now,
-                          style: TextStyle(
+                          l.now,
+                          style: const TextStyle(
                             color: AppColors.textSoft,
                             fontSize: 13,
                           ),
@@ -212,7 +218,7 @@ class _OtpScreenState extends State<OtpScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      AppStrings.otpMessage(currentOtp),
+                      l.otpMessage(AppStrings.appName, currentOtp),
                       style: const TextStyle(
                         color: AppColors.textDark,
                         fontSize: 15,
@@ -230,19 +236,21 @@ class _OtpScreenState extends State<OtpScreen> {
   }
 
   Widget buildResend() {
+    final l = context.l10n;
+
     if (secondsLeft > 0) {
       final time = '0:${secondsLeft.toString().padLeft(2, '0')}';
       return Text(
-        AppStrings.resendCodeIn(time),
+        l.resendCodeIn(time),
         textAlign: TextAlign.center,
         style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
       );
     }
     return TextButton(
       onPressed: onResendPressed,
-      child: const Text(
-        AppStrings.resendCode,
-        style: TextStyle(
+      child: Text(
+        l.resendCode,
+        style: const TextStyle(
           color: AppColors.emerald,
           fontSize: 16,
           fontWeight: FontWeight.bold,
@@ -253,6 +261,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -286,10 +296,10 @@ class _OtpScreenState extends State<OtpScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Text(
-                      AppStrings.verifyYourEmail,
+                    Text(
+                      l.verifyYourEmail,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: AppColors.textDark,
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
@@ -297,7 +307,7 @@ class _OtpScreenState extends State<OtpScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      AppStrings.otpSentTo(widget.email),
+                      l.otpSentTo(widget.email),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: AppColors.textSoft,
@@ -359,9 +369,9 @@ class _OtpScreenState extends State<OtpScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: const Text(
-                          AppStrings.verify,
-                          style: TextStyle(
+                        child: Text(
+                          l.verify,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                           ),

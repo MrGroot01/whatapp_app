@@ -3,6 +3,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../core/app_text.dart';
+
 class NotificationService {
   NotificationService._();
 
@@ -24,14 +26,17 @@ class NotificationService {
   // set when the app was started (from closed) by tapping a notification
   static String? launchPayload;
 
-  static const AndroidNotificationDetails _androidDetails =
-  AndroidNotificationDetails(
-    'task_reminders',
-    'Task reminders',
-    channelDescription: 'Reminders for your tasks',
-    importance: Importance.high,
-    priority: Priority.high,
-  );
+  // task reminders (the channel texts follow the language in use)
+  static AndroidNotificationDetails get _androidDetails {
+    final l = AppText.l;
+    return AndroidNotificationDetails(
+      'task_reminders',
+      l.notifTaskChannel,
+      channelDescription: l.notifTaskChannelDesc,
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+  }
 
   // the same message always gets the same number, in every part of the app,
   // so a message never shows two notifications
@@ -133,7 +138,7 @@ class NotificationService {
         title: title,
         body: body,
         scheduledDate: tz.TZDateTime.from(when, tz.local),
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: _androidDetails,
         ),
         // "inexact" needs no special permission; it can be a few minutes late
@@ -165,24 +170,26 @@ class NotificationService {
     if (!_ready) await init();
     if (!_ready) return;
 
+    final l = AppText.l;
+
     try {
       await _plugin.show(
         id: id,
         title: title,
         body: body,
         payload: payload,
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             'incoming_messages',
-            'Messages',
-            channelDescription: 'New messages from your contacts',
+            l.notifMessagesChannel,
+            channelDescription: l.notifMessagesChannelDesc,
             importance: Importance.high,
             priority: Priority.high,
             icon: '@mipmap/ic_launcher',
             // the same message shown twice replaces itself without a new sound
             onlyAlertOnce: true,
           ),
-          iOS: DarwinNotificationDetails(),
+          iOS: const DarwinNotificationDetails(),
         ),
       );
     } catch (e) {
@@ -196,11 +203,13 @@ class NotificationService {
     if (!_ready) await init();
     if (!_ready) return;
 
+    final l = AppText.l;
+
     final String body = switch (messageType) {
-      'image' => 'Photo sent successfully',
-      'file' => 'Document sent successfully',
-      'contact' => 'Contact sent successfully',
-      _ => 'Message sent successfully',
+      'image' => l.sentPhoto,
+      'file' => l.sentDocument,
+      'contact' => l.sentContact,
+      _ => l.sentMessage,
     };
 
     try {
@@ -208,17 +217,16 @@ class NotificationService {
         id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title: 'WhatsApp',
         body: body,
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             'message_status',
-            'Message status',
-            channelDescription:
-            'Notifications for successfully sent messages',
+            l.notifStatusChannel,
+            channelDescription: l.notifStatusChannelDesc,
             importance: Importance.high,
             priority: Priority.high,
             icon: '@mipmap/ic_launcher',
           ),
-          iOS: DarwinNotificationDetails(),
+          iOS: const DarwinNotificationDetails(),
         ),
       );
     } catch (e) {

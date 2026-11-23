@@ -1,6 +1,6 @@
 class MediaEntry {
   final String id;
-  final String kind; // 'image', 'file' or 'link'
+  final String kind;
   final DateTime time;
   final bool isMe;
   final String imageBase64;

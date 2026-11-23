@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import '../core/app_text.dart';
 import '../services/database_helper.dart';
 import '../services/message_sync_service.dart';
 import '../models/message.dart';
@@ -240,7 +241,7 @@ class MessagesProvider extends ChangeNotifier {
       await _messagesRef.child(msg.id).remove();
       return null;
     } catch (e) {
-      return 'Could not delete the message';
+      return AppText.l.couldNotDeleteMessage;
     }
   }
 
@@ -249,13 +250,13 @@ class MessagesProvider extends ChangeNotifier {
       await _messagesRef.remove();
       return null;
     } catch (e) {
-      return 'Could not clear the chat';
+      return AppText.l.couldNotClearChat;
     }
   }
 
   Future<String?> reactTo(Message msg, String emoji) async {
-    if (msg.status < 0) return 'Wait until the message is sent';
-    if (myUid.isEmpty) return 'Please log in again';
+    if (msg.status < 0) return AppText.l.waitUntilSent;
+    if (myUid.isEmpty) return AppText.l.pleaseLogInAgain;
 
     final ref = _messagesRef.child(msg.id).child('reactions').child(myUid);
 
@@ -268,7 +269,7 @@ class MessagesProvider extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Reaction failed: $e');
-      return 'Could not add the reaction. Check the database rules.';
+      return AppText.l.reactionFailed;
     }
   }
 

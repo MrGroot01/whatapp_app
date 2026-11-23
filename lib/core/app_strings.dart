@@ -1,7 +1,6 @@
 class AppStrings {
   AppStrings._(); // nobody makes an object of this class
 
-  // ---------- BRAND ----------
   static const String appName = 'Velora';
   static const String tagline = 'Messaging, beautifully simple.';
 

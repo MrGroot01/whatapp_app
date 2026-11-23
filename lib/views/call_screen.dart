@@ -2,7 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
+import '../core/app_text.dart';
 import '../core/app_theme.dart';
 
 class CallScreen extends StatefulWidget {
@@ -80,7 +81,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
     try {
       if (_cameras.isEmpty) _cameras = await availableCameras();
       if (_cameras.isEmpty) {
-        _cameraFailed(AppStrings.noCameraFound);
+        _cameraFailed(AppText.l.noCameraFound);
         return;
       }
 
@@ -112,12 +113,12 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
       debugPrint('Camera error: ${e.code} ${e.description}');
       _cameraFailed(
         e.code.startsWith('CameraAccess')
-            ? AppStrings.cameraPermissionDenied
-            : AppStrings.callCouldNotOpenCamera,
+            ? AppText.l.cameraPermissionDenied
+            : AppText.l.callCouldNotOpenCamera,
       );
     } catch (e) {
       debugPrint('Camera error: $e');
-      _cameraFailed(AppStrings.callCouldNotOpenCamera);
+      _cameraFailed(AppText.l.callCouldNotOpenCamera);
     } finally {
       _starting = false;
     }
@@ -237,6 +238,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildTopBar() {
+    final l = context.l10n;
     final number = widget.phone.isEmpty
         ? ''
         : '${widget.countryCode} ${widget.phone}';
@@ -269,7 +271,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 Text(
-                  _cameraOn ? AppStrings.videoCalling : AppStrings.calling,
+                  _cameraOn ? l.videoCalling : l.calling,
                   style: const TextStyle(
                     color: AppColors.onEmeraldHint,
                     fontSize: 15,
@@ -280,7 +282,7 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
           ),
           _roundIcon(
             AppIcons.addContact,
-                () => _snack(AppStrings.addPeopleSoon),
+                () => _snack(l.addPeopleSoon),
           ),
         ],
       ),
@@ -320,6 +322,8 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
           const SizedBox(height: 8),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
         ],
@@ -328,6 +332,8 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildControls() {
+    final l = context.l10n;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
@@ -343,19 +349,19 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
             children: [
               _controlButton(
                 icon: AppIcons.callSpeaker,
-                label: AppStrings.callSpeaker,
+                label: l.callSpeaker,
                 active: _speaker,
                 onTap: () => setState(() => _speaker = !_speaker),
               ),
               _controlButton(
                 icon: _cameraOn ? AppIcons.callVideoOn : AppIcons.callVideoOff,
-                label: AppStrings.actionVideo,
+                label: l.actionVideo,
                 active: _cameraOn,
                 onTap: _toggleCamera,
               ),
               _controlButton(
                 icon: AppIcons.callMute,
-                label: AppStrings.callMute,
+                label: l.callMute,
                 active: _muted,
                 onTap: () => setState(() => _muted = !_muted),
               ),
@@ -368,23 +374,23 @@ class _CallScreenState extends State<CallScreen> with WidgetsBindingObserver {
               if (_cameraOn)
                 _controlButton(
                   icon: AppIcons.callFlip,
-                  label: AppStrings.callFlip,
+                  label: l.callFlip,
                   onTap: _flipCamera,
                 )
               else
                 _controlButton(
                   icon: AppIcons.callMore,
-                  label: AppStrings.callMore,
-                  onTap: () => _snack(AppStrings.moreOptionsSoon),
+                  label: l.callMore,
+                  onTap: () => _snack(l.moreOptionsSoon),
                 ),
               _controlButton(
                 icon: AppIcons.callShare,
-                label: AppStrings.callShare,
-                onTap: () => _snack(AppStrings.sharingSoon),
+                label: l.callShare,
+                onTap: () => _snack(l.sharingSoon),
               ),
               _controlButton(
                 icon: AppIcons.callEnd,
-                label: AppStrings.callEnd,
+                label: l.callEnd,
                 background: AppColors.callEndRed,
                 onTap: () => Navigator.pop(context),
               ),
