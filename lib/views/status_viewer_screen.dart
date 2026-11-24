@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../services/status_service.dart';
 import 'widgets/status_widgets.dart';
@@ -154,6 +154,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
   void _prev() => _show(_index > 0 ? _index - 1 : 0);
 
   Future<void> _showViewers() async {
+    final l = context.l10n;
     final item = _items[_index];
 
     _sheetOpen = true;
@@ -176,7 +177,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
                 children: [
                   Expanded(
                     child: Text(
-                      AppStrings.viewedBy(item.viewers.length),
+                      l.viewedBy(item.viewers.length),
                       style: const TextStyle(
                         color: AppColors.textDark,
                         fontSize: 18,
@@ -185,7 +186,7 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
                     ),
                   ),
                   IconButton(
-                    tooltip: AppStrings.deleteStatus,
+                    tooltip: l.deleteStatus,
                     icon: const Icon(
                       AppIcons.deleteStatus,
                       color: AppColors.error,
@@ -199,11 +200,14 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
               ),
               const SizedBox(height: 4),
               if (item.viewers.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Text(
-                    AppStrings.noViewsYet,
-                    style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+                    l.noViewsYet,
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 16,
+                    ),
                   ),
                 )
               else
@@ -274,9 +278,9 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
           ? const CircularProgressIndicator(color: Colors.white)
           : _bytes != null
           ? Image.memory(_bytes!, fit: BoxFit.contain, gaplessPlayback: true)
-          : const Text(
-        AppStrings.couldNotLoadPhoto,
-        style: TextStyle(color: Colors.white70, fontSize: 16),
+          : Text(
+        context.l10n.couldNotLoadPhoto,
+        style: const TextStyle(color: Colors.white70, fontSize: 16),
       ),
     );
   }
@@ -310,8 +314,9 @@ class _StatusViewerScreenState extends State<StatusViewerScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final item = _items[_index];
-    final title = widget.isMine ? AppStrings.myStatus : widget.ownerName;
+    final title = widget.isMine ? l.myStatus : widget.ownerName;
 
     return Scaffold(
       backgroundColor: Colors.black,

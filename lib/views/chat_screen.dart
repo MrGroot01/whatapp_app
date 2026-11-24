@@ -13,10 +13,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../services/incoming_message_notifier.dart';
 import 'widgets/connection_banner.dart';
@@ -153,9 +154,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // who wrote a message ("You", the contact, or a group member)
   String _senderLabel(String senderId) {
-    if (senderId == _myUid) return AppStrings.you;
+    final l = context.l10n;
+    if (senderId == _myUid) return l.you;
     if (!widget.isGroup) return widget.name;
-    return _group.nameOf(senderId) ?? AppStrings.member;
+    return _group.nameOf(senderId) ?? l.member;
   }
 
   bool get _hasDraftContent =>
@@ -163,10 +165,11 @@ class _ChatScreenState extends State<ChatScreen> {
           _composer.draftImageFile != null;
 
   String _disappearLabel(int ms) {
-    if (ms == 300000) return AppStrings.disappear5Min;
-    if (ms == 86400000) return AppStrings.disappear1Day;
-    if (ms == 604800000) return AppStrings.disappear7Days;
-    return AppStrings.disappearOff;
+    final l = context.l10n;
+    if (ms == 300000) return l.disappear5Min;
+    if (ms == 86400000) return l.disappear1Day;
+    if (ms == 604800000) return l.disappear7Days;
+    return l.disappearOff;
   }
 
   @override
@@ -217,7 +220,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // I left the group, was removed, or the group was deleted
   void _leaveScreen() {
     if (!mounted) return;
-    snack(AppStrings.noLongerInGroup);
+    snack(context.l10n.noLongerInGroup);
     final route = ModalRoute.of(context);
     if (route != null && route.isActive) {
       Navigator.of(context).removeRoute(route);
@@ -265,22 +268,24 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   String _scheduleLabel(DateTime when) {
+    final l = context.l10n;
     final diff = _daysFromToday(when);
     final time = formatTime(when);
-    if (diff == 0) return AppStrings.scheduleToday(time);
-    if (diff == 1) return AppStrings.scheduleTomorrow(time);
-    return AppStrings.scheduleOn(dayLabel(when), time);
+    if (diff == 0) return l.scheduleToday(time);
+    if (diff == 1) return l.scheduleTomorrow(time);
+    return l.scheduleOn(dayLabel(when), time);
   }
 
   Future<void> showScheduleSheet() async {
+    final l = context.l10n;
     final text = messageController.text.trim();
 
     if (text.isEmpty && _composer.draftImageFile == null) {
-      snack(AppStrings.scheduleTypeFirst);
+      snack(l.scheduleTypeFirst);
       return;
     }
     if (_myUid.isEmpty) {
-      snack(AppStrings.pleaseLogInAgain);
+      snack(l.pleaseLogInAgain);
       return;
     }
     closePanels();
@@ -302,7 +307,7 @@ class _ChatScreenState extends State<ChatScreen> {
               DateTime.now().add(const Duration(minutes: 1)),
             );
             final dateText = _daysFromToday(when) == 1
-                ? AppStrings.tomorrowDay(dayLabel(when))
+                ? l.tomorrowDay(dayLabel(when))
                 : dayLabel(when);
 
             return SafeArea(
@@ -324,7 +329,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      AppStrings.scheduleTitle,
+                      l.scheduleTitle,
                       style: GoogleFonts.poppins(
                         color: AppColors.textDark,
                         fontSize: 20,
@@ -416,8 +421,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         child: Text(
                           valid
-                              ? AppStrings.sendAt(_scheduleLabel(when))
-                              : AppStrings.scheduleInvalid,
+                              ? l.sendAt(_scheduleLabel(when))
+                              : l.scheduleInvalid,
+                          textAlign: TextAlign.center,
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -429,7 +435,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: TextButton(
                         onPressed: () => Navigator.pop(sheetContext),
                         child: Text(
-                          AppStrings.cancel,
+                          l.cancel,
                           style: GoogleFonts.poppins(
                             color: AppColors.emerald,
                             fontSize: 16,
@@ -456,17 +462,18 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     messageController.clear();
-    snack(AppStrings.scheduledFor(_scheduleLabel(picked)));
+    snack(l.scheduledFor(_scheduleLabel(picked)));
   }
 
   // ---------- CALL ----------
   // Video call -> the in-app call screen (camera)
   // Voice call -> the phone's own dialer with the number already typed in
   void openCallScreen({required bool video}) {
+    final l = context.l10n;
     closePanels();
 
     if (widget.isGroup) {
-      snack(AppStrings.callsNotInGroups);
+      snack(l.callsNotInGroups);
       return;
     }
 
@@ -478,7 +485,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final otherUid = _otherUid;
 
     if (_myUid.isEmpty || otherUid.isEmpty) {
-      snack(AppStrings.couldNotIdentifyContact);
+      snack(l.couldNotIdentifyContact);
       return;
     }
 
@@ -499,11 +506,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> dialNumber() async {
+    final l = context.l10n;
+
     // remove spaces, dashes and brackets from the saved number
     var number = widget.phone.replaceAll(RegExp(r'[\s\-()]'), '');
 
     if (number.isEmpty) {
-      snack(AppStrings.noPhoneSaved(widget.name));
+      snack(l.noPhoneSaved(widget.name));
       return;
     }
 
@@ -515,15 +524,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final opened = await launchUrl(Uri(scheme: 'tel', path: number));
-      if (!opened) snack(AppStrings.couldNotOpenDialer);
+      if (!opened) snack(l.couldNotOpenDialer);
     } catch (e) {
       debugPrint('Dialer failed: $e');
-      snack(AppStrings.couldNotOpenDialer);
+      snack(l.couldNotOpenDialer);
     }
   }
 
   // ---------- CAMERA / GALLERY / DOCUMENT ----------
   Future<void> pickFromCamera() async {
+    final l = context.l10n;
     try {
       final x = await _picker.pickImage(
         source: ImageSource.camera,
@@ -534,11 +544,12 @@ class _ChatScreenState extends State<ChatScreen> {
       if (x == null || !mounted) return;
       _composer.setDraftImage(File(x.path), x.name);
     } catch (e) {
-      snack(AppStrings.couldNotOpenCamera);
+      snack(l.couldNotOpenCamera);
     }
   }
 
   Future<void> pickFromGallery() async {
+    final l = context.l10n;
     try {
       final x = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -549,11 +560,12 @@ class _ChatScreenState extends State<ChatScreen> {
       if (x == null || !mounted) return;
       _composer.setDraftImage(File(x.path), x.name);
     } catch (e) {
-      snack(AppStrings.couldNotOpenGallery);
+      snack(l.couldNotOpenGallery);
     }
   }
 
   Future<void> pickDocument() async {
+    final l = context.l10n;
     String? path;
     String name = '';
     try {
@@ -563,7 +575,7 @@ class _ChatScreenState extends State<ChatScreen> {
       path = picked.path;
       name = picked.name;
     } catch (e) {
-      snack(AppStrings.couldNotPickDocument);
+      snack(l.couldNotPickDocument);
       return;
     }
     if (path == null) return;
@@ -579,10 +591,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> openUrl(String url) async {
     if (url.isEmpty) return;
+    final l = context.l10n;
     try {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (e) {
-      snack(AppStrings.couldNotOpenFile);
+      snack(l.couldNotOpenFile);
     }
   }
 
@@ -646,8 +659,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final all = await _loadSavedContacts();
     if (!mounted) return null;
 
+    final l = context.l10n;
+
     if (all.isEmpty) {
-      snack(AppStrings.noSavedContacts);
+      snack(l.noSavedContacts);
       return null;
     }
 
@@ -710,7 +725,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           fontSize: 16,
                         ),
                         decoration: InputDecoration(
-                          hintText: AppStrings.searchNameOrNumber,
+                          hintText: l.searchNameOrNumber,
                           hintStyle: GoogleFonts.poppins(
                             color: AppColors.textSoft,
                             fontSize: 15,
@@ -735,7 +750,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: shown.isEmpty
                           ? Center(
                         child: Text(
-                          AppStrings.noContactFound,
+                          l.noContactFound,
                           style: GoogleFonts.poppins(
                             color: AppColors.textSoft,
                             fontSize: 16,
@@ -830,8 +845,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             child: Text(
                               selected.isEmpty
-                                  ? AppStrings.selectContacts
-                                  : AppStrings.sendToCount(selected.length),
+                                  ? l.selectContacts
+                                  : l.sendToCount(selected.length),
                               style: GoogleFonts.poppins(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -853,7 +868,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // ---------- SHARE A CONTACT ----------
   Future<void> shareContact() async {
     final picked = await _pickContacts(
-      title: AppStrings.shareContactTitle,
+      title: context.l10n.shareContactTitle,
       multi: false,
     );
     if (picked == null || picked.isEmpty) return;
@@ -890,6 +905,8 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
     if (!mounted) return;
+
+    final l = context.l10n;
 
     showModalBottomSheet(
       context: context,
@@ -945,7 +962,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                     icon: const Icon(AppIcons.chatMessage),
                     label: Text(
-                      AppStrings.cardMessage,
+                      l.cardMessage,
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -972,7 +989,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                     icon: const Icon(AppIcons.addContact),
                     label: Text(
-                      AppStrings.saveContact,
+                      l.saveContact,
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -990,7 +1007,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
               if (canUse && alreadySaved)
                 Text(
-                  AppStrings.alreadyInContacts,
+                  l.alreadyInContacts,
                   style: GoogleFonts.poppins(
                     color: AppColors.textSoft,
                     fontSize: 14,
@@ -998,7 +1015,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               if (!canUse)
                 Text(
-                  uid == _myUid ? AppStrings.ownNumber : '',
+                  uid == _myUid ? l.ownNumber : '',
                   style: GoogleFonts.poppins(
                     color: AppColors.textSoft,
                     fontSize: 14,
@@ -1027,6 +1044,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> saveSharedContact(Message msg) async {
+    final l = context.l10n;
     final uid = msg.contactUid;
     if (uid.isEmpty || uid == _myUid) return;
 
@@ -1040,10 +1058,10 @@ class _ChatScreenState extends State<ChatScreen> {
         'lastMessage': 'Tap to start chatting',
         'time': '',
       });
-      snack(AppStrings.contactSavedShort);
+      snack(l.contactSavedShort);
     } catch (e) {
       debugPrint('Save contact failed: $e');
-      snack(AppStrings.couldNotSaveContact);
+      snack(l.couldNotSaveContact);
     }
   }
 
@@ -1087,18 +1105,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // ---------- FORWARD ----------
   Future<void> forwardMessage(Message msg) async {
+    final l = context.l10n;
+
     if (msg.status < 0) {
-      snack(AppStrings.waitUntilSent);
+      snack(l.waitUntilSent);
       return;
     }
 
     final picked = await _pickContacts(
-      title: AppStrings.forwardToTitle,
+      title: l.forwardToTitle,
       multi: true,
     );
     if (picked == null || picked.isEmpty) return;
     if (_myUid.isEmpty) {
-      snack(AppStrings.pleaseLogInAgain);
+      snack(l.pleaseLogInAgain);
       return;
     }
 
@@ -1109,8 +1129,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     snack(
       done == picked.length
-          ? AppStrings.messageForwarded
-          : AppStrings.forwardedToCount(done, picked.length),
+          ? l.messageForwarded
+          : l.forwardedToCount(done, picked.length),
     );
   }
 
@@ -1127,7 +1147,7 @@ class _ChatScreenState extends State<ChatScreen> {
         builder: (_) => CreateTaskScreen(
           initialTitle: title,
           sourceText: text,
-          fromName: msg.isMe ? AppStrings.you : widget.name,
+          fromName: msg.isMe ? context.l10n.you : widget.name,
           sourceTime: msg.time,
           chatId: _chatId,
           messageId: msg.id,
@@ -1152,6 +1172,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // (long-press the mic, or tap the language chip while listening)
   void showVoiceLanguageSheet() {
     closePanels();
+    final l = context.l10n;
     final current = _voice.localeId;
 
     showModalBottomSheet(
@@ -1168,7 +1189,7 @@ class _ChatScreenState extends State<ChatScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
               child: Text(
-                AppStrings.voiceLanguageTitle,
+                l.voiceLanguageTitle,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 18,
@@ -1179,7 +1200,7 @@ class _ChatScreenState extends State<ChatScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                AppStrings.voiceLanguageHelp,
+                l.voiceLanguageHelp,
                 style: GoogleFonts.poppins(
                   color: AppColors.textSoft,
                   fontSize: 13,
@@ -1211,7 +1232,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _voice.changeLanguage(lang.id, messageController.text);
-                  snack(AppStrings.voiceLanguageChosen(lang.name));
+                  snack(l.voiceLanguageChosen(lang.name));
                 },
               ),
             const SizedBox(height: 8),
@@ -1223,6 +1244,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // small bar shown while the mic is listening
   Widget buildListeningBar() {
+    final l = context.l10n;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(8, 6, 8, 0),
       padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
@@ -1236,7 +1259,7 @@ class _ChatScreenState extends State<ChatScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              AppStrings.listeningIn(_voice.language.name),
+              l.listeningIn(_voice.language.name),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
@@ -1279,7 +1302,7 @@ class _ChatScreenState extends State<ChatScreen> {
           TextButton(
             onPressed: _voice.cancel,
             child: Text(
-              AppStrings.cancel,
+              l.cancel,
               style: GoogleFonts.poppins(
                 color: AppColors.error,
                 fontWeight: FontWeight.w600,
@@ -1446,18 +1469,21 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> deleteMessage(Message msg) async {
+    final l = context.l10n;
     final error = await _messages.deleteMessage(msg);
-    snack(error ?? AppStrings.messageDeleted);
+    snack(error ?? l.messageDeleted);
   }
 
   Future<void> clearChat() async {
+    final l = context.l10n;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          AppStrings.clearChatTitle,
+          l.clearChatTitle,
           style: GoogleFonts.poppins(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
@@ -1465,15 +1491,15 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         content: Text(
           widget.isGroup
-              ? AppStrings.clearGroupBody(_title)
-              : AppStrings.clearChatBody(widget.name),
+              ? l.clearGroupBody(_title)
+              : l.clearChatBody(widget.name),
           style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
-              AppStrings.cancel,
+              l.cancel,
               style: GoogleFonts.poppins(
                 color: AppColors.textSoft,
                 fontSize: 16,
@@ -1483,7 +1509,7 @@ class _ChatScreenState extends State<ChatScreen> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(
-              AppStrings.clear,
+              l.clear,
               style: GoogleFonts.poppins(
                 color: AppColors.error,
                 fontSize: 16,
@@ -1504,6 +1530,7 @@ class _ChatScreenState extends State<ChatScreen> {
   // long-press on a message: emoji reactions + Reply / Forward / Copy / Delete
   void showMessageOptions(Message msg) {
     closePanels();
+    final l = context.l10n;
     final mine = msg.reactions[_myUid];
 
     showModalBottomSheet(
@@ -1566,7 +1593,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ListTile(
               leading: const Icon(AppIcons.reply, color: AppColors.emerald),
               title: Text(
-                AppStrings.reply,
+                l.reply,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 17,
@@ -1580,7 +1607,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ListTile(
               leading: const Icon(AppIcons.forward, color: AppColors.emerald),
               title: Text(
-                AppStrings.forward,
+                l.forward,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 17,
@@ -1597,7 +1624,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ListTile(
                 leading: const Icon(AppIcons.retry, color: AppColors.emerald),
                 title: Text(
-                  AppStrings.tryAgain,
+                  l.tryAgain,
                   style: GoogleFonts.poppins(
                     color: AppColors.textDark,
                     fontSize: 17,
@@ -1617,7 +1644,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   color: AppColors.emerald,
                 ),
                 title: Text(
-                  AppStrings.copy,
+                  l.copy,
                   style: GoogleFonts.poppins(
                     color: AppColors.textDark,
                     fontSize: 17,
@@ -1626,7 +1653,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: msg.text));
                   Navigator.pop(sheetContext);
-                  snack(AppStrings.copied);
+                  snack(l.copied);
                 },
               ),
             // only your own messages can be deleted
@@ -1635,7 +1662,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 leading:
                 const Icon(AppIcons.deleteMessage, color: AppColors.error),
                 title: Text(
-                  AppStrings.delete,
+                  l.delete,
                   style: GoogleFonts.poppins(
                     color: AppColors.error,
                     fontSize: 17,
@@ -1655,6 +1682,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void showAttachMenu() {
     closePanels();
+    final l = context.l10n;
 
     Widget item(IconData icon, String label, Color color, VoidCallback action) {
       return GestureDetector(
@@ -1699,33 +1727,33 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               item(
                 AppIcons.attachDocument,
-                AppStrings.attachDocument,
+                l.attachDocument,
                 AppColors.attachDocument,
                 pickDocument,
               ),
               item(
                 AppIcons.camera,
-                AppStrings.attachCamera,
+                l.attachCamera,
                 AppColors.attachCamera,
                 pickFromCamera,
               ),
               item(
                 AppIcons.attachGallery,
-                AppStrings.attachGallery,
+                l.attachGallery,
                 AppColors.attachGallery,
                 pickFromGallery,
               ),
               item(
                 AppIcons.attachContact,
-                AppStrings.attachContact,
+                l.attachContact,
                 AppColors.attachContact,
                 shareContact,
               ),
               item(
                 AppIcons.attachLocation,
-                AppStrings.attachLocation,
+                l.attachLocation,
                 AppColors.attachLocation,
-                    () => snack(AppStrings.locationComingSoon),
+                    () => snack(l.locationComingSoon),
               ),
             ],
           ),
@@ -1735,22 +1763,40 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ---------- HELPERS ----------
+  // 3:05 pm in English (as before); the language's own style in the others
   String formatTime(DateTime t) {
+    final locale = Localizations.localeOf(context);
+    if (locale.languageCode != 'en') {
+      try {
+        return DateFormat.jm(locale.toString()).format(t);
+      } catch (_) {
+        // fall through to the plain format below
+      }
+    }
     final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
     final minute = t.minute.toString().padLeft(2, '0');
     return '$hour:$minute ${t.hour >= 12 ? 'pm' : 'am'}';
   }
 
   String dayLabel(DateTime day) {
+    final l = context.l10n;
     final now = DateTime.now();
     final today = DateTime.utc(now.year, now.month, now.day);
     final that = DateTime.utc(day.year, day.month, day.day);
     final diff = today.difference(that).inDays;
 
-    if (diff == 0) return AppStrings.today;
-    if (diff == 1) return AppStrings.yesterday;
+    if (diff == 0) return l.today;
+    if (diff == 1) return l.yesterday;
 
-    return '${day.day} ${AppStrings.monthsShort[day.month - 1]} ${day.year}';
+    // 20 Nov 2026, with the month name of the language in use
+    try {
+      return DateFormat(
+        'd MMM y',
+        Localizations.localeOf(context).toString(),
+      ).format(day);
+    } catch (_) {
+      return '${day.day}/${day.month}/${day.year}';
+    }
   }
 
   // ---------- UI PIECES ----------
@@ -2082,6 +2128,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget buildBubble(Message msg) {
+    final l = context.l10n;
+
     final bubble = GestureDetector(
       onLongPress: () => showMessageOptions(msg),
       child: Container(
@@ -2139,7 +2187,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        AppStrings.forwarded,
+                        l.forwarded,
                         style: GoogleFonts.poppins(
                           color: AppColors.textSoft,
                           fontSize: 12,
@@ -2195,6 +2243,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget buildMessageList(List<Object> items) {
+    final l = context.l10n;
+
     if (_messages.loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.emerald),
@@ -2206,7 +2256,7 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            AppStrings.couldNotLoadMessages,
+            l.couldNotLoadMessages,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
           ),
@@ -2217,7 +2267,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_messages.messages.isEmpty) {
       return Center(
         child: Text(
-          AppStrings.noMessagesYet,
+          l.noMessagesYet,
           textAlign: TextAlign.center,
           style: GoogleFonts.poppins(
             color: AppColors.textSoft,
@@ -2351,6 +2401,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget buildInputBar() {
+    final l = context.l10n;
     final draft = _composer.draftImageFile;
     final listening = _voice.listening;
 
@@ -2387,9 +2438,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(child: Text(AppStrings.photoAttached)),
+                  Expanded(child: Text(l.photoAttached)),
                   IconButton(
-                    tooltip: AppStrings.removePhoto,
+                    tooltip: l.removePhoto,
                     onPressed: _composer.clearDraftImage,
                     icon: const Icon(AppIcons.close),
                   ),
@@ -2440,9 +2491,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             _composer.setHasText(value.trim().isNotEmpty);
                           },
                           decoration: InputDecoration(
-                            hintText: listening
-                                ? AppStrings.listening
-                                : AppStrings.messageHint,
+                            hintText:
+                            listening ? l.listening : l.messageHint,
                             hintStyle: GoogleFonts.poppins(
                               color: AppColors.textSoft,
                               fontSize: 17,
@@ -2582,6 +2632,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // the normal top bar of the chat
   AppBar buildNormalAppBar() {
+    final l = context.l10n;
+
     return AppBar(
       backgroundColor: AppColors.emerald,
       foregroundColor: Colors.white,
@@ -2706,13 +2758,13 @@ class _ChatScreenState extends State<ChatScreen> {
             _menuItem(
               'info',
               widget.isGroup ? AppIcons.groupInfo : AppIcons.person,
-              widget.isGroup ? AppStrings.groupInfo : AppStrings.viewProfile,
+              widget.isGroup ? l.groupInfo : l.viewProfile,
             ),
-            _menuItem('search', AppIcons.search, AppStrings.search),
+            _menuItem('search', AppIcons.search, l.search),
             _menuItem(
               'media',
               AppIcons.media,
-              AppStrings.mediaLinksDocs,
+              l.mediaLinksDocs,
             ),
             // in a group only the admin can clear the chat for everyone
             if (!widget.isGroup || _group.isAdmin) ...[
@@ -2720,7 +2772,7 @@ class _ChatScreenState extends State<ChatScreen> {
               _menuItem(
                 'clear',
                 AppIcons.clearChat,
-                AppStrings.clearChat,
+                l.clearChat,
                 danger: true,
               ),
             ],
@@ -2732,6 +2784,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // the top bar while searching: a text box, a counter and two arrows
   AppBar buildSearchAppBar(int total) {
+    final l = context.l10n;
+
     return AppBar(
       backgroundColor: AppColors.emerald,
       foregroundColor: Colors.white,
@@ -2752,7 +2806,7 @@ class _ChatScreenState extends State<ChatScreen> {
         onChanged: onSearchChanged,
         onSubmitted: (_) => goToMatch(1),
         decoration: InputDecoration(
-          hintText: AppStrings.searchHint,
+          hintText: l.searchHint,
           hintStyle: GoogleFonts.poppins(
             color: AppColors.onEmeraldHint,
             fontSize: 17,
@@ -2767,8 +2821,8 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.only(right: 4),
               child: Text(
                 total == 0
-                    ? AppStrings.noResults
-                    : AppStrings.matchOf(_search.currentMatch + 1, total),
+                    ? l.noResults
+                    : l.matchOf(_search.currentMatch + 1, total),
                 style: GoogleFonts.poppins(color: Colors.white, fontSize: 13),
               ),
             ),
@@ -2840,7 +2894,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   horizontal: 12,
                 ),
                 child: Text(
-                  AppStrings.disappearingNotice(
+                  context.l10n.disappearingNotice(
                     _disappearLabel(_messages.disappearMs),
                   ),
                   textAlign: TextAlign.center,

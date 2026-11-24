@@ -1,7 +1,9 @@
+// full screen photo viewer: swipe left and right, pinch to zoom
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../services/chat_media.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../models/media_entry.dart';
 import 'widgets/media_widgets.dart';
@@ -48,7 +50,7 @@ class _MediaViewerScreenState extends State<MediaViewerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              entry.isMe ? AppStrings.you : widget.otherName,
+              entry.isMe ? context.l10n.you : widget.otherName,
               style: GoogleFonts.poppins(
                 color: Colors.white,
                 fontSize: 17,

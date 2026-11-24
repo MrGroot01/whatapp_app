@@ -5,6 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:intl/intl.dart';
+
+import '../core/app_text.dart';
 import 'notification_service.dart';
 
 const List<String> _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -13,10 +16,28 @@ const List<String> _months = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-String formatTaskDate(DateTime d) =>
-    '${_weekdays[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]} ${d.year}';
+// Mon, 20 Nov 2026 in English; the language's own names in the others
+String formatTaskDate(DateTime d) {
+  final code = AppText.languageCode;
+  if (code != 'en') {
+    try {
+      return DateFormat('EEE, d MMM y', code).format(d);
+    } catch (_) {
+      // fall through to the English format below
+    }
+  }
+  return '${_weekdays[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]} ${d.year}';
+}
 
 String formatTaskTime(DateTime d) {
+  final code = AppText.languageCode;
+  if (code != 'en') {
+    try {
+      return DateFormat.jm(code).format(d);
+    } catch (_) {
+      // fall through to the English format below
+    }
+  }
   final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
   final minute = d.minute.toString().padLeft(2, '0');
   return '$hour:$minute ${d.hour >= 12 ? 'PM' : 'AM'}';
@@ -29,20 +50,24 @@ class ReminderOption {
   const ReminderOption(this.label, this.minutes);
 }
 
-const List<ReminderOption> reminderOptions = [
-  ReminderOption('No reminder', -1),
-  ReminderOption('At due time', 0),
-  ReminderOption('10 minutes before', 10),
-  ReminderOption('1 hour before', 60),
-  ReminderOption('2 hours before', 120),
-  ReminderOption('1 day before', 1440),
-];
+// the choices, in the language in use
+List<ReminderOption> get reminderOptions {
+  final l = AppText.l;
+  return [
+    ReminderOption(l.noReminder, -1),
+    ReminderOption(l.reminderAtDue, 0),
+    ReminderOption(l.reminder10Min, 10),
+    ReminderOption(l.reminder1Hour, 60),
+    ReminderOption(l.reminder2Hours, 120),
+    ReminderOption(l.reminder1Day, 1440),
+  ];
+}
 
 String reminderLabel(int minutes) {
   for (final o in reminderOptions) {
     if (o.minutes == minutes) return o.label;
   }
-  return 'No reminder';
+  return AppText.l.noReminder;
 }
 
 // ---------- one saved contact (for the "Assign to" list) ----------
@@ -130,7 +155,7 @@ class TaskService {
 
   static const Duration _timeout = Duration(seconds: 10);
 
-  static String? get _uid => FirebaseAuth.instance.      currentUser?.uid;
+  static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
   static String? get myUid => _uid;
 
   // my name, shown to the person I assign a task to
@@ -139,7 +164,7 @@ class TaskService {
     final name = user?.displayName?.trim() ?? '';
     if (name.isNotEmpty) return name;
     final email = user?.email ?? '';
-    return email.contains('@') ? email.split('@').first : 'Someone';
+    return email.contains('@') ? email.split('@').first : AppText.l.someone;
   }
 
   static DatabaseReference? get _tasksRef {
@@ -178,7 +203,7 @@ class TaskService {
             list.add(
               TaskContact(
                 uid: key.toString(),
-                name: (data['name'] ?? 'Contact').toString(),
+                name: (data['name'] ?? AppText.l.attachContact).toString(),
               ),
             );
           }
@@ -356,8 +381,8 @@ class TaskService {
       id: notificationId,
       title: title,
       body: reminderMinutes == 0
-          ? 'Due now'
-          : 'Due ${formatTaskDate(due)}, ${formatTaskTime(due)}',
+          ? AppText.l.dueNow
+          : AppText.l.dueOn(formatTaskDate(due), formatTaskTime(due)),
       when: due.subtract(Duration(minutes: reminderMinutes)),
     );
   }
@@ -423,10 +448,10 @@ class TaskService {
 
         // a brand new task: tell me right away
         if (!t.seen && _announced.add(t.id)) {
-          final who = t.createdByName.isEmpty ? 'a contact' : t.createdByName;
+          final who = t.createdByName.isEmpty ? AppText.l.aContact : t.createdByName;
           await NotificationService.schedule(
             id: _announceId(t.notificationId),
-            title: 'New task from $who',
+            title: AppText.l.newTaskFrom(who),
             body: t.title,
             when: DateTime.now().add(const Duration(seconds: 2)),
           );

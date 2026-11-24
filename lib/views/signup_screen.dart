@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:math';
 
@@ -6,13 +5,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'widgets/country_code_dropdown.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../services/phone_helper.dart';
 import 'otp_screen.dart';
+import 'widgets/country_code_dropdown.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -47,43 +46,47 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   String? validateEmail(String? value) {
+    final l = context.l10n;
     final email = value?.trim() ?? '';
-    if (email.isEmpty) return AppStrings.enterEmail;
+    if (email.isEmpty) return l.enterEmail;
     final regex =
     RegExp(r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
     if (!regex.hasMatch(email)) {
-      return AppStrings.invalidEmail;
+      return l.invalidEmail;
     }
     return null;
   }
 
   String? validateNickname(String? value) {
+    final l = context.l10n;
     final name = value?.trim() ?? '';
-    if (name.isEmpty) return AppStrings.enterNickname;
-    if (name.length < 3) return AppStrings.useAtLeast3;
-    if (name.length > 20) return AppStrings.useAtMost20;
+    if (name.isEmpty) return l.enterNickname;
+    if (name.length < 3) return l.useAtLeast3;
+    if (name.length > 20) return l.useAtMost20;
     return null;
   }
 
   String? validatePassword(String? value) {
+    final l = context.l10n;
     final pass = value ?? '';
-    if (pass.isEmpty) return AppStrings.enterNewPassword;
-    if (pass.length < 8) return AppStrings.useAtLeast8;
-    if (pass.contains(' ')) return AppStrings.noSpaces;
-    if (!RegExp(r'[A-Z]').hasMatch(pass)) return AppStrings.addCapital;
-    if (!RegExp(r'[a-z]').hasMatch(pass)) return AppStrings.addSmall;
-    if (!RegExp(r'[0-9]').hasMatch(pass)) return AppStrings.addNumber;
+    if (pass.isEmpty) return l.enterNewPassword;
+    if (pass.length < 8) return l.useAtLeast8;
+    if (pass.contains(' ')) return l.noSpaces;
+    if (!RegExp(r'[A-Z]').hasMatch(pass)) return l.addCapital;
+    if (!RegExp(r'[a-z]').hasMatch(pass)) return l.addSmall;
+    if (!RegExp(r'[0-9]').hasMatch(pass)) return l.addNumber;
     if (!RegExp(r'[!@#$%^&*(),.?":{}|<>_\-]').hasMatch(pass)) {
-      return AppStrings.addSpecial;
+      return l.addSpecial;
     }
     return null;
   }
 
   String? validateConfirm(String? value) {
+    final l = context.l10n;
     if (value == null || value.isEmpty) {
-      return AppStrings.confirmYourPassword;
+      return l.confirmYourPassword;
     }
-    if (value != passwordController.text) return AppStrings.passwordsDontMatch;
+    if (value != passwordController.text) return l.passwordsDontMatch;
     return null;
   }
 
@@ -94,22 +97,23 @@ class _SignupScreenState extends State<SignupScreen> {
   bool get hasSpecial =>
       RegExp(r'[!@#$%^&*(),.?":{}|<>_\-]').hasMatch(password);
 
-  String firebaseErrorMessage(FirebaseAuthException e) {
+  // l is passed in, so the message can be built after an "await"
+  String firebaseErrorMessage(FirebaseAuthException e, AppLocalizations l) {
     switch (e.code) {
       case 'email-already-in-use':
-        return AppStrings.emailAlreadyRegistered;
+        return l.emailAlreadyRegistered;
       case 'invalid-email':
-        return AppStrings.invalidEmailAddress;
+        return l.invalidEmailAddress;
       case 'weak-password':
-        return AppStrings.weakPassword;
+        return l.weakPassword;
       case 'operation-not-allowed':
-        return AppStrings.signupNotEnabled;
+        return l.signupNotEnabled;
       case 'network-request-failed':
-        return AppStrings.networkError;
+        return l.networkError;
       case 'too-many-requests':
-        return AppStrings.tooManyAttempts;
+        return l.tooManyAttempts;
       default:
-        return e.message ?? AppStrings.signupFailed;
+        return e.message ?? l.signupFailed;
     }
   }
 
@@ -131,7 +135,11 @@ class _SignupScreenState extends State<SignupScreen> {
 
   // write phoneIndex/{key} = uid (the rules allow this only once per number)
   // returns null when it worked, otherwise the message to show
-  Future<String?> _claimPhone(String phoneKey, String uid) async {
+  Future<String?> _claimPhone(
+      String phoneKey,
+      String uid,
+      AppLocalizations l,
+      ) async {
     try {
       await FirebaseDatabase.instance
           .ref('phoneIndex/$phoneKey')
@@ -140,17 +148,20 @@ class _SignupScreenState extends State<SignupScreen> {
       return null;
     } on FirebaseException catch (e) {
       if (e.code == 'permission-denied') {
-        return AppStrings.phoneJustTaken;
+        return l.phoneJustTaken;
       }
-      return AppStrings.phoneSaveFailedCode(e.code);
+      return l.phoneSaveFailedCode(e.code);
     } catch (e) {
-      return AppStrings.phoneSaveFailed;
+      return l.phoneSaveFailed;
     }
   }
 
   // ---------- REGISTER: account -> phone check -> OTP -> Login ----------
   Future<void> onRegisterPressed() async {
     if (!formKey.currentState!.validate()) return;
+
+    // read the texts now (before any "await")
+    final l = context.l10n;
 
     setState(() {
       isLoading = true;
@@ -177,14 +188,14 @@ class _SignupScreenState extends State<SignupScreen> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = firebaseErrorMessage(e);
+        errorMessage = firebaseErrorMessage(e, l);
       });
       return;
     } catch (_) {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = AppStrings.createAccountWentWrong;
+        errorMessage = l.createAccountWentWrong;
       });
       return;
     }
@@ -194,7 +205,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (!mounted) return;
       setState(() {
         isLoading = false;
-        errorMessage = AppStrings.accountNotCreated;
+        errorMessage = l.accountNotCreated;
       });
       return;
     }
@@ -208,8 +219,8 @@ class _SignupScreenState extends State<SignupScreen> {
       setState(() {
         isLoading = false;
         errorMessage = phoneFree == false
-            ? AppStrings.phoneAlreadyRegistered
-            : AppStrings.phoneCheckFailed;
+            ? l.phoneAlreadyRegistered
+            : l.phoneCheckFailed;
       });
       return;
     }
@@ -233,7 +244,7 @@ class _SignupScreenState extends State<SignupScreen> {
       await _cancelSignup(newUser);
       if (!mounted) return;
       setState(() {
-        errorMessage = AppStrings.verificationCancelled;
+        errorMessage = l.verificationCancelled;
       });
       return;
     }
@@ -242,7 +253,7 @@ class _SignupScreenState extends State<SignupScreen> {
     if (mounted) setState(() => isLoading = true);
 
     // STEP 4a: the OTP was correct -> claim the phone number (write once)
-    final claimError = await _claimPhone(phoneKey, newUser.uid);
+    final claimError = await _claimPhone(phoneKey, newUser.uid, l);
     if (claimError != null) {
       await _cancelSignup(newUser);
       if (!mounted) return;
@@ -339,11 +350,13 @@ class _SignupScreenState extends State<SignupScreen> {
             color: done ? AppColors.emerald : AppColors.hint,
           ),
           const SizedBox(width: 10),
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 14.5,
-              color: done ? AppColors.textDark : AppColors.textSoft,
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 14.5,
+                color: done ? AppColors.textDark : AppColors.textSoft,
+              ),
             ),
           ),
         ],
@@ -353,6 +366,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -386,20 +401,23 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    AppStrings.createAccount,
+                  Text(
+                    l.createAccount,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: AppColors.textDark,
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    AppStrings.signupSubtitle,
+                  Text(
+                    l.signupSubtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+                    style: const TextStyle(
+                      color: AppColors.textSoft,
+                      fontSize: 16,
+                    ),
                   ),
                   const SizedBox(height: 28),
                   TextFormField(
@@ -418,7 +436,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       }
                     },
                     decoration: fieldDecoration(
-                      label: AppStrings.email,
+                      label: l.email,
                       icon: AppIcons.email,
                     ),
                     validator: validateEmail,
@@ -435,7 +453,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     cursorColor: AppColors.emerald,
                     decoration: fieldDecoration(
-                      label: AppStrings.nickname,
+                      label: l.nickname,
                       icon: AppIcons.person,
                     ),
                     validator: validateNickname,
@@ -450,7 +468,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         width: 108,
                         child: CountryCodeDropdown(
                           value: countryCode,
-                          decoration: fieldDecoration(label: AppStrings.code),
+                          decoration: fieldDecoration(label: l.code),
                           onChanged: isLoading
                               ? null
                               : (value) => setState(() {
@@ -482,10 +500,13 @@ class _SignupScreenState extends State<SignupScreen> {
                             }
                           },
                           decoration: fieldDecoration(
-                            label: AppStrings.phoneNumber,
+                            label: l.phoneNumber,
                             icon: AppIcons.phone,
                           ),
-                          validator: PhoneHelper.validate,
+                          validator: (value) => PhoneHelper.validateLocalized(
+                            context.l10n,
+                            value,
+                          ),
                         ),
                       ),
                     ],
@@ -506,7 +527,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       if (errorMessage != null) errorMessage = null;
                     }),
                     decoration: fieldDecoration(
-                      label: AppStrings.password,
+                      label: l.password,
                       icon: AppIcons.password,
                       suffix: IconButton(
                         icon: Icon(
@@ -533,7 +554,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     cursorColor: AppColors.emerald,
                     decoration: fieldDecoration(
-                      label: AppStrings.confirmPassword,
+                      label: l.confirmPassword,
                       icon: AppIcons.confirmPassword,
                       suffix: IconButton(
                         icon: Icon(
@@ -559,11 +580,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        rule(AppStrings.ruleLength, hasLength),
-                        rule(AppStrings.ruleCapital, hasUpper),
-                        rule(AppStrings.ruleSmall, hasLower),
-                        rule(AppStrings.ruleNumber, hasNumber),
-                        rule(AppStrings.ruleSpecial, hasSpecial),
+                        rule(l.ruleLength, hasLength),
+                        rule(l.ruleCapital, hasUpper),
+                        rule(l.ruleSmall, hasLower),
+                        rule(l.ruleNumber, hasNumber),
+                        rule(l.ruleSpecial, hasSpecial),
                       ],
                     ),
                   ),
@@ -618,9 +639,9 @@ class _SignupScreenState extends State<SignupScreen> {
                           color: Colors.white,
                         ),
                       )
-                          : const Text(
-                        AppStrings.register,
-                        style: TextStyle(
+                          : Text(
+                        l.register,
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
@@ -630,17 +651,17 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: isLoading ? null : () => Navigator.pop(context),
-                    child: const Text.rich(
+                    child: Text.rich(
                       TextSpan(
-                        text: AppStrings.haveAccount,
-                        style: TextStyle(
+                        text: '${l.haveAccount} ',
+                        style: const TextStyle(
                           color: AppColors.textSoft,
                           fontSize: 15,
                         ),
                         children: [
                           TextSpan(
-                            text: AppStrings.logIn,
-                            style: TextStyle(
+                            text: l.logInLink,
+                            style: const TextStyle(
                               color: AppColors.emerald,
                               fontWeight: FontWeight.bold,
                             ),

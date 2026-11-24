@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../services/status_service.dart';
 
@@ -41,11 +41,12 @@ class _CreateStatusScreenState extends State<CreateStatusScreen> {
   Future<void> _send() async {
     if (_sending) return;
 
+    final l = context.l10n; // read before any "await"
     final image = widget.image;
     final text = _text.text.trim();
 
     if (image == null && text.isEmpty) {
-      _snack(AppStrings.typeSomethingFirst);
+      _snack(l.typeSomethingFirst);
       return;
     }
 
@@ -65,7 +66,7 @@ class _CreateStatusScreenState extends State<CreateStatusScreen> {
     } on TimeoutException {
       // offline: Firebase keeps the write and sends it when the internet is back
       if (!mounted) return;
-      _snack(AppStrings.statusOfflineQueued);
+      _snack(l.statusOfflineQueued);
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
@@ -95,6 +96,7 @@ class _CreateStatusScreenState extends State<CreateStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
     final image = widget.image;
 
     // ---------- PHOTO ----------
@@ -136,9 +138,9 @@ class _CreateStatusScreenState extends State<CreateStatusScreen> {
                             color: Colors.white,
                             fontSize: 16,
                           ),
-                          decoration: const InputDecoration(
-                            hintText: AppStrings.addCaption,
-                            hintStyle: TextStyle(color: Colors.white54),
+                          decoration: InputDecoration(
+                            hintText: l.addCaption,
+                            hintStyle: const TextStyle(color: Colors.white54),
                             border: InputBorder.none,
                             counterText: '',
                           ),
@@ -171,7 +173,7 @@ class _CreateStatusScreenState extends State<CreateStatusScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: AppStrings.changeColour,
+            tooltip: l.changeColour,
             icon: const Icon(AppIcons.statusChangeColour),
             onPressed: () => setState(
                   () => _bg = (_bg + 1) % StatusService.backgrounds.length,
@@ -197,9 +199,9 @@ class _CreateStatusScreenState extends State<CreateStatusScreen> {
                 fontWeight: FontWeight.w600,
                 height: 1.3,
               ),
-              decoration: const InputDecoration(
-                hintText: AppStrings.typeAStatus,
-                hintStyle: TextStyle(color: Colors.white54),
+              decoration: InputDecoration(
+                hintText: l.typeAStatus,
+                hintStyle: const TextStyle(color: Colors.white54),
                 border: InputBorder.none,
                 counterText: '',
               ),

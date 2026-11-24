@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+
+import '../core/app_text.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -108,34 +110,24 @@ class VoiceInputProvider extends ChangeNotifier {
     _listening = false;
     notifyListeners();
 
+    final l = AppText.l;
+
     if (e.errorMsg == 'error_speech_timeout' ||
         e.errorMsg == 'error_no_match') {
       // only complain if nothing was heard
       if (!_heardWords) {
-        onMessage?.call(
-          "I didn't hear anything in ${language.name}. "
-              'Tap the mic and speak clearly, or change the language '
-              '(long-press the mic).',
-        );
+        onMessage?.call(l.voiceNoSpeech(language.name));
       }
     } else if (e.errorMsg == 'error_permission') {
-      onMessage?.call('Please allow the microphone permission for this app');
+      onMessage?.call(l.micPermission);
     } else if (e.errorMsg == 'error_language_unavailable' ||
         e.errorMsg == 'error_language_not_supported') {
-      onMessage?.call(
-        '${language.name} voice typing is not ready on this phone.\n'
-            'Connect to the internet, or download ${language.name} '
-            'in the phone\'s Google voice typing settings.',
-      );
+      onMessage?.call(l.voiceLangNotReady(language.name));
     } else if (e.errorMsg == 'error_network' ||
         e.errorMsg == 'error_network_timeout') {
-      onMessage?.call(
-        'Voice error: ${e.errorMsg}\n'
-            'Check your internet, or download ${language.name} for '
-            'offline use in the phone settings, or type your message.',
-      );
+      onMessage?.call(l.voiceNetworkError(e.errorMsg, language.name));
     } else {
-      onMessage?.call('Speech error: ${e.errorMsg}');
+      onMessage?.call(l.speechError(e.errorMsg));
     }
   }
 
@@ -155,9 +147,7 @@ class VoiceInputProvider extends ChangeNotifier {
   Future<void> start(String currentText) async {
     final ok = await _init();
     if (!ok) {
-      onMessage?.call(
-        'Microphone permission is needed. Allow it in the app settings.',
-      );
+      onMessage?.call(AppText.l.micPermissionNeeded);
       return;
     }
     if (_disposed) return;

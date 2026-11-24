@@ -180,4 +180,10 @@ class AppIcons {
   // ---------- CHAT MEDIA ----------
   static const IconData emptyDocs = Icons.insert_drive_file_outlined;
   static const IconData link = Icons.link;
+
+
+  // ---------- CREATE TASK ----------
+  static const IconData reminderOff = Icons.notifications_off_outlined;
+  static const IconData reminderOn = Icons.notifications_active_outlined;
+  static const IconData calendar = Icons.calendar_today_outlined;
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_icons.dart';
+import '../core/app_localization.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
 import 'login_screen.dart';
@@ -31,8 +32,8 @@ class WelcomeScreen extends StatelessWidget {
       MaterialPageRoute(builder: (_) => const LoginScreen()),
     );
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(AppStrings.accountCreated),
+      SnackBar(
+        content: Text(context.l10n.accountCreated),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -40,6 +41,8 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     // light (white) clock and icons on top of the green header
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
@@ -93,7 +96,7 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 28),
 
-                      // BRAND NAME
+                      // BRAND NAME (the same in every language)
                       Text(
                         AppStrings.appName.toUpperCase(),
                         style: const TextStyle(
@@ -104,9 +107,9 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      const Text(
-                        AppStrings.premiumMessaging,
-                        style: TextStyle(
+                      Text(
+                        l.premiumMessaging,
+                        style: const TextStyle(
                           color: AppColors.goldLight,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -129,40 +132,40 @@ class WelcomeScreen extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        AppStrings.tagline,
+                      Text(
+                        l.tagline,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: AppColors.textDark,
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 10),
-                      const Text(
-                        AppStrings.welcomeBody,
+                      Text(
+                        l.welcomeBody,
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: AppColors.bodyText,
                           fontSize: 16,
                           height: 1.45,
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const Row(
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _Perk(
                             icon: AppIcons.perkPrivate,
-                            label: AppStrings.perkPrivate,
+                            label: l.perkPrivate,
                           ),
                           _Perk(
                             icon: AppIcons.perkFast,
-                            label: AppStrings.perkFast,
+                            label: l.perkFast,
                           ),
                           _Perk(
                             icon: AppIcons.perkGroups,
-                            label: AppStrings.perkGroups,
+                            label: l.perkGroups,
                           ),
                         ],
                       ),
@@ -182,9 +185,9 @@ class WelcomeScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: const Text(
-                            AppStrings.getStarted,
-                            style: TextStyle(
+                          child: Text(
+                            l.getStarted,
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
                             ),
@@ -196,17 +199,17 @@ class WelcomeScreen extends StatelessWidget {
                       // NEW USERS
                       TextButton(
                         onPressed: () => _openSignup(context),
-                        child: const Text.rich(
+                        child: Text.rich(
                           TextSpan(
-                            text: AppStrings.newHere,
-                            style: TextStyle(
+                            text: '${l.newHere} ',
+                            style: const TextStyle(
                               color: AppColors.bodyText,
                               fontSize: 15,
                             ),
                             children: [
                               TextSpan(
-                                text: AppStrings.createAnAccount,
-                                style: TextStyle(
+                                text: l.createAnAccount,
+                                style: const TextStyle(
                                   color: AppColors.emerald,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -229,8 +232,8 @@ class WelcomeScreen extends StatelessWidget {
 
 // One small perk: round icon with a label below
 class _Perk extends StatelessWidget {
-final IconData icon;
-final String label;
+  final IconData icon;
+  final String label;
 
   const _Perk({required this.icon, required this.label});
 

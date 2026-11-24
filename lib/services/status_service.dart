@@ -6,8 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 
+import '../core/app_text.dart';
 import 'message_sync_service.dart';
-
 // a contact whose status we want to watch (built in home_screen.dart)
 class StatusContact {
   final String id;
@@ -74,7 +74,7 @@ class StatusItem {
           viewers.add(
             StatusViewer(
               uid: key.toString(),
-              name: (value['name'] ?? 'Someone').toString(),
+              name: (value['name'] ?? AppText.l.someone).toString(),
               at: _int(value['at']),
             ),
           );
@@ -126,7 +126,7 @@ class StatusService {
     final u = FirebaseAuth.instance.currentUser;
     return (u?.displayName?.isNotEmpty ?? false)
         ? u!.displayName!
-        : (u?.email ?? 'Someone');
+        : (u?.email ?? AppText.l.someone);
   }
 
   // Firebase server time (the phone clock, corrected)
@@ -162,7 +162,7 @@ class StatusService {
   // ---------- POST ----------
   static Future<void> postText(String text, int bgColor) async {
     final uid = myUid;
-    if (uid.isEmpty) throw Exception('Please log in again');
+    if (uid.isEmpty) throw Exception(AppText.l.pleaseLogInAgain);
 
     final now = nowMs();
     await _db.ref('statuses/$uid').push().set({
@@ -176,12 +176,12 @@ class StatusService {
 
   static Future<void> postImage(File file, String caption) async {
     final uid = myUid;
-    if (uid.isEmpty) throw Exception('Please log in again');
+    if (uid.isEmpty) throw Exception(AppText.l.pleaseLogInAgain);
 
     final bytes = await file.readAsBytes();
     final encoded = base64Encode(bytes);
     if (encoded.length > _maxImageChars) {
-      throw Exception('Photo is too large. Please choose a smaller one.');
+      throw Exception(AppText.l.photoTooLarge);
     }
 
     final ref = _db.ref('statuses/$uid').push();
@@ -266,11 +266,12 @@ class StatusService {
 
   // ---------- TEXT HELPERS ----------
   static String timeAgo(int ms) {
+    final l = AppText.l;
     final minutes = (nowMs() - ms) ~/ 60000;
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return '$minutes min ago';
+    if (minutes < 1) return l.justNow;
+    if (minutes < 60) return l.minutesAgo(minutes);
     final hours = minutes ~/ 60;
-    if (hours < 24) return '$hours hr ago';
-    return 'Yesterday';
+    if (hours < 24) return l.hoursAgo(hours);
+    return l.yesterday;
   }
 }

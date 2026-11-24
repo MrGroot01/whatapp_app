@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../providers/account_provider.dart';
+import '../providers/locale_provider.dart';
 import 'add_contact_action.dart';
+import 'language_screen.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 
@@ -14,8 +16,9 @@ class SettingsItem {
   final IconData icon;
   final String title;
   final String subtitle;
+  final String id; // '' = no action yet
 
-  const SettingsItem(this.icon, this.title, this.subtitle);
+  const SettingsItem(this.icon, this.title, this.subtitle, {this.id = ''});
 }
 
 // The provider is created here, inside the screen, so it stops when the
@@ -48,50 +51,12 @@ class _SettingsViewState extends State<_SettingsView> {
   final searchController = TextEditingController();
   String searchText = '';
 
-  final List<SettingsItem> items = const [
-    SettingsItem(
-      AppIcons.settingsAccount,
-      AppStrings.settingsAccount,
-      AppStrings.settingsAccountSub,
-    ),
-    SettingsItem(
-      AppIcons.settingsPrivacy,
-      AppStrings.settingsPrivacy,
-      AppStrings.settingsPrivacySub,
-    ),
-    SettingsItem(
-      AppIcons.settingsChats,
-      AppStrings.chats,
-      AppStrings.settingsChatsSub,
-    ),
-    SettingsItem(
-      AppIcons.settingsNotifications,
-      AppStrings.settingsNotifications,
-      AppStrings.settingsNotificationsSub,
-    ),
-    SettingsItem(
-      AppIcons.settingsStorage,
-      AppStrings.settingsStorage,
-      AppStrings.settingsStorageSub,
-    ),
-    SettingsItem(
-      AppIcons.settingsLanguage,
-      AppStrings.settingsLanguage,
-      AppStrings.settingsLanguageSub,
-    ),
-    SettingsItem(
-      AppIcons.settingsHelp,
-      AppStrings.settingsHelp,
-      AppStrings.settingsHelpSub,
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
     // the provider tells the screen when the picture was saved
     context.read<AccountProvider>().onPhotoUpdated = () {
-      _showMessage(AppStrings.profilePhotoUpdated);
+      if (mounted) _showMessage(context.l10n.profilePhotoUpdated);
     };
   }
 
@@ -124,37 +89,53 @@ class _SettingsViewState extends State<_SettingsView> {
     );
   }
 
+  // open the list of app languages
+  void _openLanguage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LanguageScreen()),
+    );
+  }
+
+  // the action of a row (null = the row does nothing yet)
+  VoidCallback? _actionFor(SettingsItem item) {
+    if (item.id == 'language') return _openLanguage;
+    return null;
+  }
+
   // ---------- LOGOUT ----------
   Future<void> _confirmLogout() async {
+    final l = context.l10n;
+
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          AppStrings.logOutTitle,
-          style: TextStyle(
+        title: Text(
+          l.logOutTitle,
+          style: const TextStyle(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
-        content: const Text(
-          AppStrings.logOutBody,
-          style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+        content: Text(
+          l.logOutBody,
+          style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              AppStrings.cancel,
-              style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+            child: Text(
+              l.cancel,
+              style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              AppStrings.logOut,
-              style: TextStyle(
+            child: Text(
+              l.logOut,
+              style: const TextStyle(
                 color: AppColors.error,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -279,11 +260,59 @@ class _SettingsViewState extends State<_SettingsView> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     // rebuilds whenever the provider changes (name, picture, uploading...)
     final account = context.watch<AccountProvider>();
 
+    // rebuilds when the app language changes
+    final language = context.watch<LocaleProvider>();
+    final languageName = language.isSystemDefault
+        ? l.systemDefault
+        : (LocaleProvider.nativeNames[language.locale!.languageCode] ?? '');
+
     final displayName = account.displayName;
     final fullPhone = account.fullPhone;
+
+    // the rows of the list, in the language in use
+    final items = <SettingsItem>[
+      SettingsItem(
+        AppIcons.settingsAccount,
+        l.settingsAccount,
+        l.settingsAccountSub,
+      ),
+      SettingsItem(
+        AppIcons.settingsPrivacy,
+        l.settingsPrivacy,
+        l.settingsPrivacySub,
+      ),
+      SettingsItem(
+        AppIcons.settingsChats,
+        l.chats,
+        l.settingsChatsSub,
+      ),
+      SettingsItem(
+        AppIcons.settingsNotifications,
+        l.settingsNotifications,
+        l.settingsNotificationsSub,
+      ),
+      SettingsItem(
+        AppIcons.settingsStorage,
+        l.settingsStorage,
+        l.settingsStorageSub,
+      ),
+      SettingsItem(
+        AppIcons.settingsLanguage,
+        l.settingsLanguage,
+        languageName,
+        id: 'language',
+      ),
+      SettingsItem(
+        AppIcons.settingsHelp,
+        l.settingsHelp,
+        l.settingsHelpSub,
+      ),
+    ];
 
     // keep only the rows that match the search text
     final shownItems = items
@@ -438,7 +467,7 @@ class _SettingsViewState extends State<_SettingsView> {
                     });
                   },
                   decoration: InputDecoration(
-                    hintText: AppStrings.searchSettings,
+                    hintText: l.searchSettings,
                     hintStyle: const TextStyle(
                       color: AppColors.textSoft,
                       fontSize: 16,
@@ -464,28 +493,27 @@ class _SettingsViewState extends State<_SettingsView> {
                 ),
                 const SizedBox(height: 20),
 
+                // ADD NEW CONTACT (same shared code as the Home screen)
                 whiteCard(
                   child: settingsRow(
-                    const SettingsItem(
+                    SettingsItem(
                       AppIcons.addContact,
-
-                      AppStrings.addNewContact,
-                      AppStrings.addNewContactSub,
+                      l.addNewContact,
+                      l.addNewContactSub,
                     ),
                     onTap: () => openAddContact(context),
                   ),
                 ),
-                const SizedBox(height: 10),
-
+                const SizedBox(height: 20),
 
                 // SETTINGS ROWS (inside one white card)
                 if (shownItems.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Text(
-                      AppStrings.noSettingsFound,
+                      l.noSettingsFound,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: AppColors.textSoft,
                         fontSize: 16,
                       ),
@@ -496,7 +524,10 @@ class _SettingsViewState extends State<_SettingsView> {
                     child: Column(
                       children: [
                         for (int i = 0; i < shownItems.length; i++) ...[
-                          settingsRow(shownItems[i]),
+                          settingsRow(
+                            shownItems[i],
+                            onTap: _actionFor(shownItems[i]),
+                          ),
                           if (i != shownItems.length - 1)
                             const Divider(
                               height: 1,
@@ -530,9 +561,9 @@ class _SettingsViewState extends State<_SettingsView> {
                         size: 24,
                       ),
                     ),
-                    title: const Text(
-                      AppStrings.logOut,
-                      style: TextStyle(
+                    title: Text(
+                      l.logOut,
+                      style: const TextStyle(
                         color: AppColors.error,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,

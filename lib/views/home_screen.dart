@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_icons.dart';
+import '../core/app_localization.dart';
 import '../core/app_strings.dart';
 import '../core/app_theme.dart';
 import '../services/group_service.dart';
@@ -113,19 +115,36 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // Displays a readable timestamp beside each chat
+  // (3:05 pm in English; the language's own style in the others)
   String _formatListTime(int ms) {
-    final t = DateTime.fromMillisecondsSinceEpoch(ms); // converts the timestamp into a DataTime
-    final now = DateTime.now(); // gets the current data and time
-    final today = DateTime(now.year, now.month, now.day); //creates today's data with time set to midnight
-    final day = DateTime(t.year, t.month, t.day); // create the message date with time set to midnight
-    final diff = today.difference(day).inDays; // calculate the difference in calendar days
+    final t = DateTime.fromMillisecondsSinceEpoch(ms);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(t.year, t.month, t.day);
+    final diff = today.difference(day).inDays;
+    final code = Localizations.localeOf(context).languageCode;
 
     if (diff <= 0) {
+      if (code != 'en') {
+        try {
+          return DateFormat.jm(code).format(t);
+        } catch (_) {
+          // fall through to the English style below
+        }
+      }
       final hour = t.hour % 12 == 0 ? 12 : t.hour % 12;
       final minute = t.minute.toString().padLeft(2, '0');
       return '$hour:$minute ${t.hour >= 12 ? 'pm' : 'am'}';
     }
-    if (diff == 1) return AppStrings.yesterday;
+    if (diff == 1) return context.l10n.yesterday;
+
+    if (code != 'en') {
+      try {
+        return DateFormat.yMd(code).format(t);
+      } catch (_) {
+        // fall through to the English style below
+      }
+    }
     return '${t.day}/${t.month}/${t.year}';
   }
 
@@ -134,6 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
       String fallback, {
         bool isGroup = false,
       }) {
+    final l = context.l10n;
     const baseStyle = TextStyle(color: AppColors.textSoft, fontSize: 15);
 
     final last = _chatList.visibleLast(chatId);
@@ -164,9 +184,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     String text = last.preview;
     if (isCall) {
-      text = mine ? AppStrings.videoCallNoAnswer : AppStrings.missedVideoCall;
+      text = mine ? l.videoCallNoAnswer : l.missedVideoCall;
     } else if (isGroup && mine) {
-      text = AppStrings.youPrefix(text);
+      text = l.youPrefix(text);
     }
 
     return Row(
@@ -209,6 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final ids = _selection.selectedIds; // a copy of the selected chat ids
     if (_currentUid == null || ids.isEmpty) return;
 
+    final l = context.l10n;
     final count = ids.length;
     final ok = await showDialog<bool>(
       context: context,
@@ -216,31 +237,29 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          count == 1
-              ? AppStrings.deleteChatTitle
-              : AppStrings.deleteChatsTitle(count),
+          count == 1 ? l.deleteChatTitle : l.deleteChatsTitle(count),
           style: const TextStyle(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
-        content: const Text(
-          AppStrings.deleteChatBody,
-          style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+        content: Text(
+          l.deleteChatBody,
+          style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              AppStrings.cancel,
-              style: TextStyle(color: AppColors.textSoft, fontSize: 16),
+            child: Text(
+              l.cancel,
+              style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              AppStrings.delete,
-              style: TextStyle(
+            child: Text(
+              l.delete,
+              style: const TextStyle(
                 color: AppColors.error,
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -261,9 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            count == 1
-                ? AppStrings.chatDeleted
-                : AppStrings.chatsDeleted(count),
+            count == 1 ? l.chatDeleted : l.chatsDeleted(count),
           ),
         ),
       );
@@ -271,8 +288,8 @@ class _HomeScreenState extends State<HomeScreen> {
       debugPrint('[HomeScreen] Delete chats failed: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppStrings.couldNotDelete),
+        SnackBar(
+          content: Text(l.couldNotDelete),
         ),
       );
     }
@@ -305,6 +322,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // the "+" button: New group / New contact (like WhatsApp's "New chat")
   Future<void> _openNewChatSheet() async {
+    final l = context.l10n;
+
     Widget option(IconData icon, String label, String value, BuildContext c) {
       return ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
@@ -336,11 +355,11 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(24, 20, 24, 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Text(
-                AppStrings.newChat,
-                style: TextStyle(
+                l.newChat,
+                style: const TextStyle(
                   color: AppColors.textDark,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
@@ -349,13 +368,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             option(
               AppIcons.addGroup,
-              AppStrings.newGroup,
+              l.newGroup,
               'group',
               sheetContext,
             ),
             option(
               AppIcons.addContact,
-              AppStrings.newContact,
+              l.newContact,
               'contact',
               sheetContext,
             ),
@@ -397,7 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // the last message (or the member count when there is none)
       subtitle: _buildLastLine(
         group.id,
-        AppStrings.membersCount(group.members.length),
+        context.l10n.membersCount(group.members.length),
         isGroup: true,
       ),
       trailing: _buildTimeText(group.id),
@@ -462,7 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       // the last message (the phone number is no longer shown here)
-      subtitle: _buildLastLine(chatId, AppStrings.tapToStartChatting),
+      subtitle: _buildLastLine(chatId, context.l10n.tapToStartChatting),
       trailing: _buildTimeText(chatId, fallback: contact.time),
       onLongPress: () => _selection.toggle(chatId),
       onTap: () {
@@ -500,8 +519,8 @@ class _HomeScreenState extends State<HomeScreen> {
         valueListenable: MessageSyncService.connection,
         builder: (context, state, _) {
           final message = state == ConnState.offline
-              ? AppStrings.offlineNoContacts
-              : AppStrings.noChatsYet;
+              ? context.l10n.offlineNoContacts
+              : context.l10n.noChatsYet;
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -615,6 +634,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ContactsProvider contactsState,
       GroupsProvider groupsState,
       ) {
+    final l = context.l10n;
     final uid = _currentUid;
     final selecting = selection.isSelecting;
     final contacts = contactsState.contacts;
@@ -647,7 +667,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           )
               : Text(
-            _tab == 0 ? AppStrings.homeTitle : AppStrings.updates,
+            _tab == 0 ? AppStrings.homeTitle : l.updates,
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
@@ -657,7 +677,7 @@ class _HomeScreenState extends State<HomeScreen> {
           actions: selecting
               ? [
             IconButton(
-              tooltip: AppStrings.delete,
+              tooltip: l.delete,
               icon: const Icon(AppIcons.deleteChat, color: Colors.white),
               onPressed: _deleteSelected,
             ),
@@ -667,9 +687,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (_tab == 0)
               Consumer<SearchProvider>(
                 builder: (_, search, _) => IconButton(
-                  tooltip: search.isSearching
-                      ? AppStrings.closeSearch
-                      : AppStrings.search,
+                  tooltip: search.isSearching ? l.closeSearch : l.search,
                   icon: Icon(
                     search.isSearching ? AppIcons.close : AppIcons.search,
                     color: Colors.white,
@@ -682,7 +700,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
             IconButton(
-              tooltip: AppStrings.myTasks,
+              tooltip: l.myTasks,
               icon: const Icon(AppIcons.tasks, color: Colors.white),
               onPressed: () => Navigator.push(
                 context,
@@ -703,7 +721,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onPressed: _openNewChatSheet,
           backgroundColor: AppColors.emerald,
           foregroundColor: Colors.white,
-          tooltip: AppStrings.newChat,
+          tooltip: l.newChat,
           child: const Icon(AppIcons.newChat),
         ),
 
@@ -716,18 +734,22 @@ class _HomeScreenState extends State<HomeScreen> {
             _selection.clear(); // leaving the tab leaves delete mode
             setState(() => _tab = i);
           },
-          destinations: const [
+          destinations: [
             NavigationDestination(
-              icon: Icon(AppIcons.chatsTab),
-              selectedIcon:
-              Icon(AppIcons.chatsTabSelected, color: AppColors.emerald),
-              label: AppStrings.chats,
+              icon: const Icon(AppIcons.chatsTab),
+              selectedIcon: const Icon(
+                AppIcons.chatsTabSelected,
+                color: AppColors.emerald,
+              ),
+              label: l.chats,
             ),
             NavigationDestination(
-              icon: Icon(AppIcons.updatesTab),
-              selectedIcon:
-              Icon(AppIcons.updatesTabSelected, color: AppColors.emerald),
-              label: AppStrings.updates,
+              icon: const Icon(AppIcons.updatesTab),
+              selectedIcon: const Icon(
+                AppIcons.updatesTabSelected,
+                color: AppColors.emerald,
+              ),
+              label: l.updates,
             ),
           ],
         ),
@@ -770,7 +792,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onChanged: (value) =>
                         context.read<SearchProvider>().setQuery(value),
                     decoration: InputDecoration(
-                      hintText: AppStrings.search,
+                      hintText: l.search,
                       hintStyle: const TextStyle(
                         color: AppColors.textSoft,
                         fontSize: 16,
@@ -798,10 +820,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
             Expanded(
               child: uid == null
-                  ? const Center(
+                  ? Center(
                 child: Text(
-                  AppStrings.pleaseLogIn,
-                  style: TextStyle(
+                  l.pleaseLogIn,
+                  style: const TextStyle(
                     color: AppColors.textSoft,
                     fontSize: 17,
                   ),

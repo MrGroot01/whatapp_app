@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/app_text.dart';
 import '../services/group_service.dart';
 
 class GroupChatProvider extends ChangeNotifier {
@@ -30,13 +31,14 @@ class GroupChatProvider extends ChangeNotifier {
   String? nameOf(String id) => _memberNames[id];
 
   String get membersLine {
+    final you = AppText.l.you;
     final names = <String>[];
     for (final id in _memberIds) {
-      names.add(id == myUid ? 'You' : (_memberNames[id] ?? '...'));
+      names.add(id == myUid ? you : (_memberNames[id] ?? '...'));
     }
     names.sort((a, b) {
-      if (a == 'You') return -1;
-      if (b == 'You') return 1;
+      if (a == you) return -1;
+      if (b == you) return 1;
       return a.toLowerCase().compareTo(b.toLowerCase());
     });
     return names.join(', ');

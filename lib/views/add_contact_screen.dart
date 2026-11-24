@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../models/found_profile.dart';
 import '../providers/add_contact_provider.dart';
@@ -117,7 +117,7 @@ class _AddContactViewState extends State<_AddContactView> {
     if (provider.saving) return;
 
     final email = emailController.text.trim().toLowerCase();
-    if (AddContactProvider.validateEmail(email) != null) {
+    if (AddContactProvider.validateEmail(context.l10n, email) != null) {
       formKey.currentState!.validate(); // shows the red email message
       return;
     }
@@ -197,6 +197,8 @@ class _AddContactViewState extends State<_AddContactView> {
   }
 
   Widget _lookupStatus(AddContactProvider add) {
+    final l = context.l10n;
+
     switch (add.state) {
       case LookupState.idle:
       case LookupState.loading:
@@ -208,39 +210,31 @@ class _AddContactViewState extends State<_AddContactView> {
           return _statusRow(
             AppIcons.info,
             AppColors.textSoft,
-            AppStrings.userFoundNoPhone,
+            l.userFoundNoPhone,
           );
         }
         return _statusRow(
           AppIcons.found,
           AppColors.emerald,
-          found.name.isEmpty
-              ? AppStrings.userFound
-              : AppStrings.userFoundName(found.name),
+          found.name.isEmpty ? l.userFound : l.userFoundName(found.name),
         );
       case LookupState.notFound:
-        return _statusRow(
-          AppIcons.error,
-          AppColors.error,
-          AppStrings.userNotFound,
-        );
+        return _statusRow(AppIcons.error, AppColors.error, l.userNotFound);
       case LookupState.self:
-        return _statusRow(
-          AppIcons.error,
-          AppColors.error,
-          AppStrings.cannotAddSelf,
-        );
+        return _statusRow(AppIcons.error, AppColors.error, l.cannotAddSelf);
       case LookupState.error:
         return _statusRow(
           AppIcons.error,
           AppColors.error,
-          add.lookupError ?? AppStrings.lookupFailed,
+          add.lookupError ?? l.lookupFailed,
         );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     // rebuilds whenever the provider changes (lookup state, saving...)
     final add = context.watch<AddContactProvider>();
     final isSaving = add.saving;
@@ -252,9 +246,9 @@ class _AddContactViewState extends State<_AddContactView> {
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
-        title: const Text(
-          AppStrings.newContact,
-          style: TextStyle(fontWeight: FontWeight.w700),
+        title: Text(
+          l.newContact,
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         elevation: 0,
       ),
@@ -283,10 +277,10 @@ class _AddContactViewState extends State<_AddContactView> {
                 ),
                 const SizedBox(height: 24),
 
-                const Text(
-                  AppStrings.addContactTitle,
+                Text(
+                  l.addContactTitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.textDark,
                     fontSize: 25,
                     fontWeight: FontWeight.w800,
@@ -294,10 +288,10 @@ class _AddContactViewState extends State<_AddContactView> {
                 ),
                 const SizedBox(height: 8),
 
-                const Text(
-                  AppStrings.addContactSubtitle,
+                Text(
+                  l.addContactSubtitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.textSoft,
                     fontSize: 15,
                   ),
@@ -309,10 +303,11 @@ class _AddContactViewState extends State<_AddContactView> {
                   controller: nameController,
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
-                  validator: AddContactProvider.validateName,
+                  validator: (value) =>
+                      AddContactProvider.validateName(context.l10n, value),
                   enabled: !isSaving,
                   decoration: decoration(
-                    label: AppStrings.contactNameLabel,
+                    label: l.contactNameLabel,
                     icon: AppIcons.person,
                   ),
                 ),
@@ -325,11 +320,12 @@ class _AddContactViewState extends State<_AddContactView> {
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
-                  validator: AddContactProvider.validateEmail,
+                  validator: (value) =>
+                      AddContactProvider.validateEmail(context.l10n, value),
                   enabled: !isSaving,
                   onChanged: context.read<AddContactProvider>().onEmailChanged,
                   decoration: decoration(
-                    label: AppStrings.registeredEmailLabel,
+                    label: l.registeredEmailLabel,
                     icon: AppIcons.email,
                     suffix: add.state == LookupState.loading
                         ? const Padding(
@@ -357,7 +353,7 @@ class _AddContactViewState extends State<_AddContactView> {
                       width: 108,
                       child: CountryCodeDropdown(
                         value: countryCode,
-                        decoration: decoration(label: AppStrings.code),
+                        decoration: decoration(label: l.code),
                         onChanged: (isSaving || phoneLocked)
                             ? null
                             : (value) => setState(() => countryCode = value),
@@ -376,13 +372,17 @@ class _AddContactViewState extends State<_AddContactView> {
                             RegExp(r'[0-9\s()\-]'),
                           ),
                         ],
-                        validator: (value) =>
-                        phoneLocked ? null : PhoneHelper.validate(value),
+                        validator: (value) => phoneLocked
+                            ? null
+                            : PhoneHelper.validateLocalized(
+                          context.l10n,
+                          value,
+                        ),
                         onFieldSubmitted: (_) {
                           if (!isSaving && !blocked) _save();
                         },
                         decoration: decoration(
-                          label: AppStrings.phoneNumber,
+                          label: l.phoneNumber,
                           icon: AppIcons.phone,
                           locked: phoneLocked,
                         ),
@@ -433,9 +433,9 @@ class _AddContactViewState extends State<_AddContactView> {
                         color: Colors.white,
                       ),
                     )
-                        : const Text(
-                      AppStrings.saveContact,
-                      style: TextStyle(
+                        : Text(
+                      l.saveContact,
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),

@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_icons.dart';
-import '../core/app_strings.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../services/group_service.dart';
 import '../providers/group_info_provider.dart';
@@ -68,6 +68,8 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   }
 
   Future<bool?> _confirm(String title, String message, String action) {
+    final l = context.l10n;
+
     return showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -88,7 +90,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
-              AppStrings.cancel,
+              l.cancel,
               style: GoogleFonts.poppins(color: AppColors.textSoft),
             ),
           ),
@@ -110,6 +112,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   // ---------- ADMIN ACTIONS ----------
   // each action: ask the user (dialog / picker), then the provider does it
   Future<void> _rename() async {
+    final l = context.l10n;
     final provider = context.read<GroupInfoProvider>();
     final g = provider.group;
     if (g == null) return;
@@ -121,7 +124,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          AppStrings.groupNameTitle,
+          l.groupNameTitle,
           style: GoogleFonts.poppins(
             color: AppColors.textDark,
             fontWeight: FontWeight.bold,
@@ -138,7 +141,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: Text(
-              AppStrings.cancel,
+              l.cancel,
               style: GoogleFonts.poppins(color: AppColors.textSoft),
             ),
           ),
@@ -146,7 +149,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             onPressed: () =>
                 Navigator.pop(dialogContext, controller.text.trim()),
             child: Text(
-              AppStrings.save,
+              l.save,
               style: GoogleFonts.poppins(
                 color: AppColors.emerald,
                 fontWeight: FontWeight.bold,
@@ -186,12 +189,13 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   }
 
   Future<void> _removeMember(String uid) async {
+    final l = context.l10n;
     final provider = context.read<GroupInfoProvider>();
 
     final ok = await _confirm(
-      AppStrings.removeMemberTitle(provider.nameOf(uid)),
-      AppStrings.removeMemberBody,
-      AppStrings.removeAction,
+      l.removeMemberTitle(provider.nameOf(uid)),
+      l.removeMemberBody,
+      l.removeAction,
     );
     if (ok != true) return;
 
@@ -200,13 +204,14 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   }
 
   Future<void> _exitGroup() async {
+    final l = context.l10n;
     final provider = context.read<GroupInfoProvider>();
     if (provider.group == null) return;
 
     final ok = await _confirm(
-      AppStrings.exitGroupTitle,
-      AppStrings.exitGroupBody,
-      AppStrings.exitAction,
+      l.exitGroupTitle,
+      l.exitGroupBody,
+      l.exitAction,
     );
     if (ok != true) return;
 
@@ -222,6 +227,8 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   }
 
   void _showDisappearSheet(int current) {
+    final l = context.l10n;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -236,7 +243,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
               child: Text(
-                AppStrings.disappearingTitle,
+                l.disappearingTitle,
                 style: GoogleFonts.poppins(
                   color: AppColors.textDark,
                   fontSize: 18,
@@ -247,7 +254,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text(
-                AppStrings.disappearingGroupHelp,
+                l.disappearingGroupHelp,
                 style: GoogleFonts.poppins(
                   color: AppColors.textSoft,
                   fontSize: 13,
@@ -318,6 +325,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   }
 
   Widget _memberTile(GroupInfoProvider info, GroupItem g, String uid) {
+    final l = context.l10n;
     final isMe = uid == info.me;
     final memberInfo = info.infoOf(uid);
     final name = info.nameOf(uid);
@@ -368,7 +376,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  AppStrings.groupAdminBadge,
+                  l.groupAdminBadge,
                   style: GoogleFonts.poppins(
                     color: AppColors.emerald,
                     fontSize: 11,
@@ -377,7 +385,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               ),
             if (info.isAdmin && !isMe)
               IconButton(
-                tooltip: AppStrings.removeFromGroup,
+                tooltip: l.removeFromGroup,
                 icon: const Icon(
                   AppIcons.removeMember,
                   color: AppColors.error,
@@ -392,6 +400,8 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+
     // rebuilds whenever the provider changes (group, names, busy...)
     final info = context.watch<GroupInfoProvider>();
 
@@ -406,7 +416,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
         title: Text(
-          AppStrings.groupInfo,
+          l.groupInfo,
           style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
         ),
       ),
@@ -448,7 +458,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                         ),
                         if (info.isAdmin)
                           IconButton(
-                            tooltip: AppStrings.changeGroupName,
+                            tooltip: l.changeGroupName,
                             icon: const Icon(
                               AppIcons.editGroupName,
                               color: AppColors.emerald,
@@ -460,7 +470,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      AppStrings.groupMembersLine(members.length),
+                      l.groupMembersLine(members.length),
                       style: GoogleFonts.poppins(
                         color: AppColors.textSoft,
                         fontSize: 15,
@@ -472,7 +482,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               const SizedBox(height: 8),
               _tile(
                 icon: AppIcons.media,
-                title: AppStrings.mediaLinksDocs,
+                title: l.mediaLinksDocs,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -502,7 +512,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               ),
               _tile(
                 icon: AppIcons.disappearing,
-                title: AppStrings.disappearingTitle,
+                title: l.disappearingTitle,
                 subtitle: disappearLabel(info.disappearMs),
                 onTap: () => _showDisappearSheet(info.disappearMs),
               ),
@@ -511,7 +521,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                 color: Colors.white,
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
                 child: Text(
-                  AppStrings.membersCount(members.length),
+                  l.membersCount(members.length),
                   style: GoogleFonts.poppins(
                     color: AppColors.textSoft,
                     fontSize: 14,
@@ -528,7 +538,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                       child: Icon(AppIcons.addMember, color: Colors.white),
                     ),
                     title: Text(
-                      AppStrings.addMembers,
+                      l.addMembers,
                       style: GoogleFonts.poppins(
                         color: AppColors.textDark,
                         fontSize: 15,
@@ -543,7 +553,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               const SizedBox(height: 8),
               _tile(
                 icon: AppIcons.exitGroup,
-                title: AppStrings.exitGroup,
+                title: l.exitGroup,
                 color: AppColors.error,
                 onTap: busy ? () {} : _exitGroup,
               ),

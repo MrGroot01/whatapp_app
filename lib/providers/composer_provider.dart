@@ -6,6 +6,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/app_text.dart';
 import '../services/message_sync_service.dart';
 import '../models/message.dart';
 import '../services/push_queue.dart';
@@ -75,6 +76,8 @@ class ComposerProvider extends ChangeNotifier {
     _notify();
   }
 
+  // The reply preview texts stay in English on purpose: they are saved
+  // into Firebase and the other person reads them too.
   static String previewOf(Message m) {
     String t;
     switch (m.type) {
@@ -122,7 +125,7 @@ class ComposerProvider extends ChangeNotifier {
   Future<String?> sendMessage(String text) {
     return _enqueueDraft(
       text,
-      failText: 'Could not send the message. Please try again.',
+      failText: AppText.l.couldNotSendMessage,
     );
   }
 
@@ -131,7 +134,7 @@ class ComposerProvider extends ChangeNotifier {
     return _enqueueDraft(
       text,
       sendAt: when,
-      failText: 'Could not schedule the message. Please try again.',
+      failText: AppText.l.couldNotScheduleMessage,
     );
   }
 
@@ -143,8 +146,8 @@ class ComposerProvider extends ChangeNotifier {
     final imageFile = _draftImageFile;
     final imageName = _draftImageName;
 
-    if (text.isEmpty && imageFile == null) return 'Nothing to send';
-    if (myUid.isEmpty) return 'Please log in again';
+    if (text.isEmpty && imageFile == null) return AppText.l.nothingToSend;
+    if (myUid.isEmpty) return AppText.l.pleaseLogInAgain;
 
     try {
       final data = <String, dynamic>{
@@ -155,7 +158,7 @@ class ComposerProvider extends ChangeNotifier {
       if (imageFile != null) {
         final imageBase64 = base64Encode(await imageFile.readAsBytes());
         if (imageBase64.length > 5 * 1024 * 1024) {
-          return 'Image is too large. Please choose a smaller photo.';
+          return AppText.l.imageTooLarge;
         }
         data['imageBase64'] = imageBase64;
         data['fileName'] = imageName;
@@ -189,7 +192,7 @@ class ComposerProvider extends ChangeNotifier {
     required String phone,
     required String countryCode,
   }) async {
-    if (myUid.isEmpty) return 'Please log in again';
+    if (myUid.isEmpty) return AppText.l.pleaseLogInAgain;
 
     try {
       await MessageSyncService.enqueue(
@@ -207,14 +210,14 @@ class ComposerProvider extends ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('Share contact failed: $e');
-      return 'Could not share the contact. Please try again.';
+      return AppText.l.couldNotShareContact;
     }
   }
 
   Future<String?> sendDocument(File file, String name) async {
-    if (myUid.isEmpty) return 'Please log in again';
+    if (myUid.isEmpty) return AppText.l.pleaseLogInAgain;
     if (MessageSyncService.connection.value != ConnState.online) {
-      return 'Documents can only be sent when you are online.';
+      return AppText.l.documentsOnlineOnly;
     }
 
     _uploading = true;
@@ -260,7 +263,7 @@ class ComposerProvider extends ChangeNotifier {
     } catch (e, stackTrace) {
       debugPrint('Attachment save failed: $e');
       debugPrintStack(stackTrace: stackTrace);
-      return 'Could not save the attachment. Please try again.';
+      return AppText.l.couldNotSaveAttachment;
     } finally {
       _uploading = false;
       _notify();
