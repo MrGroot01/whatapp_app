@@ -53,13 +53,12 @@ class LocaleProvider extends ChangeNotifier {
     return null;
   }
 
-  // null = system default
   Future<void> setLocale(Locale? locale) async {
     if (_locale?.languageCode == locale?.languageCode) return;
 
     _locale = locale;
-    AppText.setChosen(locale); // providers and services follow at once
-    notifyListeners(); // the whole app changes language now
+    AppText.setChosen(locale);
+    notifyListeners();
 
     try {
       final prefs = await SharedPreferences.getInstance();
