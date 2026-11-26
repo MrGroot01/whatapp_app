@@ -80,6 +80,7 @@ class _PickerViewState extends State<_PickerView> {
 
   // the people you ticked, shown above the list
   Widget _selectedRow(MemberPickerProvider picker) {
+    final p = context.palette;
     final selected = picker.selected;
 
     return SizedBox(
@@ -125,7 +126,7 @@ class _PickerViewState extends State<_PickerView> {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
-                      color: AppColors.textDark,
+                      color: p.textDark,
                       fontSize: 11,
                     ),
                   ),
@@ -139,9 +140,11 @@ class _PickerViewState extends State<_PickerView> {
   }
 
   Widget _buildList(MemberPickerProvider picker) {
+    final p = context.palette;
+
     if (picker.loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.emerald),
+      return Center(
+        child: CircularProgressIndicator(color: p.accent),
       );
     }
 
@@ -157,7 +160,7 @@ class _PickerViewState extends State<_PickerView> {
                 : AppStrings.noContactFound,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-              color: AppColors.textSoft,
+              color: p.textSoft,
               fontSize: 16,
             ),
           ),
@@ -178,7 +181,7 @@ class _PickerViewState extends State<_PickerView> {
             child: Text(
               item,
               style: GoogleFonts.poppins(
-                color: AppColors.textSoft,
+                color: p.textSoft,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
@@ -194,7 +197,7 @@ class _PickerViewState extends State<_PickerView> {
           title: Text(
             c.name,
             style: GoogleFonts.poppins(
-              color: AppColors.textDark,
+              color: p.textDark,
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
@@ -202,13 +205,13 @@ class _PickerViewState extends State<_PickerView> {
           subtitle: Text(
             '${c.countryCode} ${c.phone}',
             style: GoogleFonts.poppins(
-              color: AppColors.textSoft,
+              color: p.textSoft,
               fontSize: 13,
             ),
           ),
           trailing: Icon(
             isOn ? AppIcons.pickerOn : AppIcons.pickerOff,
-            color: isOn ? AppColors.emerald : AppColors.textSoft,
+            color: isOn ? p.accent : p.textSoft,
           ),
           onTap: () => picker.toggle(c),
         );
@@ -218,12 +221,14 @@ class _PickerViewState extends State<_PickerView> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+
     // rebuilds whenever the provider changes (loaded, ticked, search...)
     final picker = context.watch<MemberPickerProvider>();
     final selectedCount = picker.selectedCount;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: p.card,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
@@ -265,24 +270,24 @@ class _PickerViewState extends State<_PickerView> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: TextField(
               controller: searchController,
-              cursorColor: AppColors.emerald,
+              cursorColor: p.accent,
               onChanged: picker.setQuery,
               style: GoogleFonts.poppins(
-                color: AppColors.textDark,
+                color: p.textDark,
                 fontSize: 16,
               ),
               decoration: InputDecoration(
                 hintText: AppStrings.searchNameOrNumber,
                 hintStyle: GoogleFonts.poppins(
-                  color: AppColors.textSoft,
+                  color: p.textSoft,
                   fontSize: 15,
                 ),
-                prefixIcon: const Icon(
+                prefixIcon: Icon(
                   AppIcons.search,
-                  color: AppColors.textSoft,
+                  color: p.textSoft,
                 ),
                 filled: true,
-                fillColor: AppColors.searchFill,
+                fillColor: p.searchFill,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(30),

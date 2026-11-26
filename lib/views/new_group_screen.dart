@@ -59,6 +59,8 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
   }
 
   Widget _memberChip(PickedContact c) {
+    final p = context.palette;
+
     return SizedBox(
       width: 72,
       child: Column(
@@ -82,7 +84,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-              color: AppColors.textDark,
+              color: p.textDark,
               fontSize: 12,
             ),
           ),
@@ -94,9 +96,10 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
@@ -143,13 +146,13 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             child: Container(
               width: 84,
               height: 84,
-              decoration: const BoxDecoration(
-                color: AppColors.softGreen,
+              decoration: BoxDecoration(
+                color: p.softGreen,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 AppIcons.group,
-                color: AppColors.emerald,
+                color: p.accent,
                 size: 44,
               ),
             ),
@@ -161,9 +164,9 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             maxLength: 40,
             enabled: !creating,
             textCapitalization: TextCapitalization.words,
-            cursorColor: AppColors.emerald,
+            cursorColor: p.accent,
             style: GoogleFonts.poppins(
-              color: AppColors.textDark,
+              color: p.textDark,
               fontSize: 17,
             ),
             onChanged: (_) {
@@ -173,23 +176,23 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             decoration: InputDecoration(
               hintText: l.groupNameHint,
               hintStyle: GoogleFonts.poppins(
-                color: AppColors.textSoft,
+                color: p.textSoft,
                 fontSize: 16,
               ),
               filled: true,
-              fillColor: AppColors.card,
+              fillColor: p.card,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: p.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: p.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(
-                  color: AppColors.emerald,
+                borderSide: BorderSide(
+                  color: p.accent,
                   width: 1.5,
                 ),
               ),
@@ -200,7 +203,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.errorBackground,
+                color: p.errorBackground,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -216,7 +219,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
           Text(
             l.membersTitle(widget.members.length),
             style: GoogleFonts.poppins(
-              color: AppColors.textSoft,
+              color: p.textSoft,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),

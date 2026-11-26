@@ -105,6 +105,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
 
   Future<void> _showAddSheet() async {
     final l = context.l10n;
+    final p = context.palette;
 
     Widget option(IconData icon, String label, Color color, VoidCallback go) {
       return ListTile(
@@ -115,7 +116,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
         ),
         title: Text(
           label,
-          style: const TextStyle(color: AppColors.textDark, fontSize: 17),
+          style: TextStyle(color: p.textDark, fontSize: 17),
         ),
         onTap: () {
           Navigator.pop(context);
@@ -126,7 +127,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
 
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: p.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -139,8 +140,8 @@ class _UpdatesViewState extends State<_UpdatesView> {
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Text(
                 l.addStatusTitle,
-                style: const TextStyle(
-                  color: AppColors.textDark,
+                style: TextStyle(
+                  color: p.textDark,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                 ),
@@ -208,8 +209,8 @@ class _UpdatesViewState extends State<_UpdatesView> {
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
       child: Text(
         text,
-        style: const TextStyle(
-          color: AppColors.textSoft,
+        style: TextStyle(
+          color: context.palette.textSoft,
           fontSize: 15,
           fontWeight: FontWeight.w600,
         ),
@@ -219,6 +220,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
 
   Widget _myStatusTile(List<StatusItem> mine) {
     final l = context.l10n;
+    final p = context.palette;
     final me = StatusService.myUid;
 
     return ListTile(
@@ -243,7 +245,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
                 decoration: BoxDecoration(
                   color: AppColors.emerald,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(color: p.background, width: 2),
                 ),
                 child: const Icon(
                   AppIcons.addEmoji,
@@ -256,8 +258,8 @@ class _UpdatesViewState extends State<_UpdatesView> {
       ),
       title: Text(
         l.myStatus,
-        style: const TextStyle(
-          color: AppColors.textDark,
+        style: TextStyle(
+          color: p.textDark,
           fontSize: 18,
           fontWeight: FontWeight.w600,
         ),
@@ -269,15 +271,15 @@ class _UpdatesViewState extends State<_UpdatesView> {
           mine.length,
           StatusService.timeAgo(mine.last.createdAt),
         ),
-        style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
+        style: TextStyle(color: p.textSoft, fontSize: 15),
       ),
       trailing: mine.isEmpty
           ? null
           : IconButton(
         tooltip: l.addStatusTooltip,
-        icon: const Icon(
+        icon: Icon(
           AppIcons.addStatusFab,
-          color: AppColors.emerald,
+          color: p.accent,
         ),
         onPressed: _showAddSheet,
       ),
@@ -298,6 +300,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
   }
 
   Widget _entryTile(StatusEntry e) {
+    final p = context.palette;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: StatusAvatar(
@@ -311,15 +314,15 @@ class _UpdatesViewState extends State<_UpdatesView> {
         e.contact.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AppColors.textDark,
+        style: TextStyle(
+          color: p.textDark,
           fontSize: 18,
           fontWeight: FontWeight.w600,
         ),
       ),
       subtitle: Text(
         StatusService.timeAgo(e.latest),
-        style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
+        style: TextStyle(color: p.textSoft, fontSize: 15),
       ),
       onTap: () => _openViewer(
         uid: e.contact.id,
@@ -334,6 +337,7 @@ class _UpdatesViewState extends State<_UpdatesView> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     // rebuilds whenever the provider changes (new status, tick, contacts...)
     final updates = context.watch<UpdatesProvider>();
@@ -362,8 +366,8 @@ class _UpdatesViewState extends State<_UpdatesView> {
                 child: Text(
                   l.noRecentUpdates,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textSoft,
+                  style: TextStyle(
+                    color: p.textSoft,
                     fontSize: 16,
                     height: 1.4,
                   ),
@@ -379,8 +383,8 @@ class _UpdatesViewState extends State<_UpdatesView> {
             children: [
               FloatingActionButton.small(
                 heroTag: 'status_text_fab',
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.emerald,
+                backgroundColor: p.card,
+                foregroundColor: p.accent,
                 tooltip: l.textStatusTooltip,
                 onPressed: _addText,
                 child: const Icon(AppIcons.addStatusText),

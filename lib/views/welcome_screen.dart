@@ -42,6 +42,7 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     // light (white) clock and icons on top of the green header
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -49,7 +50,7 @@ class WelcomeScreen extends StatelessWidget {
         statusBarColor: Colors.transparent,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: p.background,
         body: Column(
           children: [
             // ---------- TOP: green curved header with logo and brand ----------
@@ -135,8 +136,8 @@ class WelcomeScreen extends StatelessWidget {
                       Text(
                         l.tagline,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppColors.textDark,
+                        style: TextStyle(
+                          color: p.textDark,
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
                         ),
@@ -145,8 +146,8 @@ class WelcomeScreen extends StatelessWidget {
                       Text(
                         l.welcomeBody,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppColors.bodyText,
+                        style: TextStyle(
+                          color: p.bodyText,
                           fontSize: 16,
                           height: 1.45,
                         ),
@@ -202,15 +203,15 @@ class WelcomeScreen extends StatelessWidget {
                         child: Text.rich(
                           TextSpan(
                             text: '${l.newHere} ',
-                            style: const TextStyle(
-                              color: AppColors.bodyText,
+                            style: TextStyle(
+                              color: p.bodyText,
                               fontSize: 15,
                             ),
                             children: [
                               TextSpan(
                                 text: l.createAnAccount,
-                                style: const TextStyle(
-                                  color: AppColors.emerald,
+                                style: TextStyle(
+                                  color: p.accent,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -239,22 +240,23 @@ class _Perk extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Column(
       children: [
         Container(
           width: 56,
           height: 56,
-          decoration: const BoxDecoration(
-            color: AppColors.softGreen,
+          decoration: BoxDecoration(
+            color: p.softGreen,
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: AppColors.emerald, size: 26),
+          child: Icon(icon, color: p.accent, size: 26),
         ),
         const SizedBox(height: 8),
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textDark,
+          style: TextStyle(
+            color: p.textDark,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),

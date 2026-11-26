@@ -564,5 +564,10 @@
 
   "settingsLanguage": "App language",
   "systemDefault": "System default",
-  "chooseLanguageHelp": "Choose the language of the app. Your chat messages are not translated."
+  "chooseLanguageHelp": "Choose the language of the app. Your chat messages are not translated.",
+  "settingsTheme": "Theme",
+  "chooseTheme": "Choose theme",
+  "themeLight": "Light",
+  "themeDark": "Dark"
 }
+

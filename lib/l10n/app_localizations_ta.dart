@@ -1572,4 +1572,16 @@ class AppLocalizationsTa extends AppLocalizations {
   @override
   String get chooseLanguageHelp =>
       'ஆப்பின் மொழியைத் தேர்ந்தெடுங்கள். உங்கள் அரட்டைச் செய்திகள் மொழிபெயர்க்கப்படாது.';
+
+  @override
+  String get settingsTheme => 'தீம்';
+
+  @override
+  String get chooseTheme => 'தீமைத் தேர்ந்தெடுக்கவும்';
+
+  @override
+  String get themeLight => 'லைட்';
+
+  @override
+  String get themeDark => 'டார்க்';
 }

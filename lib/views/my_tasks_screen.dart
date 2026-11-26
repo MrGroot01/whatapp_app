@@ -64,16 +64,17 @@ class _MyTasksViewState extends State<_MyTasksView> {
 
   Future<void> _confirmDelete(TaskItem task, {required bool assigned}) async {
     final l = context.l10n;
+    final p = context.palette;
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: p.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           l.deleteTaskTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
+          style: TextStyle(
+            color: p.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -81,14 +82,14 @@ class _MyTasksViewState extends State<_MyTasksView> {
           assigned
               ? l.deleteTaskAssignedBody(task.assignedToName)
               : l.deleteTaskBody,
-          style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+          style: TextStyle(color: p.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
               l.cancel,
-              style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+              style: TextStyle(color: p.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
@@ -114,6 +115,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
 
   // ---------- UI PIECES ----------
   Widget _chip(String label, TaskFilter value, TasksProvider tasks) {
+    final p = context.palette;
     final selected = tasks.filter == value;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -122,10 +124,10 @@ class _MyTasksViewState extends State<_MyTasksView> {
         selected: selected,
         showCheckmark: false,
         selectedColor: AppColors.emerald,
-        backgroundColor: Colors.white,
-        side: const BorderSide(color: AppColors.emerald),
+        backgroundColor: p.card,
+        side: BorderSide(color: p.accent),
         labelStyle: TextStyle(
-          color: selected ? Colors.white : AppColors.emerald,
+          color: selected ? Colors.white : p.accent,
           fontWeight: FontWeight.w600,
         ),
         onSelected: (_) => tasks.setFilter(value),
@@ -169,11 +171,12 @@ class _MyTasksViewState extends State<_MyTasksView> {
 
   Widget _buildCard(TaskItem t, String me) {
     final l = context.l10n;
+    final p = context.palette;
     final toMe = t.isAssignedToMe(me); // somebody gave it to me
     final byMe = t.isAssignedByMe(me); // I gave it to somebody
 
     final overdue = !t.done && t.due.isBefore(DateTime.now());
-    final dueColor = overdue ? AppColors.error : AppColors.textSoft;
+    final dueColor = overdue ? AppColors.error : p.textSoft;
 
     // the line with the bell
     final String statusText;
@@ -208,25 +211,26 @@ class _MyTasksViewState extends State<_MyTasksView> {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Icon(
         t.done ? AppIcons.taskDone : AppIcons.taskWaitingTop,
-        color: t.done ? AppColors.emerald : AppColors.textSoft,
+        color: t.done ? p.accent : p.textSoft,
       ),
     )
         : Checkbox(
       value: t.done,
       activeColor: AppColors.emerald,
+      side: BorderSide(color: p.textSoft, width: 2),
       onChanged: (v) => _toggle(t, v ?? false),
     );
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: p.card,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: AppColors.shadow,
+            color: p.shadow,
             blurRadius: 4,
-            offset: Offset(0, 1),
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -249,9 +253,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
                       Text(
                         t.title,
                         style: TextStyle(
-                          color: t.done
-                              ? AppColors.textSoft
-                              : AppColors.textDark,
+                          color: t.done ? p.textSoft : p.textDark,
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
                           decoration:
@@ -263,9 +265,7 @@ class _MyTasksViewState extends State<_MyTasksView> {
                         Text(
                           peopleLine,
                           style: TextStyle(
-                            color: (toMe || byMe)
-                                ? AppColors.emerald
-                                : AppColors.textSoft,
+                            color: (toMe || byMe) ? p.accent : p.textSoft,
                             fontSize: 14,
                             fontWeight: (toMe || byMe)
                                 ? FontWeight.w600
@@ -292,18 +292,15 @@ class _MyTasksViewState extends State<_MyTasksView> {
                           Icon(
                             statusIcon,
                             size: 17,
-                            color: (byMe && t.done)
-                                ? AppColors.emerald
-                                : AppColors.textSoft,
+                            color: (byMe && t.done) ? p.accent : p.textSoft,
                           ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               statusText,
                               style: TextStyle(
-                                color: (byMe && t.done)
-                                    ? AppColors.emerald
-                                    : AppColors.textSoft,
+                                color:
+                                (byMe && t.done) ? p.accent : p.textSoft,
                                 fontSize: 14,
                               ),
                             ),
@@ -318,8 +315,8 @@ class _MyTasksViewState extends State<_MyTasksView> {
                 const SizedBox(width: 12)
               else
                 PopupMenuButton<String>(
-                  color: Colors.white,
-                  icon: const Icon(AppIcons.more, color: AppColors.textSoft),
+                  color: p.card,
+                  icon: Icon(AppIcons.more, color: p.textSoft),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -332,12 +329,15 @@ class _MyTasksViewState extends State<_MyTasksView> {
                       value: 'edit',
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             AppIcons.editTask,
-                            color: AppColors.emerald,
+                            color: p.accent,
                           ),
                           const SizedBox(width: 10),
-                          Text(l.edit),
+                          Text(
+                            l.edit,
+                            style: TextStyle(color: p.textDark),
+                          ),
                         ],
                       ),
                     ),
@@ -350,7 +350,10 @@ class _MyTasksViewState extends State<_MyTasksView> {
                             color: AppColors.error,
                           ),
                           const SizedBox(width: 10),
-                          Text(l.delete),
+                          Text(
+                            l.delete,
+                            style: TextStyle(color: p.textDark),
+                          ),
                         ],
                       ),
                     ),
@@ -370,8 +373,8 @@ class _MyTasksViewState extends State<_MyTasksView> {
         child: Text(
           text,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: AppColors.textSoft,
+          style: TextStyle(
+            color: context.palette.textSoft,
             fontSize: 17,
             height: 1.4,
           ),
@@ -407,8 +410,8 @@ class _MyTasksViewState extends State<_MyTasksView> {
     }
 
     if (tasks.loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.emerald),
+      return Center(
+        child: CircularProgressIndicator(color: context.palette.accent),
       );
     }
 
@@ -434,12 +437,13 @@ class _MyTasksViewState extends State<_MyTasksView> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     // rebuilds whenever the provider changes (new data, filter...)
     final tasks = context.watch<TasksProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,

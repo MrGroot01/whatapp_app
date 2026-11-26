@@ -59,16 +59,17 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
   }
 
   Widget _empty(IconData icon, String text) {
+    final p = context.palette;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 64, color: AppColors.emptyIcon),
+          Icon(icon, size: 64, color: p.emptyIcon),
           const SizedBox(height: 12),
           Text(
             text,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 16),
+            style: GoogleFonts.poppins(color: p.textSoft, fontSize: 16),
           ),
         ],
       ),
@@ -77,6 +78,8 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
 
   // ---------- TAB 1: PHOTOS, grouped by month ----------
   Widget _mediaTab(List<MediaEntry> images) {
+    final p = context.palette;
+
     if (images.isEmpty) {
       return _empty(AppIcons.media, context.l10n.noPhotosYet);
     }
@@ -96,7 +99,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             child: Text(
               group.key,
               style: GoogleFonts.poppins(
-                color: AppColors.textDark,
+                color: p.textDark,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
@@ -132,6 +135,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
   // ---------- TAB 2: DOCUMENTS ----------
   Widget _docsTab(List<MediaEntry> files) {
     final l = context.l10n;
+    final p = context.palette;
 
     if (files.isEmpty) {
       return _empty(AppIcons.emptyDocs, l.noDocsYet);
@@ -140,11 +144,11 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: files.length,
-      separatorBuilder: (context, index) => const Divider(
+      separatorBuilder: (context, index) => Divider(
         height: 1,
         indent: 76,
         endIndent: 16,
-        color: AppColors.divider,
+        color: p.divider,
       ),
       itemBuilder: (context, i) {
         final e = files[i];
@@ -165,14 +169,14 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.poppins(
-              color: AppColors.textDark,
+              color: p.textDark,
               fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
           ),
           subtitle: Text(
             l.sharedBy(e.isMe ? l.you : widget.name, formatDate(e.time)),
-            style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 12.5),
+            style: GoogleFonts.poppins(color: p.textSoft, fontSize: 12.5),
           ),
           onTap: () => openExternal(context, e.url),
         );
@@ -183,6 +187,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
   // ---------- TAB 3: LINKS ----------
   Widget _linksTab(List<MediaEntry> links) {
     final l = context.l10n;
+    final p = context.palette;
 
     if (links.isEmpty) {
       return _empty(AppIcons.link, l.noLinksYet);
@@ -191,11 +196,11 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: links.length,
-      separatorBuilder: (context, index) => const Divider(
+      separatorBuilder: (context, index) => Divider(
         height: 1,
         indent: 76,
         endIndent: 16,
-        color: AppColors.divider,
+        color: p.divider,
       ),
       itemBuilder: (context, i) {
         final e = links[i];
@@ -205,10 +210,10 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: AppColors.softGreen,
+              color: p.softGreen,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(AppIcons.link, color: AppColors.emerald, size: 26),
+            child: Icon(AppIcons.link, color: p.accent, size: 26),
           ),
           title: Text(
             e.url,
@@ -228,7 +233,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
             ),
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 12.5),
+            style: GoogleFonts.poppins(color: p.textSoft, fontSize: 12.5),
           ),
           onTap: () => openExternal(context, e.url),
         );
@@ -239,12 +244,13 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     return DefaultTabController(
       length: 3,
       initialIndex: widget.initialTab,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: p.background,
         appBar: AppBar(
           backgroundColor: AppColors.emerald,
           foregroundColor: Colors.white,
@@ -284,7 +290,7 @@ class _ChatMediaScreenState extends State<ChatMediaScreen> {
                   child: Text(
                     l.couldNotLoadMedia,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.poppins(color: AppColors.textSoft),
+                    style: GoogleFonts.poppins(color: p.textSoft),
                   ),
                 ),
               );

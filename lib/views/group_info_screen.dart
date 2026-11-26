@@ -69,29 +69,30 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
 
   Future<bool?> _confirm(String title, String message, String action) {
     final l = context.l10n;
+    final p = context.palette;
 
     return showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: p.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           title,
           style: GoogleFonts.poppins(
-            color: AppColors.textDark,
+            color: p.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
           message,
-          style: GoogleFonts.poppins(color: AppColors.textSoft, fontSize: 15),
+          style: GoogleFonts.poppins(color: p.textSoft, fontSize: 15),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
               l.cancel,
-              style: GoogleFonts.poppins(color: AppColors.textSoft),
+              style: GoogleFonts.poppins(color: p.textSoft),
             ),
           ),
           TextButton(
@@ -113,6 +114,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   // each action: ask the user (dialog / picker), then the provider does it
   Future<void> _rename() async {
     final l = context.l10n;
+    final p = context.palette;
     final provider = context.read<GroupInfoProvider>();
     final g = provider.group;
     if (g == null) return;
@@ -121,12 +123,12 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     final newName = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: p.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           l.groupNameTitle,
           style: GoogleFonts.poppins(
-            color: AppColors.textDark,
+            color: p.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -134,15 +136,15 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           controller: controller,
           autofocus: true,
           maxLength: 40,
-          cursorColor: AppColors.emerald,
-          style: GoogleFonts.poppins(color: AppColors.textDark),
+          cursorColor: p.accent,
+          style: GoogleFonts.poppins(color: p.textDark),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               l.cancel,
-              style: GoogleFonts.poppins(color: AppColors.textSoft),
+              style: GoogleFonts.poppins(color: p.textSoft),
             ),
           ),
           TextButton(
@@ -151,7 +153,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             child: Text(
               l.save,
               style: GoogleFonts.poppins(
-                color: AppColors.emerald,
+                color: p.accent,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -228,10 +230,11 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
 
   void _showDisappearSheet(int current) {
     final l = context.l10n;
+    final p = context.palette;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: p.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -245,7 +248,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               child: Text(
                 l.disappearingTitle,
                 style: GoogleFonts.poppins(
-                  color: AppColors.textDark,
+                  color: p.textDark,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
@@ -256,7 +259,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               child: Text(
                 l.disappearingGroupHelp,
                 style: GoogleFonts.poppins(
-                  color: AppColors.textSoft,
+                  color: p.textSoft,
                   fontSize: 13,
                 ),
               ),
@@ -266,15 +269,15 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                 title: Text(
                   o.label,
                   style: GoogleFonts.poppins(
-                    color: AppColors.textDark,
+                    color: p.textDark,
                     fontSize: 16,
                   ),
                 ),
                 trailing: current == o.ms
-                    ? const Icon(AppIcons.selected, color: AppColors.emerald)
-                    : const Icon(
+                    ? Icon(AppIcons.selected, color: p.accent)
+                    : Icon(
                   AppIcons.notSelected,
-                  color: AppColors.textSoft,
+                  color: p.textSoft,
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -297,14 +300,16 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     Widget? trailing,
     required VoidCallback onTap,
   }) {
+    final p = context.palette;
+
     return Material(
-      color: Colors.white,
+      color: p.card,
       child: ListTile(
-        leading: Icon(icon, color: color ?? AppColors.textSoft, size: 25),
+        leading: Icon(icon, color: color ?? p.textSoft, size: 25),
         title: Text(
           title,
           style: GoogleFonts.poppins(
-            color: color ?? AppColors.textDark,
+            color: color ?? p.textDark,
             fontSize: 15,
             fontWeight: FontWeight.w500,
           ),
@@ -314,7 +319,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             : Text(
           subtitle,
           style: GoogleFonts.poppins(
-            color: AppColors.textSoft,
+            color: p.textSoft,
             fontSize: 12,
           ),
         ),
@@ -326,12 +331,13 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
 
   Widget _memberTile(GroupInfoProvider info, GroupItem g, String uid) {
     final l = context.l10n;
+    final p = context.palette;
     final isMe = uid == info.me;
     final memberInfo = info.infoOf(uid);
     final name = info.nameOf(uid);
 
     return Material(
-      color: Colors.white,
+      color: p.card,
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: GroupService.colorFor(uid),
@@ -348,7 +354,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         title: Text(
           name,
           style: GoogleFonts.poppins(
-            color: AppColors.textDark,
+            color: p.textDark,
             fontSize: 15,
             fontWeight: FontWeight.w500,
           ),
@@ -358,7 +364,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             : Text(
           memberInfo.phone,
           style: GoogleFonts.poppins(
-            color: AppColors.textSoft,
+            color: p.textSoft,
             fontSize: 12,
           ),
         ),
@@ -372,13 +378,13 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                   vertical: 3,
                 ),
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.emerald),
+                  border: Border.all(color: p.accent),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   l.groupAdminBadge,
                   style: GoogleFonts.poppins(
-                    color: AppColors.emerald,
+                    color: p.accent,
                     fontSize: 11,
                   ),
                 ),
@@ -401,6 +407,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     // rebuilds whenever the provider changes (group, names, busy...)
     final info = context.watch<GroupInfoProvider>();
@@ -411,7 +418,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     final busy = info.busy;
 
     return Scaffold(
-      backgroundColor: AppColors.plainBackground,
+      backgroundColor: p.plainBackground,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
@@ -425,7 +432,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           ListView(
             children: [
               Container(
-                color: Colors.white,
+                color: p.card,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 28,
@@ -450,7 +457,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                             name,
                             textAlign: TextAlign.center,
                             style: GoogleFonts.poppins(
-                              color: AppColors.textDark,
+                              color: p.textDark,
                               fontSize: 24,
                               fontWeight: FontWeight.w600,
                             ),
@@ -459,9 +466,9 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                         if (info.isAdmin)
                           IconButton(
                             tooltip: l.changeGroupName,
-                            icon: const Icon(
+                            icon: Icon(
                               AppIcons.editGroupName,
-                              color: AppColors.emerald,
+                              color: p.accent,
                               size: 20,
                             ),
                             onPressed: busy ? null : _rename,
@@ -472,7 +479,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                     Text(
                       l.groupMembersLine(members.length),
                       style: GoogleFonts.poppins(
-                        color: AppColors.textSoft,
+                        color: p.textSoft,
                         fontSize: 15,
                       ),
                     ),
@@ -490,13 +497,13 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                       Text(
                         '${info.mediaCount}',
                         style: GoogleFonts.poppins(
-                          color: AppColors.textSoft,
+                          color: p.textSoft,
                           fontSize: 14,
                         ),
                       ),
-                    const Icon(
+                    Icon(
                       AppIcons.chevronRight,
-                      color: AppColors.textSoft,
+                      color: p.textSoft,
                     ),
                   ],
                 ),
@@ -518,12 +525,12 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               ),
               const SizedBox(height: 8),
               Container(
-                color: Colors.white,
+                color: p.card,
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
                 child: Text(
                   l.membersCount(members.length),
                   style: GoogleFonts.poppins(
-                    color: AppColors.textSoft,
+                    color: p.textSoft,
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -531,7 +538,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
               ),
               if (info.isAdmin)
                 Material(
-                  color: Colors.white,
+                  color: p.card,
                   child: ListTile(
                     leading: const CircleAvatar(
                       backgroundColor: AppColors.emerald,
@@ -540,7 +547,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
                     title: Text(
                       l.addMembers,
                       style: GoogleFonts.poppins(
-                        color: AppColors.textDark,
+                        color: p.textDark,
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
                       ),

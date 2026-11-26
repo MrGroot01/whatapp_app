@@ -206,19 +206,19 @@ class _LoginScreenState extends State<LoginScreen> {
     required IconData icon,
     Widget? suffix,
   }) {
+    final p = context.palette;
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: AppColors.textSoft, fontSize: 16),
-      floatingLabelStyle:
-      const TextStyle(color: AppColors.emerald, fontSize: 16),
-      prefixIcon: Icon(icon, color: AppColors.emerald),
+      labelStyle: TextStyle(color: p.textSoft, fontSize: 16),
+      floatingLabelStyle: TextStyle(color: p.accent, fontSize: 16),
+      prefixIcon: Icon(icon, color: p.accent),
       suffixIcon: suffix,
       filled: true,
-      fillColor: AppColors.card,
+      fillColor: p.card,
       errorStyle: const TextStyle(color: AppColors.error, fontSize: 14),
       errorMaxLines: 2,
-      enabledBorder: boxBorder(AppColors.border),
-      focusedBorder: boxBorder(AppColors.emerald),
+      enabledBorder: boxBorder(p.border),
+      focusedBorder: boxBorder(p.accent),
       errorBorder: boxBorder(AppColors.error),
       focusedErrorBorder: boxBorder(AppColors.error),
     );
@@ -227,12 +227,13 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textDark,
+        backgroundColor: p.background,
+        foregroundColor: p.textDark,
         elevation: 0,
         scrolledUnderElevation: 0,
       ),
@@ -249,14 +250,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(18),
-                      decoration: const BoxDecoration(
-                        color: AppColors.softGreen,
+                      decoration: BoxDecoration(
+                        color: p.softGreen,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         AppIcons.loginHeader,
                         size: 44,
-                        color: AppColors.emerald,
+                        color: p.accent,
                       ),
                     ),
                   ),
@@ -264,8 +265,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     l.welcomeBack,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                     ),
@@ -274,8 +275,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     l.loginSubtitle,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textSoft,
+                    style: TextStyle(
+                      color: p.textSoft,
                       fontSize: 16,
                     ),
                   ),
@@ -285,11 +286,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 17,
                     ),
-                    cursorColor: AppColors.emerald,
+                    cursorColor: p.accent,
                     onChanged: (_) {
                       if (errorMessage != null) {
                         setState(() => errorMessage = null);
@@ -309,11 +310,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     onFieldSubmitted: (_) {
                       if (!isLoading) onNextPressed();
                     },
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 17,
                     ),
-                    cursorColor: AppColors.emerald,
+                    cursorColor: p.accent,
                     onChanged: (_) {
                       if (errorMessage != null) {
                         setState(() => errorMessage = null);
@@ -327,7 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           hidePassword
                               ? AppIcons.hidePassword
                               : AppIcons.showPassword,
-                          color: AppColors.textSoft,
+                          color: p.textSoft,
                         ),
                         onPressed: () =>
                             setState(() => hidePassword = !hidePassword),
@@ -343,8 +344,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: isLoading ? null : openForgotPassword,
                       child: Text(
                         l.forgotPassword,
-                        style: const TextStyle(
-                          color: AppColors.emerald,
+                        style: TextStyle(
+                          color: p.accent,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -356,7 +357,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.errorBackground,
+                        color: p.errorBackground,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -386,8 +387,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: isLoading ? null : resendVerification,
                           child: Text(
                             l.resendVerification,
-                            style: const TextStyle(
-                              color: AppColors.emerald,
+                            style: TextStyle(
+                              color: p.accent,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -431,15 +432,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Text.rich(
                       TextSpan(
                         text: '${l.noAccount} ',
-                        style: const TextStyle(
-                          color: AppColors.textSoft,
+                        style: TextStyle(
+                          color: p.textSoft,
                           fontSize: 15,
                         ),
                         children: [
                           TextSpan(
                             text: l.signUp,
-                            style: const TextStyle(
-                              color: AppColors.emerald,
+                            style: TextStyle(
+                              color: p.accent,
                               fontWeight: FontWeight.bold,
                             ),
                           ),

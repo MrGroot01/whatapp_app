@@ -1574,4 +1574,16 @@ class AppLocalizationsTe extends AppLocalizations {
   @override
   String get chooseLanguageHelp =>
       'యాప్ భాషను ఎంచుకోండి. మీ చాట్ సందేశాలు అనువదించబడవు.';
+
+  @override
+  String get settingsTheme => 'థీమ్';
+
+  @override
+  String get chooseTheme => 'థీమ్‌ను ఎంచుకోండి';
+
+  @override
+  String get themeLight => 'లైట్';
+
+  @override
+  String get themeDark => 'డార్క్';
 }

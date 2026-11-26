@@ -157,6 +157,7 @@ class _OtpScreenState extends State<OtpScreen> {
   // the "incoming SMS" banner that slides down from the top
   Widget buildMessageBanner() {
     final l = context.l10n;
+    final p = context.palette;
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 400),
@@ -172,7 +173,7 @@ class _OtpScreenState extends State<OtpScreen> {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: p.card,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.otpBannerBorder),
             boxShadow: const [
@@ -200,8 +201,8 @@ class _OtpScreenState extends State<OtpScreen> {
                       children: [
                         Text(
                           l.messages,
-                          style: const TextStyle(
-                            color: AppColors.textDark,
+                          style: TextStyle(
+                            color: p.textDark,
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
                           ),
@@ -209,8 +210,8 @@ class _OtpScreenState extends State<OtpScreen> {
                         const Spacer(),
                         Text(
                           l.now,
-                          style: const TextStyle(
-                            color: AppColors.textSoft,
+                          style: TextStyle(
+                            color: p.textSoft,
                             fontSize: 13,
                           ),
                         ),
@@ -219,8 +220,8 @@ class _OtpScreenState extends State<OtpScreen> {
                     const SizedBox(height: 4),
                     Text(
                       l.otpMessage(AppStrings.appName, currentOtp),
-                      style: const TextStyle(
-                        color: AppColors.textDark,
+                      style: TextStyle(
+                        color: p.textDark,
                         fontSize: 15,
                         height: 1.3,
                       ),
@@ -237,21 +238,22 @@ class _OtpScreenState extends State<OtpScreen> {
 
   Widget buildResend() {
     final l = context.l10n;
+    final p = context.palette;
 
     if (secondsLeft > 0) {
       final time = '0:${secondsLeft.toString().padLeft(2, '0')}';
       return Text(
         l.resendCodeIn(time),
         textAlign: TextAlign.center,
-        style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
+        style: TextStyle(color: p.textSoft, fontSize: 15),
       );
     }
     return TextButton(
       onPressed: onResendPressed,
       child: Text(
         l.resendCode,
-        style: const TextStyle(
-          color: AppColors.emerald,
+        style: TextStyle(
+          color: p.accent,
           fontSize: 16,
           fontWeight: FontWeight.bold,
         ),
@@ -262,12 +264,13 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textDark,
+        backgroundColor: p.background,
+        foregroundColor: p.textDark,
         elevation: 0,
         scrolledUnderElevation: 0,
       ),
@@ -284,14 +287,14 @@ class _OtpScreenState extends State<OtpScreen> {
                     Center(
                       child: Container(
                         padding: const EdgeInsets.all(18),
-                        decoration: const BoxDecoration(
-                          color: AppColors.softGreen,
+                        decoration: BoxDecoration(
+                          color: p.softGreen,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           AppIcons.otpHeader,
                           size: 44,
-                          color: AppColors.emerald,
+                          color: p.accent,
                         ),
                       ),
                     ),
@@ -299,8 +302,8 @@ class _OtpScreenState extends State<OtpScreen> {
                     Text(
                       l.verifyYourEmail,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.textDark,
+                      style: TextStyle(
+                        color: p.textDark,
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
                       ),
@@ -309,8 +312,8 @@ class _OtpScreenState extends State<OtpScreen> {
                     Text(
                       l.otpSentTo(widget.email),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.textSoft,
+                      style: TextStyle(
+                        color: p.textSoft,
                         fontSize: 16,
                         height: 1.4,
                       ),
@@ -325,9 +328,9 @@ class _OtpScreenState extends State<OtpScreen> {
                       ],
                       maxLength: 4,
                       textAlign: TextAlign.center,
-                      cursorColor: AppColors.emerald,
-                      style: const TextStyle(
-                        color: AppColors.textDark,
+                      cursorColor: p.accent,
+                      style: TextStyle(
+                        color: p.textDark,
                         fontSize: 30,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 16,
@@ -345,11 +348,11 @@ class _OtpScreenState extends State<OtpScreen> {
                           fontSize: 14,
                         ),
                         hintText: '----',
-                        hintStyle: const TextStyle(color: AppColors.hint),
+                        hintStyle: TextStyle(color: p.hint),
                         filled: true,
-                        fillColor: AppColors.card,
-                        enabledBorder: border(AppColors.border),
-                        focusedBorder: border(AppColors.emerald),
+                        fillColor: p.card,
+                        enabledBorder: border(p.border),
+                        focusedBorder: border(p.accent),
                         errorBorder: border(AppColors.error),
                         focusedErrorBorder: border(AppColors.error),
                       ),

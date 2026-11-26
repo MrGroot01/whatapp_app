@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_theme.dart';
 import '../../services/phone_helper.dart';
 
 // The one country code dropdown used by Sign up and Add contact.
@@ -18,6 +19,8 @@ class CountryCodeDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+
     final list = List<CountryCode>.from(PhoneHelper.countries);
     if (!list.any((c) => c.code == value)) {
       list.add(CountryCode(value, value));
@@ -29,9 +32,15 @@ class CountryCodeDropdown extends StatelessWidget {
       key: ValueKey(value),
       initialValue: value,
       isExpanded: true,
+      // the open list and the text follow the theme
+      dropdownColor: p.card,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        color: p.textDark,
+      ),
+      iconEnabledColor: p.textSoft,
       decoration: decoration.copyWith(
         contentPadding: const EdgeInsets.fromLTRB(12, 16, 4, 16),
-        fillColor: enabled ? decoration.fillColor : const Color(0xFFEFEBE0),
+        fillColor: enabled ? decoration.fillColor : p.lockedFill,
       ),
       selectedItemBuilder: (context) => list
           .map(

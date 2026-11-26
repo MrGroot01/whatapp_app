@@ -117,10 +117,11 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
 
   void _showDisappearSheet(int current) {
     final l = context.l10n;
+    final p = context.palette;
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: p.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -134,7 +135,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
               child: Text(
                 l.disappearingTitle,
                 style: GoogleFonts.poppins(
-                  color: AppColors.textDark,
+                  color: p.textDark,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
@@ -145,7 +146,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
               child: Text(
                 l.disappearingChatHelp,
                 style: GoogleFonts.poppins(
-                  color: AppColors.textSoft,
+                  color: p.textSoft,
                   fontSize: 13,
                 ),
               ),
@@ -155,15 +156,15 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                 title: Text(
                   o.$1,
                   style: GoogleFonts.poppins(
-                    color: AppColors.textDark,
+                    color: p.textDark,
                     fontSize: 16,
                   ),
                 ),
                 trailing: current == o.$2
-                    ? const Icon(AppIcons.selected, color: AppColors.emerald)
-                    : const Icon(
+                    ? Icon(AppIcons.selected, color: p.accent)
+                    : Icon(
                   AppIcons.notSelected,
-                  color: AppColors.textSoft,
+                  color: p.textSoft,
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -180,11 +181,12 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final textColor = AppColors.textDark;
-    final softColor = AppColors.textSoft;
+    final p = context.palette;
+    final textColor = p.textDark;
+    final softColor = p.textSoft;
 
     return Scaffold(
-      backgroundColor: AppColors.plainBackground,
+      backgroundColor: p.plainBackground,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
@@ -194,11 +196,18 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
         ),
         actions: [
           PopupMenuButton<String>(
+            color: p.card,
             onSelected: (value) {
               if (value == 'clear') widget.onClearChat();
             },
             itemBuilder: (_) => [
-              PopupMenuItem(value: 'clear', child: Text(l.clearChat)),
+              PopupMenuItem(
+                value: 'clear',
+                child: Text(
+                  l.clearChat,
+                  style: TextStyle(color: p.textDark),
+                ),
+              ),
             ],
           ),
         ],
@@ -206,7 +215,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
       body: ListView(
         children: [
           Container(
-            color: Colors.white,
+            color: p.card,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
             child: Column(
               children: [
@@ -339,6 +348,8 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
 
   // "Media, links, and docs" with a count and the latest photos
   Widget _mediaSection() {
+    final p = context.palette;
+
     return StreamBuilder<List<MediaEntry>>(
       stream: _mediaStream,
       builder: (context, snapshot) {
@@ -347,7 +358,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
         final shown = images.length < 4 ? images.length : 4;
 
         return Material(
-          color: Colors.white,
+          color: p.card,
           child: InkWell(
             onTap: _openMedia,
             child: Padding(
@@ -361,7 +372,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                         child: Text(
                           context.l10n.mediaLinksDocs,
                           style: GoogleFonts.poppins(
-                            color: AppColors.textDark,
+                            color: p.textDark,
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
                           ),
@@ -371,13 +382,13 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                         Text(
                           '${all.length}',
                           style: GoogleFonts.poppins(
-                            color: AppColors.textSoft,
+                            color: p.textSoft,
                             fontSize: 14,
                           ),
                         ),
-                      const Icon(
+                      Icon(
                         AppIcons.chevronRight,
-                        color: AppColors.textSoft,
+                        color: p.textSoft,
                       ),
                     ],
                   ),
@@ -422,16 +433,18 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
     Widget? trailing,
     required VoidCallback onTap,
   }) {
+    final p = context.palette;
+
     return Material(
-      color: Colors.white,
+      color: p.card,
       child: ListTile(
         leading: icon == null
             ? null
-            : Icon(icon, color: AppColors.textSoft, size: 25),
+            : Icon(icon, color: p.textSoft, size: 25),
         title: Text(
           title,
           style: GoogleFonts.poppins(
-            color: titleColor ?? AppColors.textDark,
+            color: titleColor ?? p.textDark,
             fontSize: 15,
             fontWeight: FontWeight.w500,
           ),
@@ -441,7 +454,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
             : Text(
           subtitle,
           style: GoogleFonts.poppins(
-            color: AppColors.textSoft,
+            color: p.textSoft,
             fontSize: 12,
           ),
         ),
@@ -471,6 +484,8 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -478,12 +493,12 @@ class _ActionButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.emerald, size: 27),
+            Icon(icon, color: p.accent, size: 27),
             const SizedBox(height: 6),
             Text(
               label,
               style: GoogleFonts.poppins(
-                color: AppColors.emerald,
+                color: p.accent,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),

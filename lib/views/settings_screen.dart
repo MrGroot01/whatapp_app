@@ -6,6 +6,7 @@ import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../providers/account_provider.dart';
 import '../providers/locale_provider.dart';
+import '../providers/theme_provider.dart';
 import 'add_contact_action.dart';
 import 'language_screen.dart';
 import 'login_screen.dart';
@@ -100,35 +101,108 @@ class _SettingsViewState extends State<_SettingsView> {
   // the action of a row (null = the row does nothing yet)
   VoidCallback? _actionFor(SettingsItem item) {
     if (item.id == 'language') return _openLanguage;
+    if (item.id == 'theme') return _chooseTheme;
     return null;
+  }
+
+  // ---------- THEME ----------
+  // the name shown under the "Theme" row and in the dialog
+  String _themeName(ThemeMode mode) {
+    final l = context.l10n;
+    if (mode == ThemeMode.light) return l.themeLight;
+    if (mode == ThemeMode.dark) return l.themeDark;
+    return l.systemDefault;
+  }
+
+  // the dialog with 3 options; the tick shows the one in use
+  Future<void> _chooseTheme() async {
+    final l = context.l10n;
+    final p = context.palette;
+    final themeProvider = context.read<ThemeProvider>();
+    final current = themeProvider.mode;
+
+    final chosen = await showDialog<ThemeMode>(
+      context: context,
+      builder: (dialogContext) {
+        Widget option(ThemeMode mode, IconData icon) {
+          final selected = mode == current;
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+            leading: Icon(
+              icon,
+              color: selected ? p.accent : p.textSoft,
+            ),
+            title: Text(
+              _themeName(mode),
+              style: TextStyle(
+                color: p.textDark,
+                fontSize: 16,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+            trailing: selected
+                ? Icon(Icons.check_circle, color: p.accent)
+                : null,
+            onTap: () => Navigator.pop(dialogContext, mode),
+          );
+        }
+
+        return AlertDialog(
+          backgroundColor: p.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            l.chooseTheme,
+            style: TextStyle(
+              color: p.textDark,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              option(ThemeMode.light, Icons.light_mode_outlined),
+              option(ThemeMode.dark, Icons.dark_mode_outlined),
+              option(ThemeMode.system, Icons.brightness_6_outlined),
+            ],
+          ),
+        );
+      },
+    );
+
+    // null = the user closed the dialog without choosing
+    if (chosen == null) return;
+    await themeProvider.setMode(chosen);
   }
 
   // ---------- LOGOUT ----------
   Future<void> _confirmLogout() async {
     final l = context.l10n;
+    final p = context.palette;
 
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: p.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           l.logOutTitle,
-          style: const TextStyle(
-            color: AppColors.textDark,
+          style: TextStyle(
+            color: p.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
           l.logOutBody,
-          style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+          style: TextStyle(color: p.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
               l.cancel,
-              style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+              style: TextStyle(color: p.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
@@ -210,17 +284,18 @@ class _SettingsViewState extends State<_SettingsView> {
     return localOrInitial();
   }
 
-  // One white card with rounded corners and a soft shadow
+  // One card with rounded corners and a soft shadow
   Widget whiteCard({required Widget child}) {
+    final p = context.palette;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: p.card,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: AppColors.shadow,
+            color: p.shadow,
             blurRadius: 12,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -231,28 +306,29 @@ class _SettingsViewState extends State<_SettingsView> {
   // One settings row: soft green icon box, title, subtitle
   // (onTap is optional: rows without an action do nothing, as before)
   Widget settingsRow(SettingsItem item, {VoidCallback? onTap}) {
+    final p = context.palette;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: Container(
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: AppColors.softGreen,
+          color: p.softGreen,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(item.icon, color: AppColors.emerald, size: 24),
+        child: Icon(item.icon, color: p.accent, size: 24),
       ),
       title: Text(
         item.title,
-        style: const TextStyle(
-          color: AppColors.textDark,
+        style: TextStyle(
+          color: p.textDark,
           fontSize: 16,
           fontWeight: FontWeight.w600,
         ),
       ),
       subtitle: Text(
         item.subtitle,
-        style: const TextStyle(color: AppColors.textSoft, fontSize: 13.5),
+        style: TextStyle(color: p.textSoft, fontSize: 13.5),
       ),
       onTap: onTap ?? () {},
     );
@@ -261,6 +337,7 @@ class _SettingsViewState extends State<_SettingsView> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     // rebuilds whenever the provider changes (name, picture, uploading...)
     final account = context.watch<AccountProvider>();
@@ -270,6 +347,9 @@ class _SettingsViewState extends State<_SettingsView> {
     final languageName = language.isSystemDefault
         ? l.systemDefault
         : (LocaleProvider.nativeNames[language.locale!.languageCode] ?? '');
+
+    // rebuilds when the theme changes
+    final themeMode = context.watch<ThemeProvider>().mode;
 
     final displayName = account.displayName;
     final fullPhone = account.fullPhone;
@@ -302,6 +382,12 @@ class _SettingsViewState extends State<_SettingsView> {
         l.settingsStorageSub,
       ),
       SettingsItem(
+        Icons.brightness_6_outlined,
+        l.settingsTheme,
+        _themeName(themeMode),
+        id: 'theme',
+      ),
+      SettingsItem(
         AppIcons.settingsLanguage,
         l.settingsLanguage,
         languageName,
@@ -320,7 +406,7 @@ class _SettingsViewState extends State<_SettingsView> {
         .toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
@@ -456,11 +542,11 @@ class _SettingsViewState extends State<_SettingsView> {
                 // SEARCH BAR
                 TextField(
                   controller: searchController,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
+                  style: TextStyle(
+                    color: p.textDark,
                     fontSize: 16,
                   ),
-                  cursorColor: AppColors.emerald,
+                  cursorColor: p.accent,
                   onChanged: (value) {
                     setState(() {
                       searchText = value;
@@ -468,26 +554,25 @@ class _SettingsViewState extends State<_SettingsView> {
                   },
                   decoration: InputDecoration(
                     hintText: l.searchSettings,
-                    hintStyle: const TextStyle(
-                      color: AppColors.textSoft,
+                    hintStyle: TextStyle(
+                      color: p.textSoft,
                       fontSize: 16,
                     ),
-                    prefixIcon:
-                    const Icon(AppIcons.search, color: AppColors.textSoft),
+                    prefixIcon: Icon(AppIcons.search, color: p.textSoft),
                     filled: true,
-                    fillColor: AppColors.card,
+                    fillColor: p.card,
                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderSide: BorderSide(color: p.border),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
-                      borderSide: const BorderSide(color: AppColors.border),
+                      borderSide: BorderSide(color: p.border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(30),
-                      borderSide: const BorderSide(color: AppColors.emerald),
+                      borderSide: BorderSide(color: p.accent),
                     ),
                   ),
                 ),
@@ -506,15 +591,15 @@ class _SettingsViewState extends State<_SettingsView> {
                 ),
                 const SizedBox(height: 20),
 
-                // SETTINGS ROWS (inside one white card)
+                // SETTINGS ROWS (inside one card)
                 if (shownItems.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Text(
                       l.noSettingsFound,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: AppColors.textSoft,
+                      style: TextStyle(
+                        color: p.textSoft,
                         fontSize: 16,
                       ),
                     ),
@@ -529,11 +614,11 @@ class _SettingsViewState extends State<_SettingsView> {
                             onTap: _actionFor(shownItems[i]),
                           ),
                           if (i != shownItems.length - 1)
-                            const Divider(
+                            Divider(
                               height: 1,
                               indent: 76,
                               endIndent: 16,
-                              color: AppColors.softDivider,
+                              color: p.softDivider,
                             ),
                         ],
                       ],
@@ -552,7 +637,7 @@ class _SettingsViewState extends State<_SettingsView> {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: AppColors.errorBackground,
+                        color: p.errorBackground,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(

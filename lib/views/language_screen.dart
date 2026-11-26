@@ -13,6 +13,7 @@ class LanguageScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
     // rebuilds when the language changes
     final state = context.watch<LocaleProvider>();
     final current = state.locale?.languageCode; // null = system default
@@ -27,14 +28,14 @@ class LanguageScreen extends StatelessWidget {
         title: Text(
           title,
           style: TextStyle(
-            color: AppColors.textDark,
+            color: p.textDark,
             fontSize: 17,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
         trailing: Icon(
           selected ? AppIcons.selected : AppIcons.notSelected,
-          color: selected ? AppColors.emerald : AppColors.textSoft,
+          color: selected ? p.accent : p.textSoft,
         ),
         onTap: onTap,
       );
@@ -47,11 +48,11 @@ class LanguageScreen extends StatelessWidget {
         onTap: () => context.read<LocaleProvider>().setLocale(null),
       ),
       for (final locale in LocaleProvider.supported) ...[
-        const Divider(
+        Divider(
           height: 1,
           indent: 16,
           endIndent: 16,
-          color: AppColors.softDivider,
+          color: p.softDivider,
         ),
         option(
           // each language is shown in its own letters
@@ -64,7 +65,7 @@ class LanguageScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
@@ -82,8 +83,8 @@ class LanguageScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
             child: Text(
               l.chooseLanguageHelp,
-              style: const TextStyle(
-                color: AppColors.textSoft,
+              style: TextStyle(
+                color: p.textSoft,
                 fontSize: 14,
                 height: 1.4,
               ),
@@ -91,13 +92,13 @@ class LanguageScreen extends StatelessWidget {
           ),
           Container(
             decoration: BoxDecoration(
-              color: AppColors.card,
+              color: p.card,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
+              boxShadow: [
                 BoxShadow(
-                  color: AppColors.shadow,
+                  color: p.shadow,
                   blurRadius: 12,
-                  offset: Offset(0, 4),
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
