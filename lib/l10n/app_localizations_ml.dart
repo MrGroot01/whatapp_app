@@ -1573,4 +1573,16 @@ class AppLocalizationsMl extends AppLocalizations {
   @override
   String get chooseLanguageHelp =>
       'ആപ്പിന്റെ ഭാഷ തിരഞ്ഞെടുക്കുക. നിങ്ങളുടെ ചാറ്റ് സന്ദേശങ്ങൾ വിവർത്തനം ചെയ്യില്ല.';
+
+  @override
+  String get settingsTheme => 'തീം';
+
+  @override
+  String get chooseTheme => 'തീം തിരഞ്ഞെടുക്കുക';
+
+  @override
+  String get themeLight => 'ലൈറ്റ്';
+
+  @override
+  String get themeDark => 'ഡാർക്ക്';
 }

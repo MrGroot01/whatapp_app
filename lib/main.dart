@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'core/app_strings.dart';
+import 'core/app_theme.dart';
 
 import 'services/notification_service.dart';
 import 'firebase_options.dart';
@@ -13,6 +14,7 @@ import 'package:provider/provider.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/locale_provider.dart';
 import 'providers/search_provider.dart';
+import 'providers/theme_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,11 +62,17 @@ Future<void> main() async {
   final localeProvider = LocaleProvider();
   await localeProvider.load();
 
+  // the saved theme is read BEFORE the first screen too, so the app opens
+  // in the theme the user chose last time (no white flash in dark mode)
+  final themeProvider = ThemeProvider();
+  await themeProvider.load();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SearchProvider()),
         ChangeNotifierProvider<LocaleProvider>.value(value: localeProvider),
+        ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
       ],
       child: MyApp(startupError: startupError),
     ),
@@ -100,6 +108,9 @@ class _MyAppState extends State<MyApp> {
     // when the language changes, this rebuilds the whole app at once
     final locale = context.watch<LocaleProvider>().locale;
 
+    // same for the theme: light / dark / follow the phone
+    final themeMode = context.watch<ThemeProvider>().mode;
+
     return MaterialApp(
       navigatorKey: NotificationService.navigatorKey,
       debugShowCheckedModeBanner: false,
@@ -119,74 +130,11 @@ class _MyAppState extends State<MyApp> {
         return const Locale('en');
       },
 
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF25D366),
-        ),
-        textTheme: const TextTheme(
-          displayLarge: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-          ),
-          displayMedium: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 28,
-          ),
-          displaySmall: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 24,
-          ),
-          headlineLarge: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 22,
-          ),
-          headlineMedium: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 20,
-          ),
-          headlineSmall: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 18,
-          ),
-          titleLarge: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 18,
-          ),
-          titleMedium: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 16,
-          ),
-          titleSmall: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-          ),
-          bodyLarge: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 16,
-          ),
-          bodyMedium: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-          ),
-          bodySmall: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 12,
-          ),
-          labelLarge: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-          ),
-          labelMedium: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 12,
-          ),
-          labelSmall: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 11,
-          ),
-        ),
-      ),
+      // ---------- THEME ----------
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeMode, // ThemeMode.system = follow the phone
+
       home: widget.startupError == null
           ? const SplashScreen()
           : StartupErrorScreen(message: widget.startupError!),

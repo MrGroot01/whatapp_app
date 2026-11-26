@@ -148,30 +148,31 @@ class _AddContactViewState extends State<_AddContactView> {
     Widget? suffix,
     bool locked = false,
   }) {
+    final p = context.palette;
     return InputDecoration(
       labelText: label,
       prefixIcon: icon == null
           ? null
           : Icon(
         icon,
-        color: locked ? AppColors.textSoft : AppColors.emerald,
+        color: locked ? p.textSoft : p.accent,
       ),
       suffixIcon: locked
-          ? const Icon(AppIcons.locked, color: AppColors.textSoft, size: 20)
+          ? Icon(AppIcons.locked, color: p.textSoft, size: 20)
           : suffix,
       filled: true,
-      fillColor: locked ? AppColors.lockedFill : AppColors.card,
+      fillColor: locked ? p.lockedFill : p.card,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: p.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: p.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.emerald, width: 1.5),
+        borderSide: BorderSide(color: p.accent, width: 1.5),
       ),
     );
   }
@@ -198,6 +199,7 @@ class _AddContactViewState extends State<_AddContactView> {
 
   Widget _lookupStatus(AddContactProvider add) {
     final l = context.l10n;
+    final p = context.palette;
 
     switch (add.state) {
       case LookupState.idle:
@@ -209,13 +211,13 @@ class _AddContactViewState extends State<_AddContactView> {
         if (!found.hasPhone) {
           return _statusRow(
             AppIcons.info,
-            AppColors.textSoft,
+            p.textSoft,
             l.userFoundNoPhone,
           );
         }
         return _statusRow(
           AppIcons.found,
-          AppColors.emerald,
+          p.accent,
           found.name.isEmpty ? l.userFound : l.userFoundName(found.name),
         );
       case LookupState.notFound:
@@ -234,6 +236,7 @@ class _AddContactViewState extends State<_AddContactView> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     // rebuilds whenever the provider changes (lookup state, saving...)
     final add = context.watch<AddContactProvider>();
@@ -242,7 +245,7 @@ class _AddContactViewState extends State<_AddContactView> {
     final phoneLocked = add.phoneLocked;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
@@ -264,13 +267,13 @@ class _AddContactViewState extends State<_AddContactView> {
                   child: Container(
                     width: 84,
                     height: 84,
-                    decoration: const BoxDecoration(
-                      color: AppColors.softGreen,
+                    decoration: BoxDecoration(
+                      color: p.softGreen,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       AppIcons.addContact,
-                      color: AppColors.emerald,
+                      color: p.accent,
                       size: 42,
                     ),
                   ),
@@ -280,8 +283,8 @@ class _AddContactViewState extends State<_AddContactView> {
                 Text(
                   l.addContactTitle,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
+                  style: TextStyle(
+                    color: p.textDark,
                     fontSize: 25,
                     fontWeight: FontWeight.w800,
                   ),
@@ -291,8 +294,8 @@ class _AddContactViewState extends State<_AddContactView> {
                 Text(
                   l.addContactSubtitle,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textSoft,
+                  style: TextStyle(
+                    color: p.textSoft,
                     fontSize: 15,
                   ),
                 ),
@@ -303,6 +306,8 @@ class _AddContactViewState extends State<_AddContactView> {
                   controller: nameController,
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
+                  style: TextStyle(color: p.textDark),
+                  cursorColor: p.accent,
                   validator: (value) =>
                       AddContactProvider.validateName(context.l10n, value),
                   enabled: !isSaving,
@@ -320,6 +325,8 @@ class _AddContactViewState extends State<_AddContactView> {
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
+                  style: TextStyle(color: p.textDark),
+                  cursorColor: p.accent,
                   validator: (value) =>
                       AddContactProvider.validateEmail(context.l10n, value),
                   enabled: !isSaving,
@@ -328,14 +335,14 @@ class _AddContactViewState extends State<_AddContactView> {
                     label: l.registeredEmailLabel,
                     icon: AppIcons.email,
                     suffix: add.state == LookupState.loading
-                        ? const Padding(
-                      padding: EdgeInsets.all(14),
+                        ? Padding(
+                      padding: const EdgeInsets.all(14),
                       child: SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: AppColors.emerald,
+                          color: p.accent,
                         ),
                       ),
                     )
@@ -367,6 +374,8 @@ class _AddContactViewState extends State<_AddContactView> {
                         textInputAction: TextInputAction.done,
                         readOnly: phoneLocked,
                         enabled: !isSaving,
+                        style: TextStyle(color: p.textDark),
+                        cursorColor: p.accent,
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
                             RegExp(r'[0-9\s()\-]'),
@@ -396,7 +405,7 @@ class _AddContactViewState extends State<_AddContactView> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.errorBackground,
+                      color: p.errorBackground,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(

@@ -1570,4 +1570,16 @@ class AppLocalizationsKn extends AppLocalizations {
   @override
   String get chooseLanguageHelp =>
       'ಅಪ್ಲಿಕೇಶನ್‌ನ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ. ನಿಮ್ಮ ಚಾಟ್ ಸಂದೇಶಗಳನ್ನು ಅನುವಾದಿಸಲಾಗುವುದಿಲ್ಲ.';
+
+  @override
+  String get settingsTheme => 'ಥೀಮ್';
+
+  @override
+  String get chooseTheme => 'ಥೀಮ್ ಆಯ್ಕೆಮಾಡಿ';
+
+  @override
+  String get themeLight => 'ಲೈಟ್';
+
+  @override
+  String get themeDark => 'ಡಾರ್ಕ್';
 }

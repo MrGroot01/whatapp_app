@@ -321,25 +321,26 @@ class _SignupScreenState extends State<SignupScreen> {
     IconData? icon,
     Widget? suffix,
   }) {
+    final p = context.palette;
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: AppColors.textSoft, fontSize: 16),
-      floatingLabelStyle:
-      const TextStyle(color: AppColors.emerald, fontSize: 16),
-      prefixIcon: icon == null ? null : Icon(icon, color: AppColors.emerald),
+      labelStyle: TextStyle(color: p.textSoft, fontSize: 16),
+      floatingLabelStyle: TextStyle(color: p.accent, fontSize: 16),
+      prefixIcon: icon == null ? null : Icon(icon, color: p.accent),
       suffixIcon: suffix,
       filled: true,
-      fillColor: AppColors.card,
+      fillColor: p.card,
       errorStyle: const TextStyle(color: AppColors.error, fontSize: 14),
       errorMaxLines: 2,
-      enabledBorder: boxBorder(AppColors.border),
-      focusedBorder: boxBorder(AppColors.emerald),
+      enabledBorder: boxBorder(p.border),
+      focusedBorder: boxBorder(p.accent),
       errorBorder: boxBorder(AppColors.error),
       focusedErrorBorder: boxBorder(AppColors.error),
     );
   }
 
   Widget rule(String text, bool done) {
+    final p = context.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -347,7 +348,7 @@ class _SignupScreenState extends State<SignupScreen> {
           Icon(
             done ? AppIcons.ruleDone : AppIcons.ruleTodo,
             size: 20,
-            color: done ? AppColors.emerald : AppColors.hint,
+            color: done ? p.accent : p.hint,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -355,7 +356,7 @@ class _SignupScreenState extends State<SignupScreen> {
               text,
               style: TextStyle(
                 fontSize: 14.5,
-                color: done ? AppColors.textDark : AppColors.textSoft,
+                color: done ? p.textDark : p.textSoft,
               ),
             ),
           ),
@@ -367,12 +368,13 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textDark,
+        backgroundColor: p.background,
+        foregroundColor: p.textDark,
         elevation: 0,
         scrolledUnderElevation: 0,
       ),
@@ -389,14 +391,14 @@ class _SignupScreenState extends State<SignupScreen> {
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(18),
-                      decoration: const BoxDecoration(
-                        color: AppColors.softGreen,
+                      decoration: BoxDecoration(
+                        color: p.softGreen,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
+                      child: Icon(
                         AppIcons.signupHeader,
                         size: 44,
-                        color: AppColors.emerald,
+                        color: p.accent,
                       ),
                     ),
                   ),
@@ -404,8 +406,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   Text(
                     l.createAccount,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                     ),
@@ -414,8 +416,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   Text(
                     l.signupSubtitle,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textSoft,
+                    style: TextStyle(
+                      color: p.textSoft,
                       fontSize: 16,
                     ),
                   ),
@@ -425,11 +427,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 17,
                     ),
-                    cursorColor: AppColors.emerald,
+                    cursorColor: p.accent,
                     onChanged: (_) {
                       if (errorMessage != null) {
                         setState(() => errorMessage = null);
@@ -447,11 +449,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     textInputAction: TextInputAction.next,
                     textCapitalization: TextCapitalization.words,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 17,
                     ),
-                    cursorColor: AppColors.emerald,
+                    cursorColor: p.accent,
                     decoration: fieldDecoration(
                       label: l.nickname,
                       icon: AppIcons.person,
@@ -489,11 +491,11 @@ class _SignupScreenState extends State<SignupScreen> {
                               RegExp(r'[0-9\s()\-]'),
                             ),
                           ],
-                          style: const TextStyle(
-                            color: AppColors.textDark,
+                          style: TextStyle(
+                            color: p.textDark,
                             fontSize: 17,
                           ),
-                          cursorColor: AppColors.emerald,
+                          cursorColor: p.accent,
                           onChanged: (_) {
                             if (errorMessage != null) {
                               setState(() => errorMessage = null);
@@ -517,11 +519,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     obscureText: hidePassword,
                     textInputAction: TextInputAction.next,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 17,
                     ),
-                    cursorColor: AppColors.emerald,
+                    cursorColor: p.accent,
                     onChanged: (value) => setState(() {
                       password = value;
                       if (errorMessage != null) errorMessage = null;
@@ -534,7 +536,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           hidePassword
                               ? AppIcons.hidePassword
                               : AppIcons.showPassword,
-                          color: AppColors.textSoft,
+                          color: p.textSoft,
                         ),
                         onPressed: () =>
                             setState(() => hidePassword = !hidePassword),
@@ -548,11 +550,11 @@ class _SignupScreenState extends State<SignupScreen> {
                     obscureText: hideConfirm,
                     textInputAction: TextInputAction.done,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 17,
                     ),
-                    cursorColor: AppColors.emerald,
+                    cursorColor: p.accent,
                     decoration: fieldDecoration(
                       label: l.confirmPassword,
                       icon: AppIcons.confirmPassword,
@@ -561,7 +563,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           hideConfirm
                               ? AppIcons.hidePassword
                               : AppIcons.showPassword,
-                          color: AppColors.textSoft,
+                          color: p.textSoft,
                         ),
                         onPressed: () =>
                             setState(() => hideConfirm = !hideConfirm),
@@ -573,9 +575,9 @@ class _SignupScreenState extends State<SignupScreen> {
                   Container(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                     decoration: BoxDecoration(
-                      color: AppColors.card,
+                      color: p.card,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: p.border),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -593,7 +595,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.errorBackground,
+                        color: p.errorBackground,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -654,15 +656,15 @@ class _SignupScreenState extends State<SignupScreen> {
                     child: Text.rich(
                       TextSpan(
                         text: '${l.haveAccount} ',
-                        style: const TextStyle(
-                          color: AppColors.textSoft,
+                        style: TextStyle(
+                          color: p.textSoft,
                           fontSize: 15,
                         ),
                         children: [
                           TextSpan(
                             text: l.logInLink,
-                            style: const TextStyle(
-                              color: AppColors.emerald,
+                            style: TextStyle(
+                              color: p.accent,
                               fontWeight: FontWeight.bold,
                             ),
                           ),

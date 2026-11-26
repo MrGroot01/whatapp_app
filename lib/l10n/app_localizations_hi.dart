@@ -1553,4 +1553,16 @@ class AppLocalizationsHi extends AppLocalizations {
   @override
   String get chooseLanguageHelp =>
       'ऐप की भाषा चुनें। आपके चैट संदेशों का अनुवाद नहीं किया जाता।';
+
+  @override
+  String get settingsTheme => 'थीम';
+
+  @override
+  String get chooseTheme => 'थीम चुनें';
+
+  @override
+  String get themeLight => 'लाइट';
+
+  @override
+  String get themeDark => 'डार्क';
 }

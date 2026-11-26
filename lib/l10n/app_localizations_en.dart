@@ -1562,4 +1562,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get chooseLanguageHelp =>
       'Choose the language of the app. Your chat messages are not translated.';
+
+  @override
+  String get settingsTheme => 'Theme';
+
+  @override
+  String get chooseTheme => 'Choose theme';
+
+  @override
+  String get themeLight => 'Light';
+
+  @override
+  String get themeDark => 'Dark';
 }

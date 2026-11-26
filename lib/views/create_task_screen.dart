@@ -102,11 +102,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   Future<void> _pickAssignee() async {
     FocusScope.of(context).unfocus();
     final l = context.l10n;
+    final p = context.palette;
     final contactsFuture = TaskService.loadContacts();
 
     final picked = await showModalBottomSheet<TaskContact>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: p.card,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
@@ -124,8 +125,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
                 child: Text(
                   l.assignTo,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
+                  style: TextStyle(
+                    color: p.textDark,
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
                   ),
@@ -138,10 +139,10 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 ),
                 title: Text(
                   l.mePersonalTask,
-                  style: const TextStyle(fontSize: 16),
+                  style: TextStyle(fontSize: 16, color: p.textDark),
                 ),
                 trailing: _assignUid.isEmpty
-                    ? const Icon(AppIcons.confirm, color: AppColors.emerald)
+                    ? Icon(AppIcons.confirm, color: p.accent)
                     : null,
                 onTap: () => Navigator.pop(
                   sheetContext,
@@ -154,11 +155,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                   future: contactsFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState != ConnectionState.done) {
-                      return const Padding(
-                        padding: EdgeInsets.all(24),
+                      return Padding(
+                        padding: const EdgeInsets.all(24),
                         child: Center(
                           child: CircularProgressIndicator(
-                            color: AppColors.emerald,
+                            color: p.accent,
                           ),
                         ),
                       );
@@ -170,8 +171,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                         padding: const EdgeInsets.all(24),
                         child: Text(
                           l.noSavedContactsAddFirst,
-                          style: const TextStyle(
-                            color: AppColors.textSoft,
+                          style: TextStyle(
+                            color: p.textSoft,
                             fontSize: 15,
                           ),
                         ),
@@ -196,12 +197,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                           ),
                           title: Text(
                             c.name,
-                            style: const TextStyle(fontSize: 16),
+                            style: TextStyle(fontSize: 16, color: p.textDark),
                           ),
                           trailing: c.uid == _assignUid
-                              ? const Icon(
+                              ? Icon(
                             AppIcons.confirm,
-                            color: AppColors.emerald,
+                            color: p.accent,
                           )
                               : null,
                           onTap: () => Navigator.pop(sheetContext, c),
@@ -250,10 +251,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
   Future<void> _pickReminder() async {
     FocusScope.of(context).unfocus();
+    final p = context.palette;
 
     final picked = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: p.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -266,11 +268,14 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               ListTile(
                 leading: Icon(
                   o.minutes < 0 ? AppIcons.reminderOff : AppIcons.reminderOn,
-                  color: AppColors.emerald,
+                  color: p.accent,
                 ),
-                title: Text(o.label, style: const TextStyle(fontSize: 16)),
+                title: Text(
+                  o.label,
+                  style: TextStyle(fontSize: 16, color: p.textDark),
+                ),
                 trailing: o.minutes == _reminder
-                    ? const Icon(AppIcons.confirm, color: AppColors.emerald)
+                    ? Icon(AppIcons.confirm, color: p.accent)
                     : null,
                 onTap: () => Navigator.pop(sheetContext, o.minutes),
               ),
@@ -339,6 +344,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
   Future<void> _showSuccess(bool reminderSet) {
     final l = context.l10n;
+    final p = context.palette;
     final missedReminder = !_assigned && _reminder >= 0 && !reminderSet;
 
     final message = _assigned
@@ -349,7 +355,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => Dialog(
-        backgroundColor: Colors.white,
+        backgroundColor: p.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -359,13 +365,13 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               Container(
                 width: 76,
                 height: 76,
-                decoration: const BoxDecoration(
-                  color: AppColors.softGreen,
+                decoration: BoxDecoration(
+                  color: p.softGreen,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   AppIcons.confirm,
-                  color: AppColors.emerald,
+                  color: p.accent,
                   size: 44,
                 ),
               ),
@@ -375,8 +381,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                     ? l.taskUpdated
                     : (_assigned ? l.taskAssigned : l.taskCreated),
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textDark,
+                style: TextStyle(
+                  color: p.textDark,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                 ),
@@ -385,8 +391,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textSoft,
+                style: TextStyle(
+                  color: p.textSoft,
                   fontSize: 15,
                 ),
               ),
@@ -430,6 +436,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
   // ---------- UI PIECES ----------
   InputDecoration _fieldDecoration(String hint) {
+    final p = context.palette;
+
     OutlineInputBorder border(Color color) => OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: color, width: 1.3),
@@ -437,12 +445,12 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: AppColors.textSoft),
+      hintStyle: TextStyle(color: p.textSoft),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: p.card,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      enabledBorder: border(AppColors.border),
-      focusedBorder: border(AppColors.emerald),
+      enabledBorder: border(p.border),
+      focusedBorder: border(p.accent),
       errorBorder: border(AppColors.error),
       focusedErrorBorder: border(AppColors.error),
     );
@@ -453,8 +461,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
       padding: const EdgeInsets.only(top: 18, bottom: 8),
       child: Text(
         text,
-        style: const TextStyle(
-          color: AppColors.textDark,
+        style: TextStyle(
+          color: context.palette.textDark,
           fontSize: 16,
           fontWeight: FontWeight.w600,
         ),
@@ -464,31 +472,32 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
 
   // onTap == null -> the row is shown but cannot be changed
   Widget _pickerTile(IconData icon, String text, VoidCallback? onTap) {
+    final p = context.palette;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: p.card,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border, width: 1.3),
+          border: Border.all(color: p.border, width: 1.3),
         ),
         child: Row(
           children: [
-            Icon(icon, color: AppColors.textSoft),
+            Icon(icon, color: p.textSoft),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(
-                  color: AppColors.textDark,
+                style: TextStyle(
+                  color: p.textDark,
                   fontSize: 16,
                 ),
               ),
             ),
             if (onTap != null)
-              const Icon(AppIcons.chevronRight, color: AppColors.textSoft),
+              Icon(AppIcons.chevronRight, color: p.textSoft),
           ],
         ),
       ),
@@ -500,6 +509,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
     if (widget.sourceText.isEmpty) return const SizedBox.shrink();
 
     final l = context.l10n;
+    final p = context.palette;
     final from = widget.fromName.isEmpty ? '' : '${l.fromLine(widget.fromName)}  ';
     final when =
     widget.sourceTime == null ? '' : formatTaskTime(widget.sourceTime!);
@@ -511,15 +521,15 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.taskSourceBox,
+            color: p.taskSourceBox,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Text(
             widget.sourceText,
             maxLines: 4,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.textDark,
+            style: TextStyle(
+              color: p.textDark,
               fontSize: 16,
               height: 1.3,
             ),
@@ -528,7 +538,7 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
         const SizedBox(height: 6),
         Text(
           '$from$when',
-          style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
+          style: TextStyle(color: p.textSoft, fontSize: 13),
         ),
       ],
     );
@@ -537,9 +547,10 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
@@ -570,11 +581,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                 TextFormField(
                   controller: _titleController,
                   textCapitalization: TextCapitalization.sentences,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
+                  style: TextStyle(
+                    color: p.textDark,
                     fontSize: 16,
                   ),
-                  cursorColor: AppColors.emerald,
+                  cursorColor: p.accent,
                   decoration: _fieldDecoration(l.taskTitleHint),
                   validator: (value) {
                     final v = value?.trim() ?? '';
@@ -589,11 +600,11 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                   minLines: 3,
                   maxLines: 6,
                   textCapitalization: TextCapitalization.sentences,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
+                  style: TextStyle(
+                    color: p.textDark,
                     fontSize: 16,
                   ),
-                  cursorColor: AppColors.emerald,
+                  cursorColor: p.accent,
                   decoration: _fieldDecoration(l.addMoreDetails),
                   validator: (value) {
                     if ((value ?? '').length > 2000) {
@@ -621,8 +632,8 @@ class _CreateTaskScreenState extends State<CreateTaskScreen> {
                     padding: const EdgeInsets.only(top: 8),
                     child: Text(
                       l.reminderGoesToThem(_assignName),
-                      style: const TextStyle(
-                        color: AppColors.textSoft,
+                      style: TextStyle(
+                        color: p.textSoft,
                         fontSize: 13,
                       ),
                     ),

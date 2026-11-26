@@ -471,5 +471,9 @@
 
   "settingsLanguage": "యాప్ భాష",
   "systemDefault": "సిస్టమ్ డిఫాల్ట్",
-  "chooseLanguageHelp": "యాప్ భాషను ఎంచుకోండి. మీ చాట్ సందేశాలు అనువదించబడవు."
+  "chooseLanguageHelp": "యాప్ భాషను ఎంచుకోండి. మీ చాట్ సందేశాలు అనువదించబడవు.",
+  "settingsTheme": "థీమ్",
+    "chooseTheme": "థీమ్‌ను ఎంచుకోండి",
+    "themeLight": "లైట్",
+    "themeDark": "డార్క్"
 }

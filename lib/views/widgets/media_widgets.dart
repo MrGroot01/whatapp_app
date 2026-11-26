@@ -23,10 +23,12 @@ class MediaImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+
     final broken = Container(
-      color: AppColors.divider,
-      child: const Center(
-        child: Icon(AppIcons.brokenImage, color: AppColors.textSoft),
+      color: p.divider,
+      child: Center(
+        child: Icon(AppIcons.brokenImage, color: p.textSoft),
       ),
     );
 

@@ -137,6 +137,8 @@ class _ProfileViewState extends State<_ProfileView> {
     required IconData icon,
     bool locked = false,
   }) {
+    final p = context.palette;
+
     OutlineInputBorder border(Color color, [double width = 1]) {
       return OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -146,24 +148,24 @@ class _ProfileViewState extends State<_ProfileView> {
 
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+      labelStyle: TextStyle(color: p.textSoft, fontSize: 16),
       floatingLabelStyle: TextStyle(
-        color: locked ? AppColors.textSoft : AppColors.emerald,
+        color: locked ? p.textSoft : p.accent,
         fontSize: 16,
       ),
       prefixIcon: Icon(
         icon,
-        color: locked ? AppColors.textSoft : AppColors.emerald,
+        color: locked ? p.textSoft : p.accent,
       ),
       suffixIcon: locked
-          ? const Icon(AppIcons.locked, color: AppColors.textSoft, size: 20)
+          ? Icon(AppIcons.locked, color: p.textSoft, size: 20)
           : null,
       filled: true,
-      fillColor: locked ? AppColors.lockedFill : AppColors.card,
+      fillColor: locked ? p.lockedFill : p.card,
       errorStyle: const TextStyle(color: AppColors.error, fontSize: 14),
-      border: border(AppColors.border),
-      enabledBorder: border(AppColors.border),
-      focusedBorder: border(AppColors.emerald, 1.5),
+      border: border(p.border),
+      enabledBorder: border(p.border),
+      focusedBorder: border(p.accent, 1.5),
       errorBorder: border(AppColors.error, 1.5),
       focusedErrorBorder: border(AppColors.error, 1.5),
     );
@@ -176,6 +178,8 @@ class _ProfileViewState extends State<_ProfileView> {
     required String value,
     bool muted = false,
   }) {
+    final p = context.palette;
+
     return InputDecorator(
       isEmpty: false,
       decoration: _decoration(label: label, icon: icon, locked: true),
@@ -184,7 +188,7 @@ class _ProfileViewState extends State<_ProfileView> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: muted ? AppColors.mutedText : AppColors.textSoft,
+          color: muted ? p.mutedText : p.textSoft,
           fontSize: 17,
           fontStyle: muted ? FontStyle.italic : FontStyle.normal,
         ),
@@ -195,6 +199,7 @@ class _ProfileViewState extends State<_ProfileView> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final p = context.palette;
 
     // rebuilds whenever the provider changes (name, picture, saving...)
     final account = context.watch<AccountProvider>();
@@ -203,7 +208,7 @@ class _ProfileViewState extends State<_ProfileView> {
     final phoneText = fullPhone ?? l.notAdded;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: p.background,
       appBar: AppBar(
         backgroundColor: AppColors.emerald,
         foregroundColor: Colors.white,
@@ -225,14 +230,14 @@ class _ProfileViewState extends State<_ProfileView> {
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
+                    decoration: BoxDecoration(
+                      color: p.card,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.shadow,
+                          color: p.shadow,
                           blurRadius: 12,
-                          offset: Offset(0, 4),
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
@@ -253,11 +258,11 @@ class _ProfileViewState extends State<_ProfileView> {
                   textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.done,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
-                  style: const TextStyle(
-                    color: AppColors.textDark,
+                  style: TextStyle(
+                    color: p.textDark,
                     fontSize: 17,
                   ),
-                  cursorColor: AppColors.emerald,
+                  cursorColor: p.accent,
                   onChanged: (_) => setState(() {
                     _nameTouched = true;
                     _errorMessage = null;
@@ -276,8 +281,8 @@ class _ProfileViewState extends State<_ProfileView> {
                   padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
                   child: Text(
                     l.nameSavedNote,
-                    style: const TextStyle(
-                      color: AppColors.textSoft,
+                    style: TextStyle(
+                      color: p.textSoft,
                       fontSize: 13,
                     ),
                   ),
@@ -305,7 +310,7 @@ class _ProfileViewState extends State<_ProfileView> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.errorBackground,
+                      color: p.errorBackground,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(

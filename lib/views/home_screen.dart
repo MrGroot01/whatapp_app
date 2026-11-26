@@ -154,7 +154,8 @@ class _HomeScreenState extends State<HomeScreen> {
         bool isGroup = false,
       }) {
     final l = context.l10n;
-    const baseStyle = TextStyle(color: AppColors.textSoft, fontSize: 15);
+    final p = context.palette;
+    final baseStyle = TextStyle(color: p.textSoft, fontSize: 15);
 
     final last = _chatList.visibleLast(chatId);
     if (last == null || (last.preview.isEmpty && last.type != 'call')) {
@@ -197,17 +198,17 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Icon(
               mine ? AppIcons.videoCall : AppIcons.missedCall,
               size: 16,
-              color: mine ? AppColors.textSoft : AppColors.error,
+              color: mine ? p.textSoft : AppColors.error,
             ),
           ),
-        ? tick,
+        ?tick,
         Expanded(
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: baseStyle.copyWith(
-              color: isCall && !mine ? AppColors.error : AppColors.textSoft,
+              color: isCall && !mine ? AppColors.error : p.textSoft,
             ),
           ),
         ),
@@ -221,7 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (text.isEmpty) return null;
     return Text(
       text,
-      style: const TextStyle(color: AppColors.textSoft, fontSize: 13),
+      style: TextStyle(color: context.palette.textSoft, fontSize: 13),
     );
   }
 
@@ -230,29 +231,30 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_currentUid == null || ids.isEmpty) return;
 
     final l = context.l10n;
+    final p = context.palette;
     final count = ids.length;
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
+        backgroundColor: p.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           count == 1 ? l.deleteChatTitle : l.deleteChatsTitle(count),
-          style: const TextStyle(
-            color: AppColors.textDark,
+          style: TextStyle(
+            color: p.textDark,
             fontWeight: FontWeight.bold,
           ),
         ),
         content: Text(
           l.deleteChatBody,
-          style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+          style: TextStyle(color: p.textSoft, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: Text(
               l.cancel,
-              style: const TextStyle(color: AppColors.textSoft, fontSize: 16),
+              style: TextStyle(color: p.textSoft, fontSize: 16),
             ),
           ),
           TextButton(
@@ -323,6 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // the "+" button: New group / New contact (like WhatsApp's "New chat")
   Future<void> _openNewChatSheet() async {
     final l = context.l10n;
+    final p = context.palette;
 
     Widget option(IconData icon, String label, String value, BuildContext c) {
       return ListTile(
@@ -334,8 +337,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         title: Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textDark,
+          style: TextStyle(
+            color: p.textDark,
             fontSize: 17,
             fontWeight: FontWeight.w500,
           ),
@@ -346,7 +349,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final choice = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: p.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -359,8 +362,8 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
               child: Text(
                 l.newChat,
-                style: const TextStyle(
-                  color: AppColors.textDark,
+                style: TextStyle(
+                  color: p.textDark,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                 ),
@@ -394,10 +397,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // one group row in the list
   Widget _buildGroupTile(GroupItem group) {
+    final p = context.palette;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      tileColor:
-      _selection.isSelected(group.id) ? AppColors.selectedTile : null,
+      tileColor: _selection.isSelected(group.id) ? p.selectedTile : null,
       leading: CircleAvatar(
         radius: 26,
         backgroundColor: GroupService.colorFor(group.id),
@@ -407,8 +410,8 @@ class _HomeScreenState extends State<HomeScreen> {
         group.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AppColors.textDark,
+        style: TextStyle(
+          color: p.textDark,
           fontSize: 18,
           fontWeight: FontWeight.w600,
         ),
@@ -429,11 +432,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // one contact row in the list
   Widget _buildContactTile(Contact contact) {
+    final p = context.palette;
     final chatId = _chatList.chatIdWith(contact.id);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      tileColor: _selection.isSelected(chatId) ? AppColors.selectedTile : null,
+      tileColor: _selection.isSelected(chatId) ? p.selectedTile : null,
       leading: StreamBuilder<DatabaseEvent>(
         // This listener receives DP changes from the contact's public profile.
         stream:
@@ -474,8 +478,8 @@ class _HomeScreenState extends State<HomeScreen> {
         contact.name,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AppColors.textDark,
+        style: TextStyle(
+          color: p.textDark,
           fontSize: 18,
           fontWeight: FontWeight.w600,
         ),
@@ -507,6 +511,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildChatList(String searchText) {
+    final p = context.palette;
+
     // the provider decides which rows to show and in which order
     final rows = _chatList.buildRows(
       contacts: _contactsProvider.contacts,
@@ -527,8 +533,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppColors.textSoft,
+                style: TextStyle(
+                  color: p.textSoft,
                   fontSize: 17,
                   height: 1.4,
                 ),
@@ -542,11 +548,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView.separated(
       padding: const EdgeInsets.only(top: 8, bottom: 90),
       itemCount: rows.length,
-      separatorBuilder: (_, _) => const Divider(
+      separatorBuilder: (_, _) => Divider(
         height: 1,
         indent: 88,
         endIndent: 16,
-        color: AppColors.divider,
+        color: p.divider,
       ),
       itemBuilder: (context, index) {
         final ChatRow row = rows[index];
@@ -635,6 +641,7 @@ class _HomeScreenState extends State<HomeScreen> {
       GroupsProvider groupsState,
       ) {
     final l = context.l10n;
+    final p = context.palette;
     final uid = _currentUid;
     final selecting = selection.isSelecting;
     final contacts = contactsState.contacts;
@@ -646,7 +653,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!didPop && selecting) _selection.clear();
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: p.background,
         appBar: AppBar(
           backgroundColor: AppColors.emerald,
           foregroundColor: Colors.white,
@@ -727,8 +734,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // bottom bar to switch between Chats and Updates
         bottomNavigationBar: NavigationBar(
-          backgroundColor: Colors.white,
-          indicatorColor: AppColors.softGreen,
+          backgroundColor: p.card,
+          indicatorColor: p.softGreen,
           selectedIndex: _tab,
           onDestinationSelected: (i) {
             _selection.clear(); // leaving the tab leaves delete mode
@@ -737,17 +744,17 @@ class _HomeScreenState extends State<HomeScreen> {
           destinations: [
             NavigationDestination(
               icon: const Icon(AppIcons.chatsTab),
-              selectedIcon: const Icon(
+              selectedIcon: Icon(
                 AppIcons.chatsTabSelected,
-                color: AppColors.emerald,
+                color: p.accent,
               ),
               label: l.chats,
             ),
             NavigationDestination(
               icon: const Icon(AppIcons.updatesTab),
-              selectedIcon: const Icon(
+              selectedIcon: Icon(
                 AppIcons.updatesTabSelected,
-                color: AppColors.emerald,
+                color: p.accent,
               ),
               label: l.updates,
             ),
@@ -784,25 +791,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: TextField(
                     controller: searchController,
                     autofocus: true,
-                    style: const TextStyle(
-                      color: AppColors.textDark,
+                    style: TextStyle(
+                      color: p.textDark,
                       fontSize: 16,
                     ),
-                    cursorColor: AppColors.emerald,
+                    cursorColor: p.accent,
                     onChanged: (value) =>
                         context.read<SearchProvider>().setQuery(value),
                     decoration: InputDecoration(
                       hintText: l.search,
-                      hintStyle: const TextStyle(
-                        color: AppColors.textSoft,
+                      hintStyle: TextStyle(
+                        color: p.textSoft,
                         fontSize: 16,
                       ),
-                      prefixIcon: const Icon(
+                      prefixIcon: Icon(
                         AppIcons.search,
-                        color: AppColors.textSoft,
+                        color: p.textSoft,
                       ),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: p.card,
                       contentPadding:
                       const EdgeInsets.symmetric(vertical: 14),
                       border: OutlineInputBorder(
@@ -823,8 +830,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? Center(
                 child: Text(
                   l.pleaseLogIn,
-                  style: const TextStyle(
-                    color: AppColors.textSoft,
+                  style: TextStyle(
+                    color: p.textSoft,
                     fontSize: 17,
                   ),
                 ),
@@ -832,9 +839,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   : contactsState.isLoading &&
                   contacts.isEmpty &&
                   groupsState.isEmpty
-                  ? const Center(
+                  ? Center(
                 child: CircularProgressIndicator(
-                  color: AppColors.emerald,
+                  color: p.accent,
                 ),
               )
                   : Consumer<SearchProvider>(
